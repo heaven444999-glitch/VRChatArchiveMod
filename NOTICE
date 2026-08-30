@@ -1,0 +1,19 @@
+VRChat Archive Mod — NOTICE
+===========================
+
+The MIT License in LICENSE covers the source code in this repository authored
+by the project. It does NOT cover the third-party components or the embedded
+media assets described in the README's "Credits & Third-party" section, which
+remain the property of their respective owners and are NOT redistributed here:
+
+  - Proprietary VRChat / Unity / BepInEx / Il2CppInterop reference assemblies
+    (the ignored libs/ directory) — obtain them from your own install.
+  - Embedded media (the ignored ressources/ directory): loading-screen
+    artwork/music, soundboard/spawn audio clips, and Bad Apple!! chatbox frame
+    data are the property of their respective owners and are not included.
+  - FewTags (by Fewdys) and Inigo Quilez's shader work — see the README's
+    Credits & Third-party section for attribution.
+
+"VRChat" and related marks are the property of VRChat Inc. This project is
+unofficial and unaffiliated. Loading third-party code into VRChat may violate
+its Terms of Service; see the Disclaimer section of the README.
