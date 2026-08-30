@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>VRChatArchiveMod</AssemblyName>
+    <Product>VRCHAT ARCHIVE MOD</Product>
+    <Version>3.5.0</Version>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <DebugType>embedded</DebugType>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <!-- BepInEx and interop assemblies are provided by the game install; never copy them to output. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- BepInEx 6 (IL2CPP) framework assemblies -->
+  <ItemGroup>
+    <Reference Include="$(MSBuildProjectDirectory)\libs\bepinex\*.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- VRChat / Unity / Il2Cpp interop assemblies (2026 build) -->
+  <ItemGroup>
+    <Reference Include="$(MSBuildProjectDirectory)\libs\interop\*.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Client branding assets, embedded into the DLL and loaded at runtime (AssetLoader). -->
+  <ItemGroup>
+    <EmbeddedResource Include="ressources\background.jpg"><LogicalName>background.jpg</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\menu_bg.png"><LogicalName>menu_bg.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\sb_scary.wav"><LogicalName>sb_scary.wav</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\sb_respawn.wav"><LogicalName>sb_respawn.wav</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\sb_gay.wav"><LogicalName>sb_gay.wav</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\sb_mambo.wav"><LogicalName>sb_mambo.wav</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\sb_mambo.png"><LogicalName>sb_mambo.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\5560-heart-rem.png"><LogicalName>5560-heart-rem.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\logo_archive.jpg"><LogicalName>logo_archive.jpg</LogicalName></EmbeddedResource>
+    <!-- Era artwork actually drawn by the 2017 loading screen (see EraLoadingModule). -->
+    <EmbeddedResource Include="ressources\era\l17_dashring.png"><LogicalName>era_l17_dashring.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_midring.png"><LogicalName>era_l17_midring.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_ringglow.png"><LogicalName>era_l17_ringglow.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_wave.png"><LogicalName>era_l17_wave.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_diamond.png"><LogicalName>era_l17_diamond.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\logo.png"><LogicalName>era_logo.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\music2017.wav"><LogicalName>era_music2017.wav</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\spawn_darksquad.wav"><LogicalName>spawn_darksquad.wav</LogicalName></EmbeddedResource>
+    <!-- Pre-baked Bad Apple!! chatbox frames + hanzi grey ramp (tools/bake_badapple.py, tools/pick_charset.py). -->
+    <EmbeddedResource Include="ressources\badapple.frames"><LogicalName>badapple.frames</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\badapple.charset"><LogicalName>badapple.charset</LogicalName></EmbeddedResource>
+  </ItemGroup>
+
+</Project>

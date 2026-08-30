@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# ---------------------------------------------------------------------------
+# Proprietary reference assemblies — NOT redistributable.
+#
+# libs/ holds the BepInEx 6 (IL2CPP) framework assemblies and the VRChat /
+# Unity / Il2CppInterop interop assemblies. Those are generated from a local
+# VRChat install and are Unity's / VRChat's property, so they are never
+# committed. See the README for how to produce them into libs/.
+# ---------------------------------------------------------------------------
+libs/
+
+# ---------------------------------------------------------------------------
+# Embedded media assets — NOT distributed for licensing reasons.
+#
+# ressources/ contains audio, fonts, images and pre-baked frame data, some of
+# it third-party. The .csproj embeds a subset of these; supply your own (or
+# strip the matching <EmbeddedResource> entries) to build. See the README.
+# ---------------------------------------------------------------------------
+ressources/
+
+# ---------------------------------------------------------------------------
+# Runtime capture dumps (may contain instance/user data) and local archives
+# ---------------------------------------------------------------------------
+captures/
+*.rar
+*.7z
+*.zip
+
+# ---------------------------------------------------------------------------
+# Python tooling caches
+# ---------------------------------------------------------------------------
+__pycache__/
+*.pyc

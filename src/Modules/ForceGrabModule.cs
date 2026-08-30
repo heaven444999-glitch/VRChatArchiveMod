@@ -1,0 +1,375 @@
+﻿using System;
+using UnityEngine;
+using VRChatArchiveMod.Core;
+
+namespace VRChatArchiveMod.Modules
+{
+	// FORCE GRAB — aim at an object, take it, keep it in your hands, use it.
+	//
+	// This removes the WALK, not the permission. A VRC_Pickup is an object the world author marked
+	// grabbable by anyone, and ownership is taken through the SDK's own Networking.SetOwner — the
+	// same call that runs when you pick something up by hand.
+	//
+	// It has to hold the object ITSELF. VRCSDKBase exposes only getters on VRC_Pickup — IsHeld,
+	// currentPlayer — and no "grab this" method; the real hold lives inside the game's own pickup
+	// system. So while it is held the object is carried in front of the camera every frame, and
+	// released on a second press.
+	//
+	// One guard, and it is the one that matters: NOTHING HELD BY SOMEONE ELSE. That is the whole
+	// difference between fetching a prop and yanking it out of another player's hands.
+	public class ForceGrabModule : IModule
+	{
+		public override string Name => "ForceGrab";
+
+		public static string Status = "";
+		public static bool Holding => _held != null || _heldRaw != null;
+		public static string HeldName = "";
+
+		private static VRC.SDKBase.VRC_Pickup _held;
+		private static Rigidbody _heldBody;
+		private static bool _wasKinematic;
+		private bool _wasDown, _useWasDown;
+
+		// RAW OBJECTS \u2014 the "even if it's locked" path. A VRC_Pickup is only what a world MARKED
+		// grabbable; a locked prop is a mesh bolted in place with no pickup component at all, so the
+		// pickup search never sees it. When that search comes up empty and ForceGrabAnyObject is on,
+		// the object under the crosshair is carried by its transform directly.
+		//
+		// LOCAL, and that is the whole point of it being allowed: no ownership is taken and nothing is
+		// networked on this path, so a locked prop moves on YOUR screen and world state is untouched.
+		// A size cap keeps it from grabbing the floor and dragging the room across your view.
+		private static Transform _heldRaw;
+		private static Rigidbody _rawBody;
+		private static bool _rawWasKinematic;
+
+		// Udon's own pickup event names. Sending them is what makes a world's gun, tool or button
+		// respond the way it does for a normal holder — the world then networks its own reaction,
+		// exactly as if you had walked over and used it.
+		private const string EvPickup = "_onPickup";
+		private const string EvDrop = "_onDrop";
+		private const string EvUseDown = "_onPickupUseDown";
+		private const string EvUseUp = "_onPickupUseUp";
+
+		public override void OnUpdate()
+		{
+			try
+			{
+				bool combo = Input.GetKey(KeyCode.RightShift) && Input.GetKey(KeyCode.G);
+				if (combo && !_wasDown) Toggle();
+				_wasDown = combo;
+
+				if (_held == null) return;
+
+				// USE. Left click while holding, the same button that uses a pickup normally.
+				// Skipped while the mod menu is open, where the mouse belongs to the menu.
+				bool use = !Menu.Visible && Input.GetMouseButton(0);
+				if (use && !_useWasDown) Fire(EvUseDown);
+				else if (!use && _useWasDown) Fire(EvUseUp);
+				_useWasDown = use;
+			}
+			catch { }
+		}
+
+		// Carried in LateUpdate so it lands after the camera has moved for this frame — doing it in
+		// Update leaves the object one frame behind your view, which reads as rubber-banding.
+		public override void OnLateUpdate()
+		{
+			try
+			{
+				// Raw carry: drive its transform to the same spot in front of the camera.
+				if (_heldRaw != null)
+				{
+					var rcam = Camera.main; if (rcam == null) return;
+					var rct = rcam.transform;
+					_heldRaw.position = rct.position + rct.forward * 0.75f - rct.up * 0.15f;
+					_heldRaw.rotation = rct.rotation;
+					if (_rawBody != null) { _rawBody.velocity = Vector3.zero; _rawBody.angularVelocity = Vector3.zero; }
+					return;
+				}
+
+				if (_held == null) return;
+				var t = _held.transform;
+				if (t == null) { Drop(); return; }
+
+				var cam = Camera.main;
+				if (cam == null) return;
+				var ct = cam.transform;
+
+				t.position = ct.position + ct.forward * 0.75f - ct.up * 0.15f;
+				t.rotation = ct.rotation;
+
+				// A physics pickup would otherwise fight us every frame and jitter.
+				if (_heldBody != null)
+				{
+					_heldBody.velocity = Vector3.zero;
+					_heldBody.angularVelocity = Vector3.zero;
+				}
+			}
+			catch { }
+		}
+
+		public override void OnSceneLoaded(int buildIndex) { _held = null; _heldBody = null; _heldRaw = null; _rawBody = null; HeldName = ""; }
+		public override void OnShutdown() => Drop();
+
+		// ------------------------------------------------------------------ grab / drop
+
+		public static void Toggle()
+		{
+			if (_held != null || _heldRaw != null) { Drop(); return; }
+			Grab();
+		}
+
+		// AIMED, not nearest. You look at the thing you want; picking the closest one instead is
+		// what made the first version useless in a room with several objects.
+		public static void Grab()
+		{
+			try
+			{
+				var cam = Camera.main;
+				if (cam == null) { Status = "no camera"; return; }
+
+				float range = Mathf.Max(1f, ModConfig.ForceGrabRange.Value);
+				var ray = new Ray(cam.transform.position, cam.transform.forward);
+
+				// ALL LAYERS, AND TRIGGERS INCLUDED. The default overload skips both, and a great
+				// many pickups are trigger colliders on layers the default mask drops — so the ray
+				// went straight through the thing you were looking at and reported nothing, without
+				// logging a word. That is why this looked dead rather than broken.
+				var hits = Physics.RaycastAll(ray, range, ~0, QueryTriggerInteraction.Collide);
+				VRC.SDKBase.VRC_Pickup best = null;
+				float bestD = float.MaxValue;
+
+				if (hits != null)
+					foreach (var h in hits)
+					{
+						try
+						{
+							if (h.collider == null) continue;
+							var p = Find(h.collider.transform);
+							if (p == null) continue;
+							bool held = false;
+							try { held = p.IsHeld; } catch { }
+							if (held) continue;                      // in someone's hands: leave it
+							if (h.distance >= bestD) continue;
+							bestD = h.distance; best = p;
+						}
+						catch { }
+					}
+
+				// Still nothing: fall back to the pickup CLOSEST TO WHERE YOU ARE LOOKING, by angle.
+				// A ray is a line with no thickness, so a small object needs pixel-perfect aim; this
+				// forgives a few degrees, which is what "I'm looking right at it" actually means.
+				if (best == null)
+				{
+					const float maxAngle = 12f;
+					float bestAngle = maxAngle;
+					try
+					{
+						foreach (var p in UnityEngine.Object.FindObjectsOfType<VRC.SDKBase.VRC_Pickup>())
+						{
+							if (p == null || p.transform == null) continue;
+							bool held = false;
+							try { held = p.IsHeld; } catch { }
+							if (held) continue;
+							Vector3 to = p.transform.position - ray.origin;
+							float d = to.magnitude;
+							if (d > range || d < 0.01f) continue;
+							float ang = Vector3.Angle(ray.direction, to);
+							if (ang >= bestAngle) continue;
+							bestAngle = ang; bestD = d; best = p;
+						}
+					}
+					catch { }
+					if (best != null)
+						VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] no ray hit; nearest to crosshair at {bestAngle:F1}deg.");
+				}
+
+				if (best == null)
+				{
+					// LOCKED / NON-PICKUP fallback: no VRC_Pickup here, so carry the raw object if allowed.
+					bool anyObj = true;
+					try { anyObj = ModConfig.ForceGrabAnyObject.Value; } catch { }
+					if (anyObj && GrabRaw(ray, range)) return;
+
+					Status = "nothing grabbable under your crosshair (within " + range.ToString("F0") + "m)";
+					VRChatArchiveModPlugin.Logger.LogInfo(
+						$"[ForceGrab] miss — {(hits == null ? 0 : hits.Length)} collider(s) on the ray, no VRC_Pickup within {range:F0}m of the crosshair.");
+					return;
+				}
+
+				var go = best.gameObject;
+				try
+				{
+					var lp = VRC.SDKBase.Networking.LocalPlayer;
+					if (lp != null && !VRC.SDKBase.Networking.IsOwner(lp, go))
+						VRC.SDKBase.Networking.SetOwner(lp, go);
+				}
+				catch (Exception oe) { VRChatArchiveModPlugin.Logger.LogWarning("[ForceGrab] ownership: " + oe.Message); }
+
+				_held = best;
+				HeldName = go.name;
+				_heldBody = null;
+				try
+				{
+					_heldBody = go.GetComponent<Rigidbody>();
+					if (_heldBody != null)
+					{
+						_wasKinematic = _heldBody.isKinematic;
+						_heldBody.isKinematic = true;    // we drive the transform while it is held
+					}
+				}
+				catch { }
+
+				Fire(EvPickup);
+				Status = "holding " + Trunc(HeldName, 30) + "  ·  click to use, RShift+G to drop";
+				VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] grabbed {HeldName} at {bestD:F1}m");
+			}
+			catch (Exception e)
+			{
+				Status = "grab failed: " + e.Message;
+				VRChatArchiveModPlugin.Logger.LogWarning("[ForceGrab] " + e.Message);
+			}
+		}
+
+		// The raw carry. Nearest collider under the ray, its rigidbody root if it has one (so aiming
+		// at a prop does not walk up and grab the whole rig it hangs under), with a size sanity cap.
+		private static bool GrabRaw(Ray ray, float range)
+		{
+			try
+			{
+				var hits = Physics.RaycastAll(ray, range, ~0, QueryTriggerInteraction.Collide);
+				if (hits == null || hits.Length == 0) return false;
+
+				RaycastHit chosen = default; float bestD = float.MaxValue; bool found = false;
+				foreach (var h in hits)
+				{
+					if (h.collider == null || h.distance >= bestD) continue;
+					bestD = h.distance; chosen = h; found = true;
+				}
+				if (!found || chosen.collider == null) return false;
+
+				Transform t = chosen.collider.attachedRigidbody != null
+					? chosen.collider.attachedRigidbody.transform
+					: chosen.collider.transform;
+				if (t == null) return false;
+
+				// SIZE SANITY. Grabbing the floor or a room shell would drag the whole world across your
+				// view. Anything whose visible bounds span more than this is structure, not a prop.
+				try
+				{
+					Bounds b = default; bool has = false;
+					foreach (var r in t.GetComponentsInChildren<Renderer>())
+					{
+						if (r == null) continue;
+						if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds);
+					}
+					if (has && b.size.magnitude > 8f) { Status = "that is world structure, too big to grab"; return false; }
+				}
+				catch { }
+
+				_heldRaw = t;
+				HeldName = t.name ?? "?";
+				_rawBody = chosen.collider.attachedRigidbody;
+				if (_rawBody != null) { _rawWasKinematic = _rawBody.isKinematic; _rawBody.isKinematic = true; }
+				Status = "holding " + Trunc(HeldName, 30) + " (locked \u2014 local carry)  \u00b7  RShift+G to drop";
+				VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] raw-grabbed {HeldName} at {bestD:F1}m (local carry, no networking).");
+				return true;
+			}
+			catch (Exception e) { Status = "raw grab failed: " + e.Message; return false; }
+		}
+
+		public static void Drop()
+		{
+			// Raw carry first: restore its physics and let go, no events, nothing networked.
+			if (_heldRaw != null)
+			{
+				try { if (_rawBody != null) { _rawBody.isKinematic = _rawWasKinematic; _rawBody.velocity = Vector3.zero; } } catch { }
+				Status = "dropped " + Trunc(HeldName, 30);
+				VRChatArchiveModPlugin.Logger.LogInfo("[ForceGrab] dropped (raw) " + HeldName);
+				_heldRaw = null; _rawBody = null; HeldName = "";
+				return;
+			}
+			try
+			{
+				if (_held == null) return;
+				Fire(EvDrop);
+
+				// Physics handed back the way we found it: leaving a world's object kinematic after
+				// letting go would quietly break it for everyone until the instance restarts.
+				if (_heldBody != null)
+				{
+					try
+					{
+						_heldBody.isKinematic = _wasKinematic;
+						_heldBody.velocity = Vector3.zero;
+						_heldBody.angularVelocity = Vector3.zero;
+					}
+					catch { }
+				}
+				Status = "dropped " + Trunc(HeldName, 30);
+				VRChatArchiveModPlugin.Logger.LogInfo("[ForceGrab] dropped " + HeldName);
+			}
+			catch { }
+			finally { _held = null; _heldBody = null; HeldName = ""; }
+		}
+
+		// ------------------------------------------------------------------ events
+
+		// Sends a pickup event to whatever Udon sits on the object, on THIS client. The world's own
+		// script decides what to do with it and networks its own response, which is what happens
+		// when any player uses the item.
+		private static void Fire(string ev)
+		{
+			try
+			{
+				if (_held == null) return;
+				var go = _held.gameObject;
+				if (go == null) return;
+
+				Type ub = FindType("VRC.Udon.UdonBehaviour");
+				var mi = ub?.GetMethod("SendCustomEvent", new[] { typeof(string) });
+				if (mi == null) return;
+
+				var il2 = Il2CppInterop.Runtime.Il2CppType.From(ub);
+				var comps = go.GetComponents(il2);
+				if (comps == null) return;
+				for (int i = 0; i < comps.Length; i++)
+				{
+					try { mi.Invoke(comps[i], new object[] { ev }); }
+					catch { }
+				}
+			}
+			catch { }
+		}
+
+		// The pickup can be on the collider, or anywhere above it — a pickup's colliders usually
+		// live on children.
+		private static VRC.SDKBase.VRC_Pickup Find(Transform t)
+		{
+			try
+			{
+				for (Transform p = t; p != null; p = p.parent)
+				{
+					var pick = p.GetComponent<VRC.SDKBase.VRC_Pickup>();
+					if (pick != null) return pick;
+				}
+			}
+			catch { }
+			return null;
+		}
+
+		private static Type FindType(string full)
+		{
+			foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+			{
+				Type t = null;
+				try { t = asm.GetType(full, false); } catch { }
+				if (t != null) return t;
+			}
+			return null;
+		}
+
+		private static string Trunc(string s, int n)
+			=> string.IsNullOrEmpty(s) ? "" : (s.Length <= n ? s : s.Substring(0, n - 1) + "…");
+	}
+}
