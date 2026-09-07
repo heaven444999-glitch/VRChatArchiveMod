@@ -40,26 +40,49 @@ namespace VRChatArchiveMod.Modules
 			public GameObject Go;         // our clone
 			public MeshRenderer Rend;
 			public Color Col;
+			public object Fx;             // the HighlightsFX instance the renderer was lit on (null = never lit)
 		}
 
 		private readonly Dictionary<int, Cap> _caps = new Dictionary<int, Cap>();
 		private int _frame;
 		private bool _wasOn;
+		private bool? _lastThrough;   // ThroughWalls as last applied to the live capsules
 
 		public override void OnUpdate()
 		{
 			try
 			{
-				// SELF-GATED, like the glows. EspEnabled is the player-box feature ("Draw a box around
-				// remote players"), not a master, so requiring it here made the capsule switch do
-				// nothing until an unrelated one was also on.
-				bool on = ModConfig.EspCapsule.Value;
+				// SELF-GATED: this switch and only this switch. OFF MEANS OFF, THIS FRAME — every
+				// capsule is un-lit and destroyed the moment the switch flips, and again on any later
+				// frame that still finds one (a removal that failed once is retried, not forgotten).
+				bool on = false;
+				try { on = ModConfig.EspCapsule.Value; } catch { }
 				if (!on)
 				{
-					if (_wasOn) { ClearAll(); _wasOn = false; }
+					if (_caps.Count > 0) ClearAll();
+					_wasOn = false;
+					FeatureHealth.Idle("ESP/Capsule", "off");
 					return;
 				}
-				_wasOn = true;
+				// AN ENABLE IS INSTANT TOO: the first rescan runs on the frame the switch goes on
+				// rather than up to a second later.
+				if (!_wasOn) { _wasOn = true; _frame = RescanFrames; }
+
+				// THROUGH-WALLS IS LIVE. It used to be baked into the material at build time, so
+				// flipping it did nothing to the capsules already on screen until they were rebuilt.
+				bool through = true;
+				try { through = ModConfig.EspThroughWalls.Value; } catch { }
+				if (_lastThrough != through)
+				{
+					_lastThrough = through;
+					foreach (var c in _caps.Values)
+					{
+						try { if (c?.Rend != null && Core.NativeGuard.Alive(c.Rend)) ApplyDepth(c.Rend.material, through); } catch { }
+					}
+				}
+
+				// Keep the ESP out of your own camera / stream / mirrors (rate-limited inside).
+				EspCameraGuard.Tick();
 
 				// Position every frame — the capsule has to sit on the player, not near them.
 				foreach (var c in _caps.Values) Track(c);
@@ -82,8 +105,8 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[CapsuleEsp] " + e.Message); }
 		}
 
-		public override void OnSceneLoaded(int buildIndex) => ClearAll();
-		public override void OnShutdown() => ClearAll();
+		public override void OnSceneLoaded(int buildIndex) { ClearAll(); EspCameraGuard.Reset(); }
+		public override void OnShutdown() { ClearAll(); EspCameraGuard.Restore(); }
 
 		private static bool _reported;
 
@@ -145,6 +168,10 @@ namespace VRChatArchiveMod.Modules
 						cap.Rainbow = false;
 						Color col = TrustKit.ColorOf(Core.ApiUsers.Get(api));
 						if (col != cap.Col) { cap.Col = col; Light(cap, true); }
+						// NEVER LIT IS NOT THE SAME AS LIT. A capsule built while the effect was still
+						// absent (world still loading) had no glow and, its colour never changing
+						// again, never got one. Retry on every rescan until it takes.
+						else if (cap.Fx == null) Light(cap, true);
 					}
 				}
 				catch { }
@@ -157,6 +184,15 @@ namespace VRChatArchiveMod.Modules
 				foreach (var kv in _caps) if (!seen.Contains(kv.Key)) gone.Add(kv.Key);
 				foreach (int id in gone) Remove(id);
 			}
+
+			// THE COUNT IS THE PROOF, and "the effect is missing" is a different report from "nobody
+			// is in range". HighlightEspModule owns the effect; ask it.
+			if (!HighlightEspModule.EffectReady())
+				FeatureHealth.Broken("ESP/Capsule", "on, but VRChat's highlight effect is not available yet — capsules are built but will not glow");
+			else
+				FeatureHealth.Ok("ESP/Capsule", _caps.Count == 0
+					? "on — no other players in range"
+					: "on — " + _caps.Count + " player capsule(s)");
 
 			// One-time headline: players in range vs capsules held. "seen 6, capsules 0" points at
 			// Build; "seen 0" at the roster; "capsules 6" with a blank screen at the glow, which
@@ -205,6 +241,7 @@ namespace VRChatArchiveMod.Modules
 				// into localScale. lossyScale is already the WORLD scale, so any scale on the root
 				// multiplied it a second time and the capsule swallowed the screen.
 				var go = new GameObject(CapsuleName);
+				go.layer = EspCameraGuard.EspLayer;   // rendered by your view only (see EspCameraGuard)
 				go.transform.SetParent(region, false);
 				go.transform.localPosition = Vector3.zero;
 				go.transform.localRotation = Quaternion.identity;
@@ -285,11 +322,7 @@ namespace VRChatArchiveMod.Modules
 					bool through = true;
 					try { through = ModConfig.EspThroughWalls.Value; } catch { }
 
-					mat.SetInt("_ZTest", (int)(through
-						? UnityEngine.Rendering.CompareFunction.Always
-						: UnityEngine.Rendering.CompareFunction.LessEqual));
-					mat.SetInt("_ZWrite", 1);                 // always: this is what stops the smearing
-					mat.renderQueue = through ? 9999 : 2500;  // last of everything, or with the world
+					ApplyDepth(mat, through);
 				}
 				catch { }
 
@@ -325,15 +358,36 @@ namespace VRChatArchiveMod.Modules
 			catch { }
 		}
 
+		// Depth behaviour of a capsule material: drawn over the world (walls never hide it — and
+		// capsules no longer hide each other either) or in the scene like ordinary geometry.
+		// ZWrite stays on either way: it is what stops a crowd's capsules smearing into one colour.
+		private static void ApplyDepth(Material mat, bool through)
+		{
+			try
+			{
+				if (mat == null) return;
+				mat.SetInt("_ZTest", (int)(through
+					? UnityEngine.Rendering.CompareFunction.Always
+					: UnityEngine.Rendering.CompareFunction.LessEqual));
+				mat.SetInt("_ZWrite", 1);
+				mat.renderQueue = through ? 9999 : 2500;   // last of everything, or with the world
+			}
+			catch { }
+		}
+
 		// HighlightsFX is reached through HighlightEspModule, which already resolves it by
-		// reflection and copes with the builds where it is missing.
+		// reflection and copes with the builds where it is missing. The instance a renderer was lit
+		// on is remembered, so the un-light goes to the effect that actually holds it.
 		private static void Light(Cap c, bool on)
 		{
 			try
 			{
 				if (c?.Rend == null) return;
-				if (on) HighlightEspModule.Highlight(c.Rend, c.Col);
-				else HighlightEspModule.Unhighlight(c.Rend);
+				if (on)
+				{
+					if (HighlightEspModule.Highlight(c.Rend, c.Col, out object fx) && fx != null) c.Fx = fx;
+				}
+				else HighlightEspModule.Unhighlight(c.Rend, c.Fx);
 			}
 			catch { }
 		}
@@ -341,15 +395,137 @@ namespace VRChatArchiveMod.Modules
 		private void Remove(int id)
 		{
 			if (!_caps.TryGetValue(id, out var c)) return;
-			try { Light(c, false); } catch { }
-			try { if (c?.Go != null) UnityEngine.Object.Destroy(c.Go); } catch { }
 			_caps.Remove(id);
+			try { Light(c, false); } catch { }
+			// The GameObject goes whether or not the effect was still there to un-light it: a
+			// destroyed renderer cannot glow, so this alone makes the capsule vanish.
+			try { if (Core.NativeGuard.Alive(c?.Go) && c.Go != null) UnityEngine.Object.Destroy(c.Go); } catch { }
 		}
 
+		// Everything, each on its own guard, and the table is emptied even if a removal threw.
 		private void ClearAll()
 		{
 			var ids = new List<int>(_caps.Keys);
-			foreach (int id in ids) Remove(id);
+			foreach (int id in ids) { try { Remove(id); } catch { } }
+			_caps.Clear();
+		}
+	}
+
+	// ESP OUT OF YOUR OWN CAMERA. Two things can leak the ESP into a photo, a stream or a mirror: the
+	// capsules (real objects, any camera renders them) and the glow (HighlightsFX is a per-camera post
+	// effect). So: the capsules live on a layer only Camera.main renders — the bit is forced into the
+	// main camera's culling mask and stripped from every other camera's — and any HighlightsFX that sits
+	// on a camera other than the one the glow ESP uses is switched off (put back when the option or the
+	// mod goes off). The 2D screen ESP is IMGUI: it never enters any camera, nothing to do there.
+	internal static class EspCameraGuard
+	{
+		// Layer 7 is one of Unity's unnamed built-in layers: no world uses it, every camera mask has a
+		// bit for it, and nothing else in VRChat is on it.
+		public const int EspLayer = 7;
+		private const int Bit = 1 << EspLayer;
+		private const int TickEveryFrames = 10;   // cameras appear on a human timescale
+		private const float RescanSec = 3f;       // a same-count swap (one mirror for another) is caught here
+		private static int _frame;
+		private static int _lastCount = -1;
+		private static float _nextRescan;
+		private static Il2CppSystem.Type _fxIl2;
+		// The enabled cameras other than the main one, as of the last rescan. Per tick only their
+		// culling mask is read — one icall each — instead of allocating Camera.allCameras, wrapping
+		// every entry, VirtualQuery-ing it and GetComponent-ing it: that was 8-26 ms every 10 frames in
+		// the 2026-09-04 log, i.e. a stutter the whole time any glow was on.
+		private static readonly List<Camera> _cams = new List<Camera>();
+		private static readonly List<Behaviour> _fxOff = new List<Behaviour>();
+
+		internal static void Tick()
+		{
+			try
+			{
+				bool on = true;
+				try { on = ModConfig.EspHideFromCamera.Value; } catch { }
+				if (!on) { if (_fxOff.Count > 0) Restore(); return; }
+				if (++_frame < TickEveryFrames) return;
+				_frame = 0;
+
+				var main = Camera.main;
+				int mainId = 0;
+				if (main != null)
+				{
+					try { mainId = main.GetInstanceID(); if ((main.cullingMask & Bit) == 0) main.cullingMask |= Bit; } catch { }
+				}
+
+				int count = -1;
+				try { count = Camera.allCamerasCount; } catch { }
+				float now = Time.realtimeSinceStartup;
+				if (count != _lastCount || now >= _nextRescan)
+				{
+					_lastCount = count;
+					_nextRescan = now + RescanSec;
+					Rescan(mainId);
+				}
+
+				for (int i = 0; i < _cams.Count; i++)
+				{
+					try
+					{
+						var cam = _cams[i];
+						if (cam == null) continue;   // destroyed since the rescan: Unity's == says so, no read is made
+						if ((cam.cullingMask & Bit) != 0) cam.cullingMask &= ~Bit;
+					}
+					catch { }
+				}
+			}
+			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[EspCameraGuard] " + e.Message); }
+		}
+
+		// Rebuilds the camera list and switches off any HighlightsFX copy that is not the one the glow
+		// ESP draws with (a copy on the photo camera would put the glow into every picture).
+		private static void Rescan(int mainId)
+		{
+			_cams.Clear();
+			Camera[] cams = null;
+			try { cams = Camera.allCameras; } catch { }
+			if (cams == null) return;
+			if (_fxIl2 == null) _fxIl2 = HighlightEspModule.FxIl2;
+			IntPtr ours = HighlightEspModule.FxPtr;
+			for (int i = 0; i < cams.Length; i++)
+			{
+				var cam = cams[i];
+				try
+				{
+					if (cam == null || !Core.NativeGuard.Alive(cam)) continue;
+					if (cam.GetInstanceID() == mainId) continue;
+					_cams.Add(cam);
+					if (_fxIl2 == null) continue;
+					var comp = cam.GetComponent(_fxIl2);
+					if (comp == null) continue;
+					if (ours != IntPtr.Zero && comp.Pointer == ours) continue;   // the instance the glow ESP itself uses
+					var b = comp.TryCast<Behaviour>();
+					if (b == null) { try { b = new Behaviour(comp.Pointer); } catch { b = null; } }
+					if (b == null || !b.enabled) continue;   // already off (by us, or by VRChat)
+					b.enabled = false;
+					_fxOff.Add(b);
+				}
+				catch { }
+			}
+		}
+
+		internal static void Restore()
+		{
+			for (int i = 0; i < _fxOff.Count; i++)
+			{
+				try { var b = _fxOff[i]; if (b != null && Core.NativeGuard.Alive(b)) b.enabled = true; } catch { }
+			}
+			_fxOff.Clear();
+			_cams.Clear();
+			_lastCount = -1;
+		}
+
+		internal static void Reset()   // the cameras left with the world
+		{
+			_fxOff.Clear();
+			_cams.Clear();
+			_lastCount = -1;
+			_fxIl2 = null;
 		}
 	}
 }

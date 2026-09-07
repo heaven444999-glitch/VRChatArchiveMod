@@ -90,6 +90,19 @@ namespace VRChatArchiveMod.Modules
 		public override void OnInitialize()
 		{
 			Instance = this;
+			// ONE-TIME SANITY. Sliders that briefly had no ceiling left absurd values in some configs
+			// (spacing 195, first plate 512 px up — "the tags are separated by huge gaps"). Values no
+			// nameplate layout can want go back to TIGHT (0 = auto) / the default height, once, and say so.
+			try
+			{
+				var fixes = new System.Text.StringBuilder();
+				if (ModConfig.FewTagsSpacingExpanded.Value > 150f) { fixes.Append(" SpacingExpanded ").Append(ModConfig.FewTagsSpacingExpanded.Value).Append("->0(auto)"); ModConfig.FewTagsSpacingExpanded.Value = 0f; }
+				if (ModConfig.FewTagsSpacing.Value > 60f) { fixes.Append(" Spacing ").Append(ModConfig.FewTagsSpacing.Value).Append("->0(auto)"); ModConfig.FewTagsSpacing.Value = 0f; }
+				if (ModConfig.FewTagsBaseYExpanded.Value > 400f) { fixes.Append(" BaseYExpanded ").Append(ModConfig.FewTagsBaseYExpanded.Value).Append("->205"); ModConfig.FewTagsBaseYExpanded.Value = 205f; }
+				if (ModConfig.FewTagsBaseY.Value > 250f) { fixes.Append(" BaseY ").Append(ModConfig.FewTagsBaseY.Value).Append("->119"); ModConfig.FewTagsBaseY.Value = 119.05f; }
+				if (fixes.Length > 0) VRChatArchiveModPlugin.Logger.LogWarning("[FewTags] layout values reset to sane ones:" + fixes);
+			}
+			catch { }
 			if (!ModConfig.FewTagsEnabled.Value)
 			{
 				VRChatArchiveModPlugin.Logger.LogInfo("[FewTags] disabled by config.");
@@ -336,7 +349,8 @@ namespace VRChatArchiveMod.Modules
 				if (header != null) { applied.Clones.Add(header); line++; }
 			}
 
-			int max = Mathf.Clamp(ModConfig.FewTagsMaxTagsPerUser.Value, 1, 10);
+			// No ceiling: the owner wants every tag a user has. The setting is the only cap (min 1).
+			int max = Mathf.Max(1, ModConfig.FewTagsMaxTagsPerUser.Value);
 			for (int i = 0; i < rec.Tags.Length && i < max; i++)
 			{
 				string tag = rec.Tags[i];
@@ -459,8 +473,9 @@ namespace VRChatArchiveMod.Modules
 				// SELF-CALIBRATING FLOOR. A line has to be at least ~1.7x its own font size clear of
 				// the next one or the glyphs collide. Measuring beats guessing: the number comes
 				// from the label actually on screen, so a future layout change corrects itself.
-				float floor = AnchorFontSize > 0f ? AnchorFontSize * 1.7f : 0f;
-				return Mathf.Max(cfg, floor);
+				// 0 (the default now) = TIGHT: exactly that floor, lines stacked like text.
+				float floor = AnchorFontSize > 0f ? AnchorFontSize * 1.7f : (IsExpandedInfo ? 78f : 28f);
+				return cfg <= 0f ? floor : Mathf.Max(cfg, floor);
 			}
 			catch { return 78f; }
 		}
@@ -579,6 +594,14 @@ namespace VRChatArchiveMod.Modules
 				//   autoSizing on a rect this small shrinks the text toward zero;
 				//   an overflow mode of Truncate/Ellipsis clips it away entirely.
 				tmp.richText = true;
+				// overrideColorTags=true makes TMP IGNORE every <color> span and paint the whole label
+				// in tmp.color — which turns the member gradient (and rainbow/scroll/cylon/…) into one
+				// flat colour. VRChat's own nameplate label ships with this ON (and a game update can
+				// flip it), and the clone inherits it, so force it off or per-character colour never shows.
+				tmp.overrideColorTags = false;
+				// A tinted base colour multiplies the <color> vertices and mutes the gradient; the spans
+				// carry the real colours, so the label's own colour must be plain white.
+				tmp.color = Color.white;
 				tmp.enableAutoSizing = false;
 				tmp.overflowMode = TextOverflowModes.Overflow;
 				tmp.horizontalAlignment = HorizontalAlignmentOptions.Center;

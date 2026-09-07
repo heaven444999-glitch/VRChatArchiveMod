@@ -41,6 +41,16 @@ namespace VRChatArchiveMod.Core
 		public static float HeaderH => S(26f);
 		public static float PadX    => S(10f);
 
+		/// <summary>The width of every HUD panel that sits against a screen edge — the player list,
+		/// the instance log and the radar.
+		///
+		/// ONE FORMULA FOR ALL THREE, deliberately. They each used to compute their own: the radar
+		/// from Screen.height, the two lists from Screen.width. So the corners of the HUD were never
+		/// the same width, and drifted further apart the wider the display got. They read as one
+		/// interface, so they are sized as one — and since the radar is square, height is the
+		/// dimension that has to drive it.</summary>
+		public static float SideWidth => Mathf.Clamp(Screen.height * 0.30f, S(240f), S(460f));
+
 		private static GUIStyle _title, _right;
 		private static float _styleScale = -1f;
 

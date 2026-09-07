@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -167,7 +167,10 @@ namespace VRChatArchiveMod.Modules
 				bool vaOn = ModConfig.VaTagsEnabled.Value;
 				bool rosterNeeded = vaOn
 					|| ModConfig.InstancePanelsEnabled.Value
-					|| ModConfig.JoinNotifierEnabled.Value;
+					|| ModConfig.JoinNotifierEnabled.Value
+					// Player Grab finds its targets (and the holder) through this roster: with tags off
+					// and no panels it was never refreshed, so there was nobody to grab.
+					|| PlayerGrabModule.Active;
 
 				if (!vaOn && _plates.Count > 0) RemoveAllPlates();
 
@@ -182,9 +185,16 @@ namespace VRChatArchiveMod.Modules
 					// Self-register as a VRChat Archive member once, as soon as the DB is loaded
 					// and our own user id is readable.
 					if (!_memberTagChecked && RecordsLoaded > 0) EnsureMemberTag();
+					// The rank badge, on EVERY pass rather than once: the level can change while the
+					// game is running (a subscription starts, a session ends, the client is signed out)
+					// and the badge has to follow it both ways. It costs one integer compare unless
+					// something actually moved.
+					if (RecordsLoaded > 0) EnsureRankTag();
 
 					float now = Time.realtimeSinceStartup;
-					VaAuth.Poll(now);   // keep the auth mode (client bridge / mod login) current
+					// VaAuth.Poll used to run here, which tied the auth probe to VaTags being ON:
+					// switch tags off and the client bridge was never probed, so the control channel
+					// never connected. ModControlModule owns the probe now, above its own gates.
 
 					if (now >= _nextFetchAt)
 					{
@@ -621,6 +631,137 @@ namespace VRChatArchiveMod.Modules
 			AddTag(me, new VaTag { Text = MemberTagText, Color = MemberPink, B = true, Fx = "grad" });
 		}
 
+		// ---------------------------------------------------------------- rank badge
+		//
+		// THE ARCHIVE TIER, WORN IN GAME, AND KEPT HONEST BY ITSELF.
+		//
+		// The member badge says "this person runs the mod". This one says WHICH TIER their archive
+		// account holds — and it is not something anyone grants or takes away by hand: the desktop
+		// client publishes the level over the local bridge (VaAuth.AccountLevel) and this compares it
+		// to what is currently worn. Subscribe and the badge appears; let it lapse and it comes off on
+		// its own, because a rank nobody can revoke is not a rank.
+		//
+		// The colours are the SITE's, value for value out of the tier classes in html/admin.html
+		// (.access-tier-*), so a Premium is the same purple in game as on the website.
+		//
+		// EVERY LEVEL GETS ONE, including level 1: the ladder reads as a ladder only if its bottom
+		// rung exists, and "Archive User" is what somebody with an account and no subscription is.
+		public sealed class Rank
+		{
+			public readonly int Level; public readonly string Text, Color, Fx;
+			public Rank(int level, string text, string color, string fx) { Level = level; Text = text; Color = color; Fx = fx; }
+		}
+
+		// Highest first: RankFor takes the first one this level reaches.
+		private static readonly Rank[] Ranks =
+		{
+			// "sr", not "rain"/"rainbow": the site's .access-tier-legendary is a linear-gradient swept
+			// by an animation, i.e. a SMOOTH flow through the spectrum — which is what sr draws. The
+			// "rainbow" code is the chunky stepped CoD-clan-tag look and would not match it. The colour
+			// is ignored by both (they write their own per-glyph spans); it is kept as the fallback for
+			// anywhere the effect is stripped.
+			new Rank(5, "Archive Legendary", "#FF5FCF", "sr"),
+			new Rank(4, "Archive VIP",       "#FFD166", "glow"),     // --yellow
+			new Rank(3, "Archive Premium",   "#A855F7", "glow"),     // --purple
+			new Rank(2, "Archive Supporter", "#0066FF", "none"),     // --blue
+			new Rank(1, "Archive User",      "#00FF41", "none"),     // --green (.access-tier-standard)
+		};
+		private const string AdminRankText = "Archive Admin";
+		private const string AdminRankColor = "#00E5FF";                // --cyan
+
+		// THE NAMES THIS SYSTEM USED TO WRITE, cleaned off an account when the current name goes on —
+		// otherwise the first build's badges stay stranded on everyone who already earned one.
+		//
+		// SPLIT IN TWO ON PURPOSE. "Legendary Subscriber" and "Premium Supporter" are ours beyond
+		// doubt, so they count as rank badges everywhere, including the guard that refuses a manual
+		// delete. Bare "VIP" and "Supporter" are words anybody might legitimately want as their own
+		// tag: they are swept off YOUR OWN account during the rename and nowhere else, so nobody is
+		// left unable to write — or delete — a tag that simply says VIP.
+		private static readonly string[] LegacyRankTexts =
+		{
+			"Legendary Subscriber", "Premium Supporter",
+		};
+		private static readonly string[] LegacyLooseRankTexts =
+		{
+			"VIP", "Supporter",
+		};
+
+		public static Rank RankFor(int level)
+		{
+			for (int i = 0; i < Ranks.Length; i++) if (level >= Ranks[i].Level) return Ranks[i];
+			return null;
+		}
+
+		/// <summary>Every text this system owns — used to recognise a rank badge on somebody, and to
+		/// refuse to let one be taken off by hand.</summary>
+		public static bool IsRankTag(string text)
+		{
+			if (string.IsNullOrEmpty(text)) return false;
+			if (string.Equals(text, AdminRankText, StringComparison.OrdinalIgnoreCase)) return true;
+			for (int i = 0; i < Ranks.Length; i++)
+				if (string.Equals(text, Ranks[i].Text, StringComparison.OrdinalIgnoreCase)) return true;
+			for (int i = 0; i < LegacyRankTexts.Length; i++)
+				if (string.Equals(text, LegacyRankTexts[i], StringComparison.OrdinalIgnoreCase)) return true;
+			return false;
+		}
+
+		/// <summary>A word the first build used as a rank and that anyone else may legitimately want.
+		/// Swept off your own account by the rename, and treated as an ordinary tag everywhere else.</summary>
+		private static bool IsLooseLegacyRank(string text)
+		{
+			if (string.IsNullOrEmpty(text)) return false;
+			for (int i = 0; i < LegacyLooseRankTexts.Length; i++)
+				if (string.Equals(text, LegacyLooseRankTexts[i], StringComparison.OrdinalIgnoreCase)) return true;
+			return false;
+		}
+
+		// What was last put on, so the steady state costs one compare per sync instead of a round trip.
+		private static string _rankApplied;
+		private static int _rankLevelSeen = int.MinValue;
+
+		private static void EnsureRankTag()
+		{
+			string me = LocalUserId();
+			if (string.IsNullOrEmpty(me)) return;
+
+			int level = VaAuth.AccountLevel;
+			// -1 = the level is not knowable right now (no bridge, or a client too old to send it).
+			// Leave everything exactly as it is: a badge must never vanish because the desktop client
+			// happened to be closed — only because the account really lost the tier.
+			if (level < 0) return;
+
+			bool admin = VaAuth.AccountAdmin;
+			Rank want = RankFor(level);
+			string wantText = admin ? AdminRankText : want?.Text;
+			if (level == _rankLevelSeen && string.Equals(wantText ?? "", _rankApplied ?? "", StringComparison.Ordinal)) return;
+			_rankLevelSeen = level;
+
+			// Take off every rank badge that is not the one owed. This is the "auto-removed" half, and
+			// it is what makes a demotion, a lapsed subscription or a sign-out clean up after itself.
+			// WriteTag directly, because RemoveTag refuses rank badges by design.
+			foreach (var t in TagsOf(me))
+			{
+				if (!IsRankTag(t.Text) && !IsLooseLegacyRank(t.Text)) continue;
+				if (wantText != null && string.Equals(t.Text, wantText, StringComparison.OrdinalIgnoreCase)) continue;
+				VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] rank badge '" + t.Text + "' no longer earned (level " + level + ") — removing.");
+				WriteTag("/api/va-tags/remove", me, new VaTag { Text = t.Text }, "rank badge removed");
+			}
+
+			if (wantText == null) { _rankApplied = null; return; }
+			foreach (var t in TagsOf(me))
+				if (string.Equals(t.Text, wantText, StringComparison.OrdinalIgnoreCase)) { _rankApplied = wantText; return; }
+
+			VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] rank badge '" + wantText + "' earned (level " + level + (admin ? ", admin" : "") + ") — adding.");
+			AddTag(me, new VaTag
+			{
+				Text = wantText,
+				Color = admin ? AdminRankColor : want.Color,
+				B = true,
+				Fx = admin ? "glow" : want.Fx,
+			});
+			_rankApplied = wantText;
+		}
+
 		public static string LocalAvatarId()
 		{
 			try
@@ -629,6 +770,20 @@ namespace VRChatArchiveMod.Modules
 				if (local == null) return null;
 				ResolveAvatar(local, out string id, out _);
 				return id;
+			}
+			catch { return null; }
+		}
+
+		// The worn avatar's NAME, by the same route. The Archive fav button uses it to recognise "the
+		// pane is showing the avatar I'm wearing" in any UI language (the "Applied" label is English).
+		public static string LocalAvatarName()
+		{
+			try
+			{
+				var local = PlayerRef.LocalPlayer();
+				if (local == null) return null;
+				ResolveAvatar(local, out _, out string name);
+				return name;
 			}
 			catch { return null; }
 		}
@@ -648,10 +803,15 @@ namespace VRChatArchiveMod.Modules
 		public static void AddTag(string uid, VaTag tag) => WriteTag("/api/va-tags/add", uid, tag, "tag added");
 
 		// The member badge is mandatory for everyone who runs the mod — it can never be removed.
+		// Neither can a rank badge: it is not a decoration somebody chose, it is what the archive
+		// account currently is, and the only thing allowed to take it off is EnsureRankTag noticing
+		// that the level no longer earns it.
 		public static void RemoveTag(string uid, string text)
 		{
 			if (string.Equals(text, MemberTagText, StringComparison.OrdinalIgnoreCase))
 			{ LastStatus = "the VRChat Archive Member badge is mandatory — it can't be removed"; return; }
+			if (IsRankTag(text))
+			{ LastStatus = "'" + text + "' is your archive rank — it follows your account, it isn't removable by hand"; return; }
 			WriteTag("/api/va-tags/remove", uid, new VaTag { Text = text }, "tag removed");
 		}
 
@@ -856,8 +1016,27 @@ namespace VRChatArchiveMod.Modules
 				}
 				catch (Exception e)
 				{
-					LastFetchInfo = "fetch failed: " + Short(e.Message);
-					MainThreadQueue.Enqueue(() => LastStatus = "unable to contact the VRChatArchive tag server");
+					// SAY IT OUT LOUD. This used to fail in complete silence: LastFetchInfo and the
+					// status line are only visible to someone already looking for them, so a player
+					// whose download was refused saw no tags, no error, and nothing in the log to
+					// explain it — the failure was indistinguishable from "nobody nearby is tagged".
+					// A refused download is the one case worth a warning, because it is never the
+					// player's doing and it disables the whole feature.
+					string why = Short(e.Message);
+					bool refused = why.IndexOf("403", StringComparison.Ordinal) >= 0
+						|| why.IndexOf("Forbidden", StringComparison.OrdinalIgnoreCase) >= 0;
+					LastFetchInfo = "fetch failed: " + why;
+					MainThreadQueue.Enqueue(() =>
+					{
+						LastStatus = refused
+							? "the tag server refused the request — tags are unavailable this session"
+							: "unable to contact the VRChatArchive tag server";
+						VRChatArchiveModPlugin.Logger.LogWarning(
+							"[VaTags] tag database NOT loaded — " + why
+							+ (refused
+								? ". The server refused an anonymous read, so no tags can be shown."
+								: ". Tags stay empty until the next refresh succeeds."));
+					});
 				}
 				finally { _fetching = false; }
 			});

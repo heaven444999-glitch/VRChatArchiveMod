@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VRChatArchiveMod.Core;
@@ -43,6 +43,9 @@ namespace VRChatArchiveMod.Modules
 			public float Phase;      // where it sits in the ring
 			public float Tilt;       // its own height in the ring
 			public Vector3 Spin;     // per-object tumble, so the ring is not a carousel of statues
+			public Rigidbody Body;   // frozen kinematic while it orbits so physics stops fighting us
+			public bool WasKinematic;
+			public RigidbodyInterpolation WasInterp;
 		}
 
 		private static readonly List<Held> Held0 = new List<Held>();
@@ -72,7 +75,7 @@ namespace VRChatArchiveMod.Modules
 			Start(entry.Transform, entry.Name);
 		}
 
-		private static void Start(Transform center, string label)
+		internal static void Start(Transform center, string label)
 		{
 			Stop(null);
 			_center = center;
@@ -81,8 +84,27 @@ namespace VRChatArchiveMod.Modules
 			try { _synced = ModConfig.ObjOrbitSynced.Value; } catch { _synced = false; }
 
 			int owned = 0;
-			int want = Mathf.Clamp(ModConfig.ObjOrbitCount.Value, 1, 200);
-			float range = Mathf.Max(2f, ModConfig.ObjOrbitRange.Value);
+			// HOW MANY. Count <= 0 means ALL. But synced grabs are a NETWORK cost — every object is
+			// owned and its position broadcast to everyone, so an uncapped synced ring floods the
+			// instance (the pickup-spam grief). Local grabs cost nothing: they move only on your screen.
+			// So LOCAL is effectively unlimited; SYNCED is capped to protect the room.
+			int cfgCount = 0;
+			try { cfgCount = ModConfig.ObjOrbitCount.Value; } catch { }
+			// NOT capped low. A 4-object cap was tried on 2026-09-02 on the theory that a synced ring
+			// starved the send queue before a ServerTimeout; EvilEye's ItemOrbit owns and moves EVERY
+			// SYNCED IS BOUNDED, LOCAL IS NOT. NetSend proved it on 2026-09-02: a synced ring of many
+			// objects sent ~240 events/s outbound (each owned object is its own VRC_ObjectSync stream)
+			// and timed the connection out to the home world. EvilEye orbits hundreds, but LOCALLY -- no
+			// ownership, no broadcast. So synced is capped low and throttled (see OnUpdate); local stays
+			// unlimited because it costs no network at all.
+			// 0 = ALL (the owner's default): local takes every loose object it can find (up to 5000);
+			// synced takes the network ceiling of 40 — each owned object is its own ObjectSync stream at
+			// ~10 Hz, and 24 of them once timed the connection out, so that ceiling is not a preference.
+			int want = _synced
+				? Mathf.Clamp(cfgCount <= 0 ? 40 : cfgCount, 1, 40)
+				: Mathf.Clamp(cfgCount <= 0 ? 5000 : cfgCount, 1, 5000);
+			// 0 = unlimited (whole world); otherwise at least 2 m so the ring is not just what you stand on.
+			float range = ModConfig.ObjOrbitRange.Value <= 0f ? 100000f : Mathf.Max(2f, ModConfig.ObjOrbitRange.Value);
 			var picked = Collect(center.position, range, want);
 			if (picked.Count == 0)
 			{
@@ -106,6 +128,21 @@ namespace VRChatArchiveMod.Modules
 					Tilt = ((i % 5) - 2) * 0.45f,
 					Spin = new Vector3(23f + (i * 7 % 40), 41f + (i * 11 % 60), 17f + (i * 5 % 30)),
 				};
+				// A loose prop's Rigidbody keeps obeying gravity and collisions, so it fights our
+				// per-frame transform writes and jitters. Freeze it while it orbits; Stop restores it.
+				try
+				{
+					h.Body = t.GetComponent<Rigidbody>() ?? t.GetComponentInChildren<Rigidbody>();
+					if (h.Body != null)
+					{
+						h.WasKinematic = h.Body.isKinematic; h.Body.isKinematic = true;
+						// Interpolated, so the body reports a velocity as it is moved with MovePosition
+						// below; that velocity is what ObjectSync sends and what lets other clients
+						// dead-reckon a smooth arc instead of stepping between samples.
+						h.WasInterp = h.Body.interpolation; h.Body.interpolation = RigidbodyInterpolation.Interpolate;
+					}
+				}
+				catch { }
 				if (_synced && TakeOwnershipCounted(h.Go)) owned++;
 				Held0.Add(h);
 			}
@@ -134,6 +171,16 @@ namespace VRChatArchiveMod.Modules
 					if (h.Parent != null) h.T.SetParent(h.Parent, true);
 					h.T.position = h.Pos;
 					h.T.rotation = h.Rot;
+					if (h.Body != null)
+					{
+						try
+						{
+							h.Body.interpolation = h.WasInterp;
+							h.Body.isKinematic = h.WasKinematic;
+							if (!h.Body.isKinematic) { h.Body.velocity = Vector3.zero; h.Body.angularVelocity = Vector3.zero; }
+						}
+						catch { }
+					}
 				}
 				catch { }
 			}
@@ -166,6 +213,16 @@ namespace VRChatArchiveMod.Modules
 					float nowT = Time.realtimeSinceStartup;
 					if (nowT >= _nextOwn) { _nextOwn = nowT + 2f; reassertOwner = true; }
 				}
+				// NO MOVE GATE. A ~15 Hz throttle used to sit here on the theory that moving fewer times
+				// sends fewer events. It does not: VRC_ObjectSync serialises at ITS OWN tick (~10 Hz per
+				// owned object -- the 240 events/s measured on 2026-09-02 was 24 objects x 10 Hz), so a
+				// 15 Hz move still hands every tick a fresh position and the event count is identical.
+				// What the gate DID do was hold each body still for ~4 frames and then jump it: a 15 fps
+				// stutter for the owner, and a saw-tooth velocity (jump, zero, zero, zero) that remote
+				// clients extrapolate into the same stutter. The network is protected by the synced
+				// object CAP in Start(), not by this. Moving every frame is the moving-platform path:
+				// MovePosition on an interpolated kinematic body every frame = smooth here, and a steady
+				// tangential velocity for everyone else to dead-reckon.
 
 				int alive = 0;
 				for (int i = Held0.Count - 1; i >= 0; i--)
@@ -193,8 +250,22 @@ namespace VRChatArchiveMod.Modules
 						if (_synced && reassertOwner) TakeOwnershipCounted(h.Go);
 
 						float rad = (_angle + h.Phase) * Mathf.Deg2Rad;
-						h.T.position = new Vector3(c.x + Mathf.Cos(rad) * r, c.y + h0 + h.Tilt, c.z + Mathf.Sin(rad) * r);
-						if (spin) h.T.Rotate(h.Spin * dt, Space.Self);
+						// MOVE THROUGH THE RIGIDBODY when there is one. Writing transform.position on a
+						// kinematic body leaves its velocity at zero, and VRC_ObjectSync serialises that
+						// zero: remote clients then have nothing to extrapolate with and draw the ring
+						// as a stutter of samples. MovePosition on an interpolated kinematic body is the
+						// moving-platform path: the body carries the velocity of the move.
+						var target = new Vector3(c.x + Mathf.Cos(rad) * r, c.y + h0 + h.Tilt, c.z + Mathf.Sin(rad) * r);
+						if (h.Body != null)
+						{
+							h.Body.MovePosition(target);
+							if (spin) h.Body.MoveRotation(h.Body.rotation * Quaternion.Euler(h.Spin * dt));
+						}
+						else
+						{
+							h.T.position = target;
+							if (spin) h.T.Rotate(h.Spin * dt, Space.Self);
+						}
 						alive++;
 					}
 					catch
@@ -221,52 +292,91 @@ namespace VRChatArchiveMod.Modules
 		// The filters are all about NOT grabbing something load-bearing: the floor, a wall, the
 		// skybox, a player's avatar or our own UI. Anything that is too big to be a prop, attached
 		// to a player, or has no renderer, is left where it is.
-		private static List<Transform> Collect(Vector3 around, float range, int want)
+		internal static List<Transform> Collect(Vector3 around, float range, int want) => Collect(around, range, want, _synced);
+
+		// networkableOnly: a SYNCED ring must only take what it can actually network (grabbable pickups
+		// nobody holds). The Mark's art passes false: it wants EVERY loose object — the non-networkable
+		// ones simply stay local (TakeOwnershipCounted refuses anything that is not ownable anyway).
+		internal static List<Transform> Collect(Vector3 around, float range, int want, bool networkableOnly)
 		{
 			var outp = new List<Transform>(want);
 			var seen = new HashSet<int>();
 			try
 			{
 				float r2 = range * range;
-				var rends = UnityEngine.Object.FindObjectsOfType<Renderer>();
-				if (rends == null) return outp;
-
-				// Nearest first, so the ring is built from what is actually around you.
+				float maxSize = ModConfig.ObjOrbitMaxSize.Value;
 				var cands = new List<(float d, Transform t)>();
-				foreach (var rend in rends)
+
+				// One candidate's transform, filtered: in range, not on a player, not our own UI, and small
+				// enough to be a prop rather than the room. A dead wrapper's members are an access violation
+				// the catch cannot save, so NativeGuard gates before every native read.
+				void Consider(Transform t)
 				{
-					// A MANAGED null check is not enough. FindObjectsOfType hands back wrappers, and in a
-					// busy instance \u2014 avatars loading and unloading every second \u2014 a wrapper can outlive
-					// its native object. Reading .enabled, .gameObject or .bounds off that is an access
-					// violation the try/catch below cannot catch (see the mod's dead-proxy note); NativeGuard
-					// proves the native object is really there first. THIS is the crash you hit turning object
-					// orbit on in a full instance: Collect walks every avatar renderer while they churn.
-					if (rend == null || !Core.NativeGuard.Alive(rend)) continue;
-					Transform t;
 					try
 					{
-						var go = rend.gameObject;
-						if (go == null || !Core.NativeGuard.Alive(go)) continue;
-						if (!rend.enabled || !go.activeInHierarchy) continue;
-						t = rend.transform;
-						if (t == null || !Core.NativeGuard.Alive(t)) continue;
-
+						if (t == null || !Core.NativeGuard.Alive(t)) return;
 						float d2 = (t.position - around).sqrMagnitude;
-						if (d2 > r2 || d2 < 0.04f) continue;
+						if (d2 > r2 || d2 < 0.04f) return;
+						if (IsPlayerOwned(t) || IsOurs(t)) return;
 
-						// Props only. A 30-metre bound is the floor or a building.
-						Vector3 size = rend.bounds.size;
-						float big = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
-						if (big > ModConfig.ObjOrbitMaxSize.Value || big < 0.05f) continue;
-
-						if (IsPlayerOwned(t)) continue;
-						if (IsOurs(t)) continue;
-						// Synced mode only ever touches things the world author made grabbable.
-						if (_synced && !IsGrabbablePickup(t)) continue;
+						// Size sanity when the item has a renderer: a 30-metre bound is a building, not a prop.
+						try
+						{
+							var rnd = t.GetComponentInChildren<Renderer>();
+							if (rnd != null && Core.NativeGuard.Alive(rnd))
+							{
+								Vector3 size = rnd.bounds.size;
+								if (Mathf.Max(size.x, Mathf.Max(size.y, size.z)) > maxSize) return;
+							}
+						}
+						catch { }
 
 						int id = t.GetInstanceID();
-						if (!seen.Add(id)) continue;
+						if (!seen.Add(id)) return;
 						cands.Add((d2, t));
+					}
+					catch { }
+				}
+
+				// REAL ITEMS ONLY, not every mesh. Collecting every Renderer meant a detailed world (Late
+				// Night and its like) handed back THOUSANDS of static meshes \u2014 furniture, walls, decor \u2014
+				// so the ring grabbed the room itself and orbiting all of it lagged the game. What a player
+				// actually calls an "item" has physics or is grabbable: VRC_Pickup (author-grabbable) and
+				// Rigidbody (loose props). Far fewer objects, and the right ones \u2014 and FindObjectsOfType
+				// over those is a fraction of the cost of walking every renderer in the scene.
+				try
+				{
+					// NON-GENERIC on purpose: FindObjectsOfType<VRC_Pickup>() returns nothing on this build
+					// (Il2CppInterop's generic type resolution misses the class — the same gap that had Force
+					// Pickup unlocking 0). Resolve the il2cpp type once and TryCast each result back.
+					var il2 = Il2CppInterop.Runtime.Il2CppType.Of<VRC.SDKBase.VRC_Pickup>();
+					var found = UnityEngine.Object.FindObjectsOfType(il2);
+					if (found != null)
+						for (int fi = 0; fi < found.Length; fi++)
+						{
+							var pk = found[fi] != null ? found[fi].TryCast<VRC.SDKBase.VRC_Pickup>() : null;
+							if (pk == null || !Core.NativeGuard.Alive(pk)) continue;
+							// Synced mode networks each object, so it only ever touches things the world made
+							// grabbable AND that nobody else is holding.
+							if (networkableOnly && !IsGrabbablePickup(pk.transform)) continue;
+							Consider(pk.transform);
+						}
+				}
+				catch { }
+
+				// Rigidbody props are LOCAL only: a non-pickup rigidbody is not networkable, so a synced ring
+				// could not move it for anyone else \u2014 it would only desync you.
+				if (!networkableOnly)
+				{
+					try
+					{
+						var bodies = UnityEngine.Object.FindObjectsOfType<Rigidbody>();
+						if (bodies != null)
+							foreach (var rb in bodies)
+							{
+								if (rb == null || !Core.NativeGuard.Alive(rb)) continue;
+								Consider(rb.transform);
+							}
 					}
 					catch { }
 				}
@@ -374,7 +484,7 @@ namespace VRChatArchiveMod.Modules
 			return false;
 		}
 
-		private static bool TakeOwnershipCounted(GameObject go)
+		internal static bool TakeOwnershipCounted(GameObject go)
 		{
 			try
 			{

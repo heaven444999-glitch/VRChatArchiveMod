@@ -33,7 +33,13 @@ namespace VRChatArchiveMod.Modules
 		private static bool _wasW, _wasR, _wasJ;
 
 
-		private float _nextApply;
+		// MANAGED CLOCK for the gate: Stopwatch is a QueryPerformanceCounter read — no interop, no
+		// allocation. Time.realtimeSinceStartup is an il2cpp_runtime_invoke that BOXES its float on
+		// the il2cpp heap: one native call plus one native allocation per frame, spent nine frames
+		// out of ten on deciding "not yet". Measured at 20-100 us a call on this machine (SpawnSound,
+		// whose whole frame is two of these reads, sits at 2.5-13 ms/s in the same runs).
+		private long _nextApplyTs;
+		private static readonly long ApplyEveryTs = System.Diagnostics.Stopwatch.Frequency / 10;   // 100 ms
 
 		public override void OnUpdate()
 		{
@@ -47,18 +53,29 @@ namespace VRChatArchiveMod.Modules
 				// il2cpp setter calls are anything but free, and a re-assert every 100 ms closes the
 				// same gap for a tenth of the cost. Ten times a second is faster than anyone can
 				// perceive a speed change, and still far tighter than the half-second that failed.
-				float now = Time.realtimeSinceStartup;
-				if (now < _nextApply) return;
-				_nextApply = now + 0.1f;
+				long nowTs = System.Diagnostics.Stopwatch.GetTimestamp();
+				if (nowTs < _nextApplyTs) return;
+				_nextApplyTs = nowTs + ApplyEveryTs;
+
+				// PER KIND. Each switch owns one value: what is off keeps the world's own number,
+				// what is on is held to yours.
+				bool w = ModConfig.WalkMod.Value, r = ModConfig.RunMod.Value, j = ModConfig.JumpMod.Value;
+
+				// EVERY SWITCH OFF AND NOTHING LEFT TO UNDO: not one il2cpp call. The player lookup
+				// below is an interop clock read plus a periodic VirtualQuery, and with no setter to
+				// follow it, a module that is switched off cost the same as one that is on. Only
+				// taken once the stock values are captured, so the first tick after spawn still
+				// captures them exactly as before and a later restore is unchanged.
+				if (_captured && !w && !r && !j && !_wasW && !_wasR && !_wasJ)
+				{
+					Status = "off — the world's own values";
+					return;
+				}
 
 				var api = PlayerRef.LocalApi();
 				if (api == null) { _captured = false; return; }
 
 				if (!_captured) Capture(api);
-
-				// PER KIND. Each switch owns one value: what is off keeps the world's own number,
-				// what is on is held to yours.
-				bool w = ModConfig.WalkMod.Value, r = ModConfig.RunMod.Value, j = ModConfig.JumpMod.Value;
 
 				// THE JUMP BUG. The old code wrote every value EVERY FRAME, even when its toggle was
 				// off — writing `_origJump` (a single spawn-time read) forever. If that read returned 0

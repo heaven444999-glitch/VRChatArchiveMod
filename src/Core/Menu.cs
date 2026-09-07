@@ -41,10 +41,10 @@ namespace VRChatArchiveMod.Core
 		//
 		// Tabs that absorbed another page carry a segmented sub-selector at the top rather than
 		// stacking two unrelated screens: SCREEN is HUD/ESP/Tags, PLAY is Movement/Fun.
-		private enum Tab { Home, Protection, Players, Screen, Avatars, Play, World, Settings, About, Dev }
+		private enum Tab { Home, Protection, Players, Screen, Avatars, Play, World, Settings, About }
 		private static Tab _tab = Tab.Home;
 		private static readonly string[] TabNames =
-			{ "HOME", "PROTECTION", "PLAYERS", "ON SCREEN", "FAVORIS", "MOVE & PLAY", "WORLD", "SETTINGS", "ABOUT", "DEV" };
+			{ "HOME", "PROTECTION", "PLAYERS", "ON SCREEN", "FAVORIS", "MOVE & PLAY", "WORLD", "SETTINGS", "ABOUT" };
 
 		// Sub-page selection inside the merged tabs.
 		private static int _screenSub;   // 0 = on-screen HUD, 1 = ESP detail, 2 = nameplate tags
@@ -62,9 +62,7 @@ namespace VRChatArchiveMod.Core
 		{
 			get
 			{
-				try { if (ModConfig.ShowDevTab.Value || ModConfig.DebugMode.Value) return TabNames.Length; }
-				catch { }
-				return TabNames.Length - 1;
+				return TabNames.Length;
 			}
 		}
 
@@ -97,15 +95,8 @@ namespace VRChatArchiveMod.Core
 		private const float TabH    = 38f;    // one tab row
 		private const float HeaderH = 74f;    // header band height
 
-		// Accent presets (index persisted via ModConfig.UiAccent).
-		private static readonly (string name, Color col)[] Accents =
-		{
-			("CYAN",    new Color(0.22f, 0.78f, 0.96f, 1f)),
-			("CRIMSON", new Color(0.95f, 0.16f, 0.36f, 1f)),
-			("GREEN",   new Color(0.24f, 0.90f, 0.52f, 1f)),
-			("VIOLET",  new Color(0.545f, 0.361f, 0.965f, 1f)),   // #8B5CF6 — the Archive violet
-			("AMBER",   new Color(1.00f, 0.66f, 0.16f, 1f)),
-		};
+		// (The accent presets went with ModConfig.UiAccent, 2026-09-01: GuiKit.Accent keeps its
+		// default, and nothing here is drawn any more that would show a preset.)
 
 		// FPS readout (updated once per frame from HandleInput).
 		private static float _fps, _fpsAccum;
@@ -141,11 +132,12 @@ namespace VRChatArchiveMod.Core
 		//   3. suspend VRChat's input components + zero the axes → no walking/turning
 		// The game re-asserts cursor state every frame, so this runs from Update AND
 		// LateUpdate rather than once on toggle.
-		// FREE-CURSOR TOGGLE (Left Alt by default). Detaches the pointer from VRChat for free mouse
-		// AND free movement, with or without the menu open. When it is on we deliberately do NOT
-		// capture/pin — that is the whole point: walk around, mouse freely, with the menu up if you
-		// like. The menu on its own still captures (so you can click precisely without drifting),
-		// unless FreeCursor overrides it. Tap Alt again to hand the cursor back to the game.
+		// FREE-CURSOR HOLD (Left or Right Alt, while AltFreeCursor is on). True for exactly as long
+		// as Alt is held: the pointer detaches from VRChat for free mouse AND free movement, and
+		// the moment the key is released the game takes it straight back. HOLD rather than
+		// toggle because Alt is shared with ALT+TAB — a toggle flipped on every window switch and
+		// came back in a state nobody could explain; a held key cannot be left stuck. While it
+		// is on we deliberately do NOT capture/pin — walking around is the whole point.
 		public static bool FreeCursor;
 		private static bool _captured;   // did we SuspendGameInput()? tracked apart from _cursorTaken
 
@@ -157,7 +149,9 @@ namespace VRChatArchiveMod.Core
 				bool wantFree = Visible || FreeCursor;
 				// Capture (freeze movement, eat clicks) only for a menu opened WITHOUT free-move.
 				// FreeCursor is an explicit "let me move", so it suppresses capture even mid-menu.
-				bool capture = Visible && !FreeCursor && ModConfig.MenuCaptureInput.Value;
+				// (UI/CaptureInput used to gate this too; it went 2026-09-01 — with the menu sealed,
+				// Visible is never true and the switch could not change anything.)
+				bool capture = Visible && !FreeCursor;
 
 				if (wantFree)
 				{
@@ -328,10 +322,11 @@ namespace VRChatArchiveMod.Core
 				// through MOD SETTINGS, the instance roster and tags through PLAYERS, favourites
 				// through FAVORIS. The QuickMenu integrations stay — those belong in the headset.
 				//
-				// The key handler is what is removed, not the drawing code: `Visible` is read by
-				// other modules (MenuExclusive, ForceGrab) and Draw() is still wired, so leaving
-				// them alone keeps this a one-line change to bring back if it is ever wanted.
-				// Nothing sets Visible any more, so none of it runs.
+				// The key handler is what is removed, not the drawing code: `Visible` is still
+				// referenced elsewhere and Draw() is still wired (it now carries the BlockAll
+				// banner and the status toasts, which are drawn whether the menu is open or not),
+				// so leaving the rest alone keeps this a one-line change to bring back if it is
+				// ever wanted. Nothing sets Visible any more, so none of the page code runs.
 
 				// FREE-CURSOR (HOLD Left Alt). While Alt is held the pointer detaches from VRChat:
 				// move the mouse freely, and keep walking. Let go and the game takes it straight
@@ -386,7 +381,12 @@ namespace VRChatArchiveMod.Core
 					"WORLD SCRIPTS ARE BLOCKED — mirrors, doors, pens and videos will not work");
 				GUI.color = new Color(0.92f, 0.78f, 0.80f, 1f);
 				GUI.Label(new Rect(r.x + 16f, r.y + 24f, r.width - 26f, 18f),
-					"Press TAB → PROTECTION → turn off \"Stop ALL world scripts\"");
+					// TAB opened a menu that is sealed now, so it was an escape route that did not
+					// exist. The switch lives in the desktop client, and so must the way out of it.
+					// Named after the switch as the client actually labels it (the BlockAll entry,
+					// described as PANIC), so the reader finds it instead of hunting for a label
+					// that exists nowhere.
+					"Desktop client → MOD SETTINGS → PROTECTION → switch off BlockAll (the PANIC toggle)");
 				GUI.color = prev;
 			}
 			catch { }
@@ -403,11 +403,15 @@ namespace VRChatArchiveMod.Core
 				GuiKit.RoundedBorder(r, new Color(0f, 0f, 0f, 0f), new Color(0.55f, 0.36f, 0.98f, 0.9f), 9f, 1.5f);
 				var prev = GUI.color;
 				GUI.color = new Color(0.86f, 0.80f, 1f, 1f);
-				GUI.Label(new Rect(r.x + 14f, r.y + 4f, r.width - 24f, 20f), "FREE CURSOR  ·  Alt to lock");
+				GUI.Label(new Rect(r.x + 14f, r.y + 4f, r.width - 24f, 20f), "FREE CURSOR  ·  release Alt to lock");
 				GUI.color = prev;
 			}
 			catch { }
 		}
+
+		// The last status strings already turned into a toast, so a message pops ONCE, when it
+		// changes — not on every frame it happens to still be set.
+		private static string _toastVa = "", _toastFav = "";
 
 		public static void Draw()
 		{
@@ -417,19 +421,31 @@ namespace VRChatArchiveMod.Core
 			try { blocked = ModConfig.UdonBlockAll.Value; } catch { }
 			if (blocked) { EnsureStyles(); DrawBlockedWarning(); }
 
+			// STATUS TOASTS, also before the Visible gate, on purpose. The menu is sealed, so the
+			// status pill on its PLAYERS tab (DrawStatus) is drawn for nobody — a QuickMenu card
+			// or a client command that refused ("no player selected", "tag lock enabled") wrote its
+			// reason into a string nobody could read, and the button simply looked dead. Diffing
+			// here means every module that sets LastStatus / Status gets shown without having to
+			// know about the toast.
+			try
+			{
+				string va = VaTagsModule.LastStatus ?? "";
+				if (!string.Equals(va, _toastVa, StringComparison.Ordinal)) { _toastVa = va; Toast.Show(va); }
+				string fav = ArchiveFavButtonModule.Status ?? "";
+				if (!string.Equals(fav, _toastFav, StringComparison.Ordinal)) { _toastFav = fav; Toast.Show(fav); }
+			}
+			catch { }
+			Toast.Draw();
+
 			if (!Visible) { if (FreeCursor) DrawFreeCursorHint(); return; }
 
 			Matrix4x4 oldMat = GUI.matrix;
 			try
 			{
-				GuiKit.Accent = Accents[Mathf.Clamp(ModConfig.UiAccent.Value, 0, Accents.Length - 1)].col;
 				EnsureStyles();
-				// The chrome no longer follows the accent preset: header labels and eyebrows are
-				// part of the brand and stay violet-neutral, so the accent only colours CONTROLS.
-
-				float scale = Mathf.Clamp(ModConfig.UiScale.Value, 0.7f, 1.4f);
-				if (Mathf.Abs(scale - 1f) > 0.001f)
-					GUIUtility.ScaleAroundPivot(new Vector2(scale, scale), new Vector2(Screen.width / 2f, Screen.height / 2f));
+				// The chrome does not follow GuiKit.Accent: header labels and eyebrows are part of
+				// the brand and stay violet-neutral. (The accent preset and the menu scale that used
+				// to be applied here went with UI/AccentPreset and UI/Scale, 2026-09-01.)
 
 				HandleDrag();
 
@@ -510,7 +526,6 @@ namespace VRChatArchiveMod.Core
 					case Tab.World:      DrawUdon(inner); break;
 					case Tab.Settings:   DrawSettings(inner); break;
 					case Tab.About:      DrawCredits(inner); break;
-					case Tab.Dev:        DrawDev(inner); break;
 				}
 
 				// Footer + custom cursor.
@@ -550,12 +565,12 @@ namespace VRChatArchiveMod.Core
 				"Player list (RShift+L)", ModConfig.InstancePanelsEnabled.Value);
 			ModConfig.WingPlayersEnabled.Value = GuiKit.Toggle(new Rect(c0, a.y + 64f, colW, 38f),
 				"Player list in VRChat's menu", ModConfig.WingPlayersEnabled.Value);
-			ModConfig.EspEnabled.Value = GuiKit.Toggle(new Rect(c0, a.y + 106f, colW, 38f),
-				"See players through walls", ModConfig.EspEnabled.Value);
+			// THE 3D CAPSULE is what shows a player through a wall. The flat screen-space box this
+			// used to drive is gone; every other ESP glow has its own switch in the ESP DETAIL tab.
+			ModConfig.EspCapsule.Value = GuiKit.Toggle(new Rect(c0, a.y + 106f, colW, 38f),
+				"Player capsules (see through walls)", ModConfig.EspCapsule.Value);
 			GUI.Label(new Rect(c0 + 6f, a.y + 146f, colW - 6f, 16f),
-				ModConfig.EspEnabled.Value
-					? "<color=#6E6690>settings in the ESP DETAIL tab above</color>"
-					: "<color=#6E6690>off — the ESP detail tab does nothing</color>", _dim);
+				"<color=#6E6690>more ESP switches in the ESP DETAIL tab above</color>", _dim);
 
 			// ---- column 2: radar, with its options dimmed when the radar itself is off
 			GUI.Label(new Rect(c1, a.y, colW, 16f), "RADAR", _header);
@@ -582,8 +597,7 @@ namespace VRChatArchiveMod.Core
 			{
 				ModConfig.UdonLogOverlay.Value = GuiKit.Toggle(new Rect(c2 + 14f, a.y + 64f, colW - 14f, 38f),
 					"Show it on screen", ModConfig.UdonLogOverlay.Value);
-				ModConfig.QMConsoleEnabled.Value = GuiKit.Toggle(new Rect(c2 + 14f, a.y + 106f, colW - 14f, 38f),
-					"Show it in VRChat's menu", ModConfig.QMConsoleEnabled.Value);
+
 			});
 			GUI.Label(new Rect(c2 + 14f, a.y + 146f, colW - 14f, 16f),
 				rec ? "<color=#6E6690>the WORLD tab reads this recording</color>"
@@ -607,279 +621,6 @@ namespace VRChatArchiveMod.Core
 		private static string _cfgFilter = "", _typeFilter = "", _selType = "";
 		private static System.Collections.Generic.List<string> _typeMembers;
 		private static Vector2 _devScroll, _devScroll2;
-
-		private static void DrawDev(Rect a)
-		{
-			_devSub = GuiKit.Segmented(new Rect(a.x, a.y, a.width, 36f),
-				new[] { "Performance", "Settings", "Find types", "Captures" }, _devSub);
-
-			var body = new Rect(a.x, a.y + 44f, a.width, a.height - 44f);
-			switch (_devSub)
-			{
-				case 1: DrawDevConfig(body); break;
-				case 2: DrawDevTypes(body); break;
-				case 3: DrawInfo(body); break;
-				default: DrawDevPerf(body); break;
-			}
-		}
-
-		// ---- PERFORMANCE: the spike hunter -------------------------------------------------
-		//
-		// Answers "where do the stutters come from", which a per-second average cannot: a module
-		// costing 40 ms once a second averages the same as one costing 0.7 ms every frame, and only
-		// the first is felt. So the graph shows real frames and the list shows the worst ones.
-		private static void DrawDevPerf(Rect a)
-		{
-			float gap = 14f, colW = (a.width - gap) / 2f;
-
-			GUI.Label(new Rect(a.x, a.y, colW, 16f), "FRAME TIME (last 3 seconds)", _header);
-
-			// --- the graph
-			var g = new Rect(a.x, a.y + 22f, a.width, 92f);
-			GuiKit.RoundedFill(g, new Color(0.04f, 0.03f, 0.07f, 0.92f), 8f);
-
-			var hist = Modules.DevToolsModule.FrameHistory;
-			int cur = Modules.DevToolsModule.FrameCursor;
-			float scale = 66f;                     // ms mapped to the full height
-			float bw = g.width / hist.Length;
-
-			// 16.6 ms (60 FPS) and the spike threshold, so the bars have meaning without a legend.
-			float y60 = g.yMax - Mathf.Clamp01(16.6f / scale) * g.height;
-			GuiKit.Fill(new Rect(g.x, y60, g.width, 1f), new Color(0.35f, 0.85f, 0.55f, 0.35f));
-			float ySp = g.yMax - Mathf.Clamp01(Modules.DevToolsModule.SpikeMs / scale) * g.height;
-			GuiKit.Fill(new Rect(g.x, ySp, g.width, 1f), new Color(0.97f, 0.42f, 0.42f, 0.45f));
-
-			for (int i = 0; i < hist.Length; i++)
-			{
-				float ms = hist[(cur + i) % hist.Length];
-				if (ms <= 0f) continue;
-				float h = Mathf.Clamp01(ms / scale) * (g.height - 2f);
-				var c = ms >= Modules.DevToolsModule.SpikeMs ? new Color(0.97f, 0.35f, 0.35f, 0.95f)
-					  : ms >= 16.7f ? new Color(0.98f, 0.75f, 0.30f, 0.85f)
-					  : new Color(0.45f, 0.80f, 0.98f, 0.7f);
-				GuiKit.Fill(new Rect(g.x + i * bw, g.yMax - h - 1f, Mathf.Max(1f, bw - 0.5f), h), c);
-			}
-			GUI.Label(new Rect(g.x + 8f, g.y + 4f, 300f, 16f),
-				"<color=#6E6690>green line 60fps · red line spike threshold</color>", _dim);
-
-			// --- controls
-			float cy = g.yMax + 12f;
-			bool hunt = Modules.DevToolsModule.Hunting;
-			bool want = GuiKit.Toggle(new Rect(a.x, cy, 200f, 32f), "Hunt spikes", hunt);
-			if (want != hunt)
-			{
-				Modules.DevToolsModule.Hunting = want;
-				// HUNTING IMPLIES MEASURING. Without the profiler running there is nothing to name
-				// the guilty module with, and the spike list fills up with rows that say "?" — which
-				// is what the first run of this did: it proved the stutters were real and then
-				// refused to say what caused them. Turning it on here is the difference between a
-				// symptom and a diagnosis.
-				if (want)
-				{
-					_profilerWasOn = ModuleManager.Profiling;
-					ModuleManager.Profiling = true;
-					Modules.DevToolsModule.ClearSpikes();
-					Modules.DevToolsModule.WorstMs = 0f;
-				}
-				else ModuleManager.Profiling = _profilerWasOn;
-			}
-			Slider(a.x + 214f, cy + 2f, 240f, "Spike over (ms)", Modules.DevToolsModule.SpikeMs, 20, 200,
-				v => Modules.DevToolsModule.SpikeMs = v, "F0");
-			if (GuiKit.Button(new Rect(a.x + 470f, cy, 110f, 32f), "Clear"))
-			{
-				Modules.DevToolsModule.ClearSpikes();
-				Modules.DevToolsModule.WorstMs = 0f;
-			}
-			GUI.Label(new Rect(a.x + 592f, cy + 7f, a.width - 592f, 20f),
-				$"<color=#6E6690>worst frame</color> <color=#FFFFFF>{Modules.DevToolsModule.WorstMs:F0} ms</color>"
-				+ $"   <color=#6E6690>caught</color> <color=#FFFFFF>{Modules.DevToolsModule.SpikeCount}</color>", _dim);
-
-			// --- left: the spikes themselves
-			float ly = cy + 42f;
-			GUI.Label(new Rect(a.x, ly, colW, 16f), "SPIKES — worst frames, newest first", _header);
-			var sv = new Rect(a.x, ly + 22f, colW, a.height - (ly + 22f - a.y) - 4f);
-			GuiKit.RoundedFill(sv, new Color(0.03f, 0.03f, 0.06f, 0.9f), 8f);
-
-			var spikes = Modules.DevToolsModule.SpikeSnapshot();
-			if (spikes.Count == 0)
-			{
-				GUI.Label(new Rect(sv.x + 12f, sv.y + 12f, sv.width - 24f, 40f),
-					Modules.DevToolsModule.Hunting
-						? "<color=#6E6690>hunting… play normally, stutters land here</color>"
-						: "<color=#6E6690>switch on \"Hunt spikes\", then go and reproduce the stutter</color>", _dim);
-			}
-			else
-			{
-				float ry = sv.y + 8f;
-				for (int i = 0; i < spikes.Count && ry < sv.yMax - 20f; i++, ry += 20f)
-				{
-					var s = spikes[i];
-					GUI.Label(new Rect(sv.x + 10f, ry, 62f, 18f), "<color=#6E6690>" + s.Clock + "</color>", _dim);
-					GUI.Label(new Rect(sv.x + 74f, ry, 64f, 18f),
-						"<color=#FF8A8A>" + s.Ms.ToString("F0") + " ms</color>", _dim);
-					GUI.Label(new Rect(sv.x + 142f, ry, sv.width - 152f, 18f),
-						"<color=#A99FC4>" + Trunc(s.Worst, 26) + "</color>"
-						+ (s.WorstMs > 0f ? " <color=#6E6690>" + s.WorstMs.ToString("F0") + " ms/s</color>" : ""), _dim);
-				}
-			}
-
-			// --- right: the per-module cost table
-			float rx = a.x + colW + gap;
-			GUI.Label(new Rect(rx, ly, colW, 16f), "MODULE COST (ms per second of wall clock)", _header);
-			var mv = new Rect(rx, ly + 22f, colW, a.height - (ly + 22f - a.y) - 4f);
-			GuiKit.RoundedFill(mv, new Color(0.03f, 0.03f, 0.06f, 0.9f), 8f);
-
-			try
-			{
-				var rep = ModuleManager.ProfileReport();
-				if (rep == null || rep.Count == 0)
-				{
-					GUI.Label(new Rect(mv.x + 12f, mv.y + 12f, mv.width - 24f, 40f),
-						"<color=#6E6690>the profiler is off — switch on PROFILER in Captures</color>", _dim);
-				}
-				else
-				{
-					float total = ModuleManager.ProfileTotalMs();
-					GUI.Label(new Rect(mv.x + 10f, mv.y + 6f, mv.width - 20f, 18f),
-						$"<color=#6E6690>all modules together</color> <color=#FFFFFF>{total:F1} ms/s</color>"
-						+ $"   <color=#6E6690>({total / 10f:F1}% of one second)</color>", _dim);
-					float ry = mv.y + 28f;
-					for (int i = 0; i < rep.Count && ry < mv.yMax - 18f; i++, ry += 18f)
-					{
-						float v = rep[i].Value;
-						// A bar, because sorted numbers alone do not show that one row is the problem.
-						float frac = total > 0.01f ? Mathf.Clamp01(v / Mathf.Max(total, 1f)) : 0f;
-						GuiKit.Fill(new Rect(mv.x + 10f, ry + 13f, (mv.width - 20f) * frac, 2f),
-							v > 8f ? new Color(0.97f, 0.45f, 0.45f, 0.8f) : new Color(0.55f, 0.45f, 0.95f, 0.7f));
-						GUI.Label(new Rect(mv.x + 10f, ry, mv.width - 90f, 16f),
-							"<color=#A99FC4>" + Trunc(rep[i].Key, 30) + "</color>", _dim);
-						GUI.Label(new Rect(mv.xMax - 84f, ry, 74f, 16f),
-							"<color=#FFFFFF>" + v.ToString("F1") + "</color><color=#6E6690> ms/s</color>", _dim);
-					}
-				}
-			}
-			catch { }
-		}
-
-		// ---- SETTINGS: every config entry, searchable and live-editable ---------------------
-		private static void DrawDevConfig(Rect a)
-		{
-			GUI.Label(new Rect(a.x, a.y + 5f, 56f, 20f), "FIND", _header);
-			_cfgFilter = GUI.TextField(new Rect(a.x + 54f, a.y, a.width * 0.45f, 26f), _cfgFilter ?? "", 40);
-			if (string.IsNullOrEmpty(_cfgFilter))
-				GUI.Label(new Rect(a.x + 62f, a.y + 4f, 300f, 20f),
-					"<color=#4A4266>setting name or section…</color>", _dim);
-
-			var all = Modules.DevToolsModule.Config();
-			string f = (_cfgFilter ?? "").Trim();
-			var rows = new System.Collections.Generic.List<Modules.DevToolsModule.Entry>();
-			foreach (var e in all)
-			{
-				if (f.Length > 0
-					&& e.Key.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0
-					&& e.Section.IndexOf(f, StringComparison.OrdinalIgnoreCase) < 0) continue;
-				rows.Add(e);
-			}
-			GUI.Label(new Rect(a.x + a.width * 0.45f + 66f, a.y + 5f, 320f, 20f),
-				$"<color=#6E6690>{rows.Count} of {all.Count} settings — changes apply immediately</color>", _dim);
-
-			var view = new Rect(a.x, a.y + 34f, a.width, a.height - 38f);
-			GuiKit.RoundedFill(view, new Color(0.03f, 0.03f, 0.06f, 0.9f), 8f);
-
-			float rowH = 30f;
-			var content = new Rect(0f, 0f, view.width - 18f, rows.Count * rowH + 8f);
-			_devScroll = GUI.BeginScrollView(view, _devScroll, content);
-			float y = 4f;
-			foreach (var e in rows)
-			{
-				GUI.Label(new Rect(8f, y + 6f, 120f, 18f),
-					"<color=#6E6690>" + Trunc(e.Section, 16) + "</color>", _dim);
-				GUI.Label(new Rect(132f, y + 6f, 250f, 18f),
-					"<color=#EAE4FF>" + Trunc(e.Key, 34) + "</color>", _dim);
-
-				// Booleans get a real switch; everything else is shown as its value, because a
-				// text box that silently rejects a bad number is worse than a readout.
-				if (e.Type == "Boolean")
-				{
-					bool cur = false;
-					try { cur = (bool)e.Raw.BoxedValue; } catch { }
-					bool nw = GuiKit.Toggle(new Rect(392f, y + 1f, 150f, 26f), cur ? "on" : "off", cur);
-					if (nw != cur) Modules.DevToolsModule.SetBool(e, nw);
-				}
-				else
-				{
-					GUI.Label(new Rect(392f, y + 6f, 240f, 18f),
-						"<color=#FFFFFF>" + Trunc(Modules.DevToolsModule.ValueOf(e), 30) + "</color>"
-						+ " <color=#6E6690>" + e.Type + "</color>", _dim);
-				}
-				y += rowH;
-			}
-			GUI.EndScrollView();
-		}
-
-		// ---- FIND TYPES: search the loaded IL2CPP types and list their members --------------
-		private static void DrawDevTypes(Rect a)
-		{
-			float gap = 14f, colW = (a.width - gap) / 2f;
-
-			GUI.Label(new Rect(a.x, a.y + 5f, 56f, 20f), "TYPE", _header);
-			_typeFilter = GUI.TextField(new Rect(a.x + 54f, a.y, colW - 160f, 26f), _typeFilter ?? "", 60);
-			if (string.IsNullOrEmpty(_typeFilter))
-				GUI.Label(new Rect(a.x + 62f, a.y + 4f, 260f, 20f),
-					"<color=#4A4266>e.g. HighlightsFX, FavoriteArea…</color>", _dim);
-			if (GuiKit.Button(new Rect(a.x + colW - 100f, a.y, 100f, 26f), "Search"))
-				Modules.DevToolsModule.FindTypes(_typeFilter);
-
-			GUI.Label(new Rect(a.x, a.y + 32f, colW, 18f),
-				"<color=#6E6690>" + Modules.DevToolsModule.FindStatus + "</color>", _dim);
-
-			// left: matches
-			var lv = new Rect(a.x, a.y + 54f, colW, a.height - 58f);
-			GuiKit.RoundedFill(lv, new Color(0.03f, 0.03f, 0.06f, 0.9f), 8f);
-			var hits = Modules.DevToolsModule.Hits;
-			float ry = lv.y + 6f;
-			for (int i = 0; i < hits.Count && ry < lv.yMax - 20f; i++, ry += 20f)
-			{
-				var h = hits[i];
-				bool sel = h.Full == _selType;
-				if (sel) GuiKit.Fill(new Rect(lv.x + 4f, ry - 2f, lv.width - 8f, 20f), new Color(0.55f, 0.36f, 0.98f, 0.18f));
-				if (GUI.Button(new Rect(lv.x + 4f, ry - 2f, lv.width - 8f, 20f), "", GUIStyle.none))
-				{
-					_selType = h.Full;
-					_typeMembers = Modules.DevToolsModule.Members(h.Full);
-				}
-				GUI.Label(new Rect(lv.x + 10f, ry, lv.width - 90f, 18f),
-					"<color=#EAE4FF>" + Trunc(h.Full, 44) + "</color>", _dim);
-				GUI.Label(new Rect(lv.xMax - 78f, ry, 70f, 18f),
-					"<color=#6E6690>" + h.Members + "</color>", _dim);
-			}
-
-			// right: members of the selected type
-			float rx = a.x + colW + gap;
-			GUI.Label(new Rect(rx, a.y + 5f, colW, 18f),
-				string.IsNullOrEmpty(_selType)
-					? "<color=#6E6690>pick a type on the left</color>"
-					: "<color=#EAE4FF>" + Trunc(_selType, 52) + "</color>", _dim);
-			if (!string.IsNullOrEmpty(_selType)
-				&& GuiKit.Button(new Rect(rx + colW - 100f, a.y + 28f, 100f, 24f), "Copy name"))
-				GUIUtility.systemCopyBuffer = _selType;
-
-			var mv = new Rect(rx, a.y + 54f, colW, a.height - 58f);
-			GuiKit.RoundedFill(mv, new Color(0.03f, 0.03f, 0.06f, 0.9f), 8f);
-			if (_typeMembers != null)
-			{
-				var content = new Rect(0f, 0f, mv.width - 18f, _typeMembers.Count * 17f + 8f);
-				_devScroll2 = GUI.BeginScrollView(mv, _devScroll2, content);
-				float y = 4f;
-				foreach (string m in _typeMembers)
-				{
-					GUI.Label(new Rect(8f, y, content.width - 12f, 16f),
-						"<color=#A99FC4>" + m + "</color>", _dim);
-					y += 17f;
-				}
-				GUI.EndScrollView();
-			}
-		}
 
 		// ON SCREEN — everything the mod draws over the game, in one place.
 		//
@@ -983,19 +724,48 @@ namespace VRChatArchiveMod.Core
 			float gap = 14f;
 			float colW = (a.width - gap) / 2f;
 
-			ModConfig.AntiCrashEnabled.Value = GuiKit.Toggle(new Rect(a.x, a.y, a.width, 40f),
-				"Anti-Crash Master", ModConfig.AntiCrashEnabled.Value);
+			// WRITE ONLY ON CHANGE (same rule as the ANTI-UDON toggles below). Assigning a ConfigEntry
+			// every frame rewrites the config file continuously, and AntiCrashModule now edge-detects
+			// these values to undo / rescan \u2014 a constant stream of identical writes is harmless to
+			// that, but a real change must be the only thing that ever reaches the entry.
+			void CfgToggle(Rect r, string label, BepInEx.Configuration.ConfigEntry<bool> entry)
+			{
+				bool cur = entry.Value;
+				bool v = GuiKit.Toggle(r, label, cur);
+				if (v != cur) entry.Value = v;
+			}
 
-			float hy = a.y + 52f;
+			CfgToggle(new Rect(a.x, a.y, a.width, 40f), "Anti-Crash Master", ModConfig.AntiCrashEnabled);
+
+			// BUNDLE GUARD \u2014 the download side of the same protection. The clamps below act on what an
+			// avatar DOES once it is loaded; this acts on whether a bundle is allowed to load at all.
+			// Gated by the master like every other vector.
+			CfgToggle(new Rect(a.x, a.y + 44f, a.width, 40f), "Asset-bundle guard (source + integrity)", ModConfig.BundleGuardEnabled);
+
+			bool guardLive = ModConfig.AntiCrashEnabled.Value && ModConfig.BundleGuardEnabled.Value;
+			GUI.Label(new Rect(a.x, a.y + 86f, a.width, 18f),
+				guardLive
+					? "<color=#7CFF9E>on</color> \u2014 bundles must come from VRChat's own delivery, the CRC check stays "
+					  + "on, and a bad cache file is re-downloaded"
+						+ (Modules.AssetBundlePatchModule.Blocked > 0
+							? "   \u00b7   <color=#FF7A7A>" + Modules.AssetBundlePatchModule.Blocked + " refused</color>   (last: "
+							  + Trunc(Modules.AssetBundlePatchModule.LastBlocked, 40) + ")"
+							: "")
+					: ModConfig.BundleGuardEnabled.Value
+						? "<color=#FFC08A>off</color> \u2014 the master is off, so the guard is off with it"
+						: "<color=#FFC08A>off</color> \u2014 any source is accepted and a cached file is trusted as-is",
+				_dim);
+
+			float hy = a.y + 52f + 56f;
 			GUI.Label(new Rect(a.x, hy, a.width, 16f), "CLAMP VECTORS", _header);
 
 			float ty = hy + 24f;
-			ModConfig.ClampParticles.Value    = GuiKit.Toggle(new Rect(a.x, ty, colW, 40f), "Particles", ModConfig.ClampParticles.Value);
-			ModConfig.ClampLights.Value       = GuiKit.Toggle(new Rect(a.x + colW + gap, ty, colW, 40f), "Lights", ModConfig.ClampLights.Value);
-			ModConfig.ClampAudioSources.Value = GuiKit.Toggle(new Rect(a.x, ty + 48f, colW, 40f), "AudioSources", ModConfig.ClampAudioSources.Value);
-			ModConfig.ClampCloth.Value        = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 48f, colW, 40f), "Cloth", ModConfig.ClampCloth.Value);
-			ModConfig.ClampPhysBones.Value    = GuiKit.Toggle(new Rect(a.x, ty + 96f, colW, 40f), "PhysBones", ModConfig.ClampPhysBones.Value);
-			ModConfig.ClampContacts.Value     = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 96f, colW, 40f), "Contacts", ModConfig.ClampContacts.Value);
+			CfgToggle(new Rect(a.x, ty, colW, 40f), "Particles", ModConfig.ClampParticles);
+			CfgToggle(new Rect(a.x + colW + gap, ty, colW, 40f), "Lights", ModConfig.ClampLights);
+			CfgToggle(new Rect(a.x, ty + 48f, colW, 40f), "AudioSources", ModConfig.ClampAudioSources);
+			CfgToggle(new Rect(a.x + colW + gap, ty + 48f, colW, 40f), "Cloth", ModConfig.ClampCloth);
+			CfgToggle(new Rect(a.x, ty + 96f, colW, 40f), "PhysBones", ModConfig.ClampPhysBones);
+			CfgToggle(new Rect(a.x + colW + gap, ty + 96f, colW, 40f), "Contacts", ModConfig.ClampContacts);
 
 			float sy = ty + 96f + 56f;
 			GUI.Label(new Rect(a.x, sy, a.width, 16f), "THRESHOLDS", _header);
@@ -1063,7 +833,7 @@ namespace VRChatArchiveMod.Core
 			ModConfig.FewTagsShowBigPlates.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty, colW, 40f), "Big plates", ModConfig.FewTagsShowBigPlates.Value);
 
 			float sy = ty + 56f;
-			Slider(a.x, sy, colW, "Max tags per user", ModConfig.FewTagsMaxTagsPerUser.Value, 1, 10, v => ModConfig.FewTagsMaxTagsPerUser.Value = (int)v);
+			Slider(a.x, sy, colW, "Max tags per user", ModConfig.FewTagsMaxTagsPerUser.Value, 1, 100, v => ModConfig.FewTagsMaxTagsPerUser.Value = (int)v);
 			Slider(a.x + colW + gap, sy, colW, "DB refresh (minutes)", ModConfig.FewTagsUpdateMinutes.Value, 1, 60, v => ModConfig.FewTagsUpdateMinutes.Value = (int)v);
 
 			float dy = sy + 62f;
@@ -1343,40 +1113,39 @@ namespace VRChatArchiveMod.Core
 			float gap = 14f;
 			float colW = (a.width - gap) / 2f;
 
-			// The on/off switches for ESP and the radar now live in DASHBOARD with every other
-			// on-screen overlay. What stays here is what only means something once ESP is on: what
-			// it draws, how far, and the trust-colour legend.
+			// EVERY SWITCH HERE IS ITS OWN THING. There is no master ESP switch: each glow below turns
+			// on and off by itself, and off means off — the modules un-light what they lit on the same
+			// frame the switch flips. The 2D screen box (box / name / distance) is one more independent
+			// switch, back by the owner's request.
 			GUI.Label(new Rect(a.x, a.y, a.width, 18f),
-				"<color=#6E6690>ESP and Radar are switched on in the <color=#FFFFFF>DASHBOARD</color> tab, "
-				+ "with the rest of the on-screen HUD. This tab is their detail.</color>", _dim);
+				"<color=#6E6690>Each switch is independent — one thing, one switch. "
+				+ "The radar has its own switch in the <color=#FFFFFF>OVERLAYS</color> tab.</color>", _dim);
 
 			float hy = a.y + 30f;
-			GUI.Label(new Rect(a.x, hy, a.width, 16f), "DISPLAY", _header);
+			GUI.Label(new Rect(a.x, hy, a.width, 16f), "GLOWS", _header);
 			float ty = hy + 24f;
-			ModConfig.EspBox.Value      = GuiKit.Toggle(new Rect(a.x, ty, colW, 40f), "Box", ModConfig.EspBox.Value);
-			ModConfig.EspName.Value     = GuiKit.Toggle(new Rect(a.x + colW + gap, ty, colW, 40f), "Name", ModConfig.EspName.Value);
-			ModConfig.EspDistance.Value = GuiKit.Toggle(new Rect(a.x, ty + 48f, colW, 40f), "Distance", ModConfig.EspDistance.Value);
-			ModConfig.EspSkeleton.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 48f, colW, 40f), "Skeleton (mesh)", ModConfig.EspSkeleton.Value);
-			ModConfig.AntiBlockEnabled.Value = GuiKit.Toggle(new Rect(a.x, ty + 96f, colW, 40f), "Anti-Block", ModConfig.AntiBlockEnabled.Value);
-			ModConfig.EspPortals.Value = GuiKit.Toggle(new Rect(a.x, ty + 144f, colW, 40f),
-				"Portals", ModConfig.EspPortals.Value);
-			ModConfig.EspItems.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 144f, colW, 40f),
-				"Items (pickups)", ModConfig.EspItems.Value);
-			ModConfig.EspCapsule.Value = GuiKit.Toggle(new Rect(a.x, ty + 192f, colW, 40f),
-				"Capsule (3D glow)", ModConfig.EspCapsule.Value);
-			// THE AVATAR MESH GLOW — VRChat's own outline effect traced around the player's real
-			// body, the same glow the game puts on a grabbable. It had NO switch anywhere in the
-			// menu and defaults to off, which is the entire reason "mesh ESP doesn't work": there
-			// was no way to turn it on.
-			ModConfig.EspHighlight.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 192f, colW, 40f),
+			ModConfig.EspCapsule.Value = GuiKit.Toggle(new Rect(a.x, ty, colW, 40f),
+				"Player capsules (3D glow)", ModConfig.EspCapsule.Value);
+			ModConfig.EspHighlight.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty, colW, 40f),
 				"Mesh glow (avatar outline)", ModConfig.EspHighlight.Value);
-			// The radar's map opacity used to sit here, at the same height as the toggle beside it —
-			// the slider drew straight through "Glow around avatars". It belongs with the radar
-			// anyway, which lives on the OVERLAYS page now, so it moves down into the slider block
-			// below instead of sharing a row with a toggle.
+			ModConfig.EspPortals.Value = GuiKit.Toggle(new Rect(a.x, ty + 48f, colW, 40f),
+				"Portals", ModConfig.EspPortals.Value);
+			ModConfig.EspItems.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 48f, colW, 40f),
+				"Items (pickups)", ModConfig.EspItems.Value);
+			// Capsule-only: whether walls hide the capsules. CapsuleEspModule re-applies it to the
+			// capsules already built, so it takes effect on the frame it is flipped.
+			ModConfig.EspThroughWalls.Value = GuiKit.Toggle(new Rect(a.x, ty + 96f, colW, 40f),
+				"Capsules through walls", ModConfig.EspThroughWalls.Value);
+			ModConfig.AntiBlockEnabled.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 96f, colW, 40f),
+				"Anti-Block", ModConfig.AntiBlockEnabled.Value);
+			// The 2D screen ESP: a box around each player with name and distance, drawn on screen.
+			ModConfig.EspEnabled.Value = GuiKit.Toggle(new Rect(a.x, ty + 144f, colW, 40f),
+				"Screen box (2D box · name · distance)", ModConfig.EspEnabled.Value);
+			ModConfig.EspSkeleton.Value = GuiKit.Toggle(new Rect(a.x + colW + gap, ty + 144f, colW, 40f),
+				"Skeleton instead of box", ModConfig.EspSkeleton.Value);
 
-			float sy = ty + 250f;
-			Slider(a.x, sy, colW, "ESP distance (m)", ModConfig.EspMaxDistance.Value, 10, 200, v => ModConfig.EspMaxDistance.Value = v, "F0");
+			float sy = ty + 202f;
+			Slider(a.x, sy, colW, "Capsule range (m)", ModConfig.EspMaxDistance.Value, 10, 200, v => ModConfig.EspMaxDistance.Value = v, "F0");
 			Slider(a.x + colW + gap, sy, colW, "Radar range (m)", ModConfig.RadarRange.Value, 10, 200, v => ModConfig.RadarRange.Value = v, "F0");
 			if (ModConfig.RadarMap.Value)
 				Slider(a.x, sy + 46f, colW, "Map opacity", ModConfig.RadarMapOpacity.Value, 0.1f, 1f,
@@ -1398,7 +1167,7 @@ namespace VRChatArchiveMod.Core
 
 			// A legend row occupies its y to y+16, so the LAST one ends at ly+100. The note used to
 			// sit at ly+96 and printed straight through "Known User".
-			GUI.Label(new Rect(a.x, ly + 112f, a.width, 34f), "Visualization only — boxes over players, no targeting or tracking.", _dim);
+			GUI.Label(new Rect(a.x, ly + 112f, a.width, 34f), "Visualization only — glows on what your client already renders, no targeting or tracking.", _dim);
 		}
 
 		private static void LegendRow(float x, float y, Color c, string label)
@@ -1729,28 +1498,11 @@ namespace VRChatArchiveMod.Core
 
 		private static void DrawSettings(Rect a)
 		{
-			float gap = 8f;
-			GUI.Label(new Rect(a.x, a.y, a.width, 16f), "ACCENT COLOR", _header);
-
-			float sw = (a.width - gap * 4f) / 5f;
-			for (int i = 0; i < Accents.Length; i++)
-			{
-				var r = new Rect(a.x + i * (sw + gap), a.y + 24f, sw, 40f);
-				bool sel = ModConfig.UiAccent.Value == i;
-				GuiKit.Fill(new Rect(r.x, r.y, r.width, r.height), new Color(0.06f, 0.07f, 0.09f, 1f));
-				GUI.color = new Color(Accents[i].col.r, Accents[i].col.g, Accents[i].col.b, sel ? 1f : 0.5f);
-				GUI.DrawTexture(new Rect(r.x, r.y, r.width, 5f), GuiKit.Pixel);
-				GUI.color = Color.white;
-				if (sel) { GUI.color = Accents[i].col; GuiKit.Corners(r, 12f, 2f, 0f); GUI.color = Color.white; }
-				if (GUI.Button(r, Accents[i].name, _swatch)) ModConfig.UiAccent.Value = i;
-			}
-
-			float hy = a.y + 84f;
-			GUI.Label(new Rect(a.x, hy, a.width, 16f), "MENU SCALE", _header);
-			Slider(a.x, hy + 24f, a.width, "Scale", ModConfig.UiScale.Value, 0.7f, 1.4f, v => ModConfig.UiScale.Value = Mathf.Round(v * 20f) / 20f, "F2");
-
+			// The ACCENT COLOR swatches and MENU SCALE slider that opened this page are gone with
+			// their settings (UI/AccentPreset, UI/Scale, removed 2026-09-01): they only styled this
+			// sealed menu, and the desktop client was showing them as live controls.
 			// AUDIO — spawn stinger played once when you finish loading into an instance
-			float au = hy + 76f;
+			float au = a.y;
 			GUI.Label(new Rect(a.x, au, a.width, 16f), "SPAWN SOUND", _header);
 			float half = (a.width - 8f) / 2f;
 			bool wantSpawn = GuiKit.Toggle(new Rect(a.x, au + 22f, half, 36f),
@@ -1914,53 +1666,8 @@ namespace VRChatArchiveMod.Core
 			GUI.Label(new Rect(a.x, a.y + 124f, a.width, 18f),
 				"<color=#6E6690>" + Trunc(string.IsNullOrEmpty(_diagPath) ? DiagnosticsModule.ReportPath : _diagPath, 92) + "</color>", _dim);
 
-			// --- capture: read-only dumps of VRChat's live objects, to improve the mod ---
-			GUI.Label(new Rect(a.x, a.y + 156f, a.width, 16f), "CAPTURE (read-only — dumps to file, never sent)", _header);
-			float cbY = a.y + 176f, cbW = 150f, cbH = 30f, cbG = 8f;
-			if (GuiKit.Button(new Rect(a.x + 0 * (cbW + cbG), cbY, cbW, cbH), "DUMP MENU"))    Modules.CaptureModule.Request(Modules.CaptureModule.Job.Menu);
-			if (GuiKit.Button(new Rect(a.x + 1 * (cbW + cbG), cbY, cbW, cbH), "DUMP LOADING")) Modules.CaptureModule.Request(Modules.CaptureModule.Job.Loading);
-			if (GuiKit.Button(new Rect(a.x + 2 * (cbW + cbG), cbY, cbW, cbH), "DUMP AUDIO"))   Modules.CaptureModule.Request(Modules.CaptureModule.Job.Audio);
-			if (GuiKit.Button(new Rect(a.x + 0 * (cbW + cbG), cbY + 36f, cbW, cbH), "DUMP UDON"))   Modules.CaptureModule.Request(Modules.CaptureModule.Job.Udon);
-			if (GuiKit.Button(new Rect(a.x + 1 * (cbW + cbG), cbY + 36f, cbW, cbH), "DUMP ALL UI")) Modules.CaptureModule.Request(Modules.CaptureModule.Job.AllUI);
-			if (GuiKit.Button(new Rect(a.x + 3 * (cbW + cbG), cbY, cbW, cbH), "DUMP METADATA"))
-				Modules.CaptureModule.Request(Modules.CaptureModule.Job.Metadata);
-			if (GuiKit.Button(new Rect(a.x + 3 * (cbW + cbG), cbY + 36f, cbW, cbH), "DUMP UI API"))
-				Modules.CaptureModule.Request(Modules.CaptureModule.Job.UiApi);
-			if (GuiKit.Button(new Rect(a.x + 4 * (cbW + cbG), cbY, cbW, cbH), "DUMP FAVORITES"))
-				Modules.CaptureModule.Request(Modules.CaptureModule.Job.Favorites);
-			// ONE button. Everything the favourites work needs, in one file: our own card geometry,
-			// the live avatar-list sections, VRChat's favourites collection and the whole avatar
-			// menu tree. Best run with the big menu's AVATARS page open, but it reports what it
-			// could not reach instead of failing quietly.
-			if (GuiKit.Button(new Rect(a.x + 4 * (cbW + cbG), cbY + 36f, cbW, cbH), "DUMP EVERYTHING"))
-				Modules.CaptureModule.Request(Modules.CaptureModule.Job.AvatarList);
-			// Works for ANY open menu (Worlds, Social, Avatars): dumps the live content panels'
-			// real runtime types, so a world/user category can be built by value instead of by guess.
-			if (GuiKit.Button(new Rect(a.x + 3 * (cbW + cbG), cbY + 36f, cbW, cbH), "DUMP MENU PANELS"))
-				Modules.CaptureModule.Request(Modules.CaptureModule.Job.MenuPanels);
-
-			// The recorder is a MODE, not a one-shot, so it gets its own row and reports itself.
-			bool rec = ModConfig.MenuRecorder.Value;
-			ModConfig.MenuRecorder.Value = GuiKit.Toggle(new Rect(a.x, cbY + 74f, cbW * 2f + cbG, cbH + 4f),
-				rec ? "RECORDING — browse the whole menu, then switch off" : "RECORD THE MENU (browse to capture)",
-				rec);
-			GUI.Label(new Rect(a.x + 2 * (cbW + cbG), cbY + 80f, a.width - 2 * (cbW + cbG), 20f),
-				"<color=#6E6690>" + Trunc(Modules.MenuRecorderModule.Status, 60) + "</color>", _dim);
-			if (GuiKit.Button(new Rect(a.x + 2 * (cbW + cbG), cbY + 36f, cbW, cbH), "OPEN CAPTURES"))
-			{
-				try
-				{
-					string dir = System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "captures");
-					System.IO.Directory.CreateDirectory(dir);
-					System.Diagnostics.Process.Start("explorer.exe", dir);
-				}
-				catch { }
-			}
-			GUI.Label(new Rect(a.x, cbY + 74f, a.width, 18f),
-				"<color=#6E6690>last: " + Trunc(Modules.CaptureModule.LastFile, 92) + "</color>", _dim);
-
-			// --- modules + hotkeys, below the capture block (single flowing column, no overlap) ---
-			float my = cbY + 102f;
+			// --- modules + hotkeys (single flowing column, no overlap) ---
+			float my = a.y + 156f;
 			GUI.Label(new Rect(a.x, my, a.width, 16f), "MODULES", _header);
 			GUI.Label(new Rect(a.x, my + 22f, a.width, 18f), "• AntiCrash · Anti-Block · ESP · Radar · Movement", _dim);
 			GUI.Label(new Rect(a.x, my + 42f, a.width, 18f), "• Tags · FewTags · Watchlist · Udon console", _dim);
@@ -2037,18 +1744,10 @@ namespace VRChatArchiveMod.Core
 			CancelEdit();
 		}
 
-		public static void OpenPlayers()
-		{
-			_tab = Tab.Players;
-			Visible = true;
-		}
-
-		// Opened from the VRCHAT ARCHIVE row injected into VRChat's own avatar sidebar.
-		public static void OpenFavorites()
-		{
-			_tab = Tab.Avatars;
-			Visible = true;
-		}
+		// OpenPlayers() / OpenFavorites() are GONE (2026-09-01). They set Visible = true on a menu
+		// that is sealed: a wing-row click "opened" it, nothing was drawn, and the click looked
+		// dead. A player picked in VRChat's wing now goes to the desktop client's PLAYERS page
+		// over the control channel (WingPlayersModule → ModControlModule.WingSelect) instead.
 
 		// The tag system's status line. It used to be a bare label, which made a refusal
 		// ("this user has tag lock enabled") read like stray text floating on the panel. Now it is

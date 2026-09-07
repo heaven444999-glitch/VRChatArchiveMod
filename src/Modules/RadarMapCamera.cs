@@ -30,6 +30,14 @@ namespace VRChatArchiveMod.Modules
 		public static bool Ready => _cam != null && _rt != null;
 		public static Texture Texture => _rt;
 
+		// Where and how the cached picture was taken, so RadarModule can slide and turn it to the
+		// player's CURRENT position and heading on every frame in between (the render itself stays
+		// at 10 Hz; that is what kept the radar cheap, and what made it step instead of flow).
+		public const float Overscan = 1.15f;   // margin for the slide between two renders (24/s): a few metres at most
+		public static Vector3 RenderPos;
+		public static float RenderYaw;
+		public static bool HasRender;
+
 		// Everything except players, UI and mirrors. Layer numbers are VRChat's own and stable
 		// across builds; naming them here beats a magic number.
 		private const int LayerDefault = 0, LayerWater = 4, LayerUI = 5, LayerInteractive = 8;
@@ -73,15 +81,62 @@ namespace VRChatArchiveMod.Modules
 				float yaw = 0f;
 				try { yaw = playerCam.transform.eulerAngles.y; } catch { }
 				float height = Mathf.Max(10f, ModConfig.RadarMapHeight.Value);
-				_go.transform.position = local.position + Vector3.up * height;
-				_go.transform.rotation = Quaternion.Euler(90f, yaw, 0f);
-				_cam.orthographicSize = Mathf.Max(2f, rangeMeters);
-				_cam.farClipPlane = height + Mathf.Max(50f, rangeMeters);
+				Vector3 pos = local.position;
+				float size = Mathf.Max(2f, rangeMeters) * Overscan;
+				float far = height + Mathf.Max(50f, rangeMeters) * Overscan;
 
 				// Rendered on OUR cadence, not the frame's.
 				int every = Mathf.Clamp(ModConfig.RadarMapEveryFrames.Value, 1, 30);
-				if (_frame++ % every == 0)
+				_frame++;
+				bool due = _frame >= every;
+				// SAME POSE = SAME PICTURE. A camera that has neither moved (5 cm) nor turned (0.3 deg)
+				// since the last render would draw the identical image, so that render is skipped:
+				// standing in a crowd -- exactly where fps is lowest -- costs a few renders a second
+				// instead of one per frame, and the first real step or turn renders on that very frame,
+				// as before. The 15-frame ceiling keeps animated scenery (water, platforms) ticking
+				// while you stand still and bounds how long a previous world's picture can sit under
+				// the blips. The size/far test covers two things at once: a range or height change
+				// re-renders at once (the blit scales by the CURRENT range), and a camera that Ensure()
+				// just rebuilt (map toggled on, resolution changed) still carries Unity's defaults
+				// (5 / 1000) rather than these values, so a fresh, never-rendered texture is drawn on
+				// its first tick instead of showing uncleared VRAM -- HasRender alone cannot tell,
+				// since Release() leaves it set.
+				if (due && HasRender && _frame < 15 && Time.timeSinceLevelLoad > 2f
+					&& (pos - RenderPos).sqrMagnitude < 0.0025f
+					&& Mathf.Abs(Mathf.DeltaAngle(yaw, RenderYaw)) < 0.3f
+					&& Mathf.Abs(_cam.orthographicSize - size) < 0.01f
+					&& Mathf.Abs(_cam.farClipPlane - far) < 0.01f)
+					due = false;
+				// COST-BASED BRAKE, not a frame counter.
+				//
+				// This render is a COMPLETE second pass of the world, and its price is set by the WORLD,
+				// not by anything we do. Measured in one session, same 35-player roster, across a world
+				// change and nothing else:
+				//     light world: Radar =  30.2 ms/s at 27 fps  ->  1.1 ms per frame
+				//     heavy world: Radar = 469.2 ms/s at  9 fps  ->   52 ms per frame
+				// A 45x swing at identical workload. So a fixed cadence is the wrong instrument: any
+				// value cheap enough for the heavy world throws away the light world, which is exactly
+				// why the old fixed throttle was removed ("100% fluide, nvm the cost", 2026-09-04).
+				//
+				// Instead the map is given a BUDGET — a share of wall-clock time — and it renders as
+				// often as that budget allows. At 1 ms a render it may go again after ~12 ms, i.e. every
+				// frame, which is what the owner asked for and what the light world gets. At 52 ms it
+				// waits ~650 ms, so a world that is already at 9 fps stops paying half its frame for a
+				// minimap. Nothing disappears in between: OnGui keeps blitting the cached texture, and
+				// the blit pans and rotates it to follow the player.
+				if (due && Time.realtimeSinceStartup < _nextAllowed) due = false;
+
+				if (due)
 				{
+					_frame = 0;
+					_go.transform.position = pos + Vector3.up * height;
+					_go.transform.rotation = Quaternion.Euler(90f, yaw, 0f);
+					// OVERSCAN: the picture covers more than the radar shows, so the blit can pan AND rotate
+					// the cached frame to follow the player between two renders without exposing its corners.
+					_cam.orthographicSize = size;
+					_cam.farClipPlane = far;
+					RenderPos = pos; RenderYaw = yaw; HasRender = true;
+					long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
 					try { _cam.Render(); }
 					catch (Exception e)
 					{
@@ -92,11 +147,28 @@ namespace VRChatArchiveMod.Modules
 						Release();
 						return false;
 					}
+
+					// What it actually cost, smoothed so one hitching frame does not park the map for a
+					// second. The budget is a fraction of wall time: interval = cost / budget, so a
+					// 1 ms render may repeat after 12 ms and a 52 ms one waits ~650 ms.
+					float ms = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+					LastRenderMs = LastRenderMs <= 0f ? ms : LastRenderMs * 0.7f + ms * 0.3f;
+					_nextAllowed = Time.realtimeSinceStartup + Mathf.Clamp(LastRenderMs / 1000f / Budget, 0f, 1f);
 				}
 				return true;
 			}
 			catch { return false; }
 		}
+
+		/// <summary>Share of wall-clock time the map render may consume. 0.08 = at most ~80 ms per
+		/// second, whatever the world costs.</summary>
+		private const float Budget = 0.08f;
+
+		/// <summary>Smoothed cost of one map render, in milliseconds. Shown in the diagnostics panel:
+		/// a big number here means the WORLD is expensive, not the radar's blips.</summary>
+		public static float LastRenderMs;
+
+		private static float _nextAllowed;
 
 		private static bool Ensure(int res)
 		{

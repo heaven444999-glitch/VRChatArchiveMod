@@ -21,9 +21,10 @@ namespace VRChatArchiveMod.Modules
 	// currently is (settings + who is in the instance) and receives whatever the client wants
 	// changed since last time.
 	//
-	// ITS OWN MODULE, deliberately. VaAuth.Poll used to be driven from VaTagsModule.OnUpdate, below
-	// an early-out on VaTagsEnabled — bolting control onto that would mean switching VA tags off
-	// silently killed the client's control of the mod.
+	// ITS OWN MODULE, deliberately — and this module OWNS the VaAuth probe (VaTags no longer does).
+	// VaAuth.Poll used to be driven from VaTagsModule.OnUpdate, below an early-out on VaTagsEnabled,
+	// so switching VA tags off silently killed the client's control of the mod. It is now called
+	// from OnUpdate here, above every gate.
 	public class ModControlModule : IModule
 	{
 		public override string Name => "ModControl";
@@ -31,6 +32,11 @@ namespace VRChatArchiveMod.Modules
 		public static string Status = "idle";
 		public static bool Linked;              // the client answered our last sync
 		private static int _applied;            // settings changed by the client this session
+
+		// THE LAST WING ROW CLICKED, set by WingPlayersModule.OnRowClick (main thread, uGUI click)
+		// and emitted by BuildSync as "wingSelect" so the CLIENT selects that player on its PLAYERS
+		// page. seq climbs on every click; the client acts once per new seq. Zero = nothing yet.
+		internal static (string userId, string name, int seq) WingSelect;
 
 		private float _next;
 		private long _seq;                      // highest sequence seen, for reporting only
@@ -72,7 +78,11 @@ namespace VRChatArchiveMod.Modules
 				// without bound would mean a frame that never comes. Said out loud rather than dropped
 				// quietly — the client clears its own queue the moment it hands a command over, so a
 				// silent drop here would be the last trace the request ever existed.
-				if (MainWork.Count >= 64)
+				// 4096, not 64: the client's bulk actions (RUN ALL / TAKE OWNERSHIP ALL) hand over up to a
+				// hundred steps per sync at 0.01 s pacing, and PumpMain below now spends them at that same
+				// pace instead of in one frame — so between two syncs a few hundred can legitimately wait
+				// here. 64 dropped a third of every bulk batch with nothing but a log line to show for it.
+				if (MainWork.Count >= 4096)
 				{
 					VRChatArchiveModPlugin.Logger.LogWarning("[ModControl] main-thread queue full, command dropped.");
 					return;
@@ -81,16 +91,36 @@ namespace VRChatArchiveMod.Modules
 			}
 		}
 
+		// PACED, NOT DRAINED. This used to run everything a sync had brought in ONE frame, so a bulk
+		// "run all" of a hundred events was a single-frame burst whatever spacing the client had used
+		// to hand them over — and a burst of networked events is exactly what desyncs or disconnects
+		// you. Now it spends one step per 10 ms of elapsed time: at 60 fps that is 1-2 per frame, i.e.
+		// the client's 0.01 s pacing becomes 0.01 s pacing IN GAME. Two guarantees: at least one step
+		// per frame (a lone toggle is never delayed), and the banked credit is capped at 80 ms, so a
+		// frame hitch cannot turn into a burst of its own. Credit resets when the queue is empty, so
+		// idle time never banks up a burst for the next batch.
+		private static readonly System.Diagnostics.Stopwatch MainClock = System.Diagnostics.Stopwatch.StartNew();
+		private static long _mainLastMs, _mainCreditMs;
+
 		private static void PumpMain()
 		{
+			long now = MainClock.ElapsedMilliseconds;
+			long elapsed = now - _mainLastMs;
+			_mainLastMs = now;
+			lock (MainWork) { if (MainWork.Count == 0) { _mainCreditMs = 0; return; } }
+			_mainCreditMs = Math.Min(_mainCreditMs + elapsed, 80);
+			int ran = 0;
 			while (true)
 			{
+				if (ran > 0 && _mainCreditMs < 10) return;
 				Action work;
 				lock (MainWork)
 				{
 					if (MainWork.Count == 0) return;
 					work = MainWork.Dequeue();
 				}
+				_mainCreditMs = Math.Max(0, _mainCreditMs - 10);
+				ran++;
 				try { work(); }
 				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ModControl] queued command failed: " + e.Message); }
 			}
@@ -102,6 +132,10 @@ namespace VRChatArchiveMod.Modules
 		// something — a scan, a switch, a restore — and a world can hold a thousand behaviours, so
 		// sending it once a second would be a hundred kilobytes a second describing something that did
 		// not move. Built once when it changes, taken once by the next sync.
+		// Which clip icons the client already has. Icons are big next to the rest of a sync, so each
+		// goes over exactly once; a fresh schema announce (new client session) clears this.
+		private static readonly HashSet<string> _iconSent = new HashSet<string>(StringComparer.Ordinal);
+
 		private static string _udonPayload;
 
 		// THE ENTRY POINTS OF THE LAST BEHAVIOUR ASKED ABOUT, kept rather than consumed. Clearing
@@ -114,6 +148,11 @@ namespace VRChatArchiveMod.Modules
 		private static List<string> _udonEventList;
 		private static int _udonVarsId;
 		private static List<UdonManagerModule.Var> _udonVarList;
+		// Every script's entry points in one answer (client action udonEventsAll), so the client's list
+		// can be filtered by LOCAL / GLOBAL without 300 round trips. Built on demand, sent once.
+		private static string _udonAllEvents;
+		// (The mod-side "udonDump" walker of v236-v238 is gone: DUMP ALL reads the world FILE in the
+		// client now, and the live walk was never cheap enough for a running game.)
 		// The last "run this event and tell me what changed" result, kept like the events/vars blocks.
 		private static int _udonDiffId;
 		private static string _udonDiffEvent;
@@ -150,7 +189,7 @@ namespace VRChatArchiveMod.Modules
 			_subscribed = true;
 			try
 			{
-				var file = ModConfig.EspEnabled?.ConfigFile;   // any entry: they all share one file
+				var file = ModConfig.EspCapsule?.ConfigFile;   // any entry: they all share one file
 				if (file != null) file.SettingChanged += (_, __) => _dirty = true;
 			}
 			catch { }
@@ -160,12 +199,19 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				if (!ModConfig.ModControlEnabled.Value) return;
+				// THE PROBE RUNS FIRST, ABOVE EVERY GATE. VaAuth.Poll is the only thing that ever sets
+				// InsideClient, and it used to be called from VaTagsModule below its own VaTagsEnabled
+				// early-out — so switching VA tags off silently killed this whole channel. It lives here
+				// now, before the ModControl switch too, so the mod always knows whether the desktop
+				// client is there. Poll throttles itself, so a second caller would be harmless.
+				VaAuth.Poll(Time.realtimeSinceStartup);
 
 				// Anything the client asked for that has to touch Unity runs HERE, on the frame — not
 				// on the socket continuation that received it. Ahead of the link check on purpose, so
 				// work already accepted still completes if the client goes away mid-flight.
 				PumpMain();
+
+				if (!ModConfig.ModControlEnabled.Value) return;
 
 				if (!VaAuth.InsideClient) { Linked = false; Status = "waiting for the desktop client"; return; }
 
@@ -210,6 +256,11 @@ namespace VRChatArchiveMod.Modules
 		public override void OnSceneLoaded(int buildIndex)
 		{
 			_schemaSent = false;
+			// Forget the world we were in, so the 2 s watch in OnUpdate re-pushes the udon block even
+			// when the new scene is the SAME world (new instance, rejoin after a crash). Without this
+			// the id compares equal, nothing is rebuilt, and the client never re-applies its per-world
+			// profile.
+			_lastWorldId = "";
 			OnMain(() =>
 			{
 				_udonEventList = null;   // the behaviour they belonged to no longer exists
@@ -222,15 +273,27 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
+				// THE SYNC BODY IS BUILT FIRST, before any await. SyncAsync is entered synchronously
+				// from OnUpdate, so this line runs on the main thread — and it has to: BuildSync reads
+				// the roster, OrbitModule, ForceGrab's live pickup, and BuildEvents walks Unity/IL2CPP
+				// state. It used to sit AFTER the schema POST below, which meant that on every
+				// schema-first sync (every world change) it ran in the awaited continuation — a
+				// thread-pool thread with no IL2CPP GC attachment — which is exactly the kind of
+				// off-thread native read that takes the process down without a catchable exception.
+				// Built exactly once per SyncAsync, too: BuildSync is side-effecting (it TAKES the
+				// udon payload, advances the event high-water mark, trims the release cache).
+				string syncBody = BuildSync();
+
 				// The schema goes once per session: it is the list of every setting with its type, so
 				// the client can build real controls instead of guessing. Values ride on every sync.
 				if (!_schemaSent)
 				{
+					lock (_iconSent) _iconSent.Clear();   // new client session: it has no icons yet
 					var (okS, _, _) = await VaAuth.PostBridgeAsync("/mod/schema", BuildSchema());
 					if (okS) _schemaSent = true;
 				}
 
-				var (ok, raw, code) = await VaAuth.PostBridgeAsync("/mod/sync", BuildSync());
+				var (ok, raw, code) = await VaAuth.PostBridgeAsync("/mod/sync", syncBody);
 				if (!ok)
 				{
 					Linked = false;
@@ -281,7 +344,7 @@ namespace VRChatArchiveMod.Modules
 			var sb = new StringBuilder(16 * 1024);
 			sb.Append("{\"schema\":[");
 			bool first = true;
-			foreach (var e in DevToolsModule.Config())
+			foreach (var e in Core.ConfigRegistry.Config())
 			{
 				if (e == null || e.Raw == null) continue;
 				if (IsInternal(e.Section, e.Key)) continue;   // not offered to the client at all
@@ -306,7 +369,7 @@ namespace VRChatArchiveMod.Modules
 			return sb.ToString();
 		}
 
-		private static string Describe(DevToolsModule.Entry e)
+		private static string Describe(Core.ConfigRegistry.Entry e)
 		{
 			try { return e.Raw.Description?.Description ?? ""; } catch { return ""; }
 		}
@@ -316,12 +379,12 @@ namespace VRChatArchiveMod.Modules
 			var sb = new StringBuilder(16 * 1024);
 			sb.Append("{\"values\":{");
 			bool first = true;
-			foreach (var e in DevToolsModule.Config())
+			foreach (var e in Core.ConfigRegistry.Config())
 			{
 				if (e == null || e.Raw == null) continue;
 				if (!first) sb.Append(',');
 				first = false;
-				sb.Append(Json(e.Section + "/" + e.Key)).Append(':').Append(Json(DevToolsModule.ValueOf(e)));
+				sb.Append(Json(e.Section + "/" + e.Key)).Append(':').Append(Json(Core.ConfigRegistry.ValueOf(e)));
 			}
 			sb.Append('}');
 
@@ -356,10 +419,23 @@ namespace VRChatArchiveMod.Modules
 						  .Append(",\"trust\":").Append(Json(p.TrustColor))
 						  .Append(",\"plus\":").Append(p.Plus ? "true" : "false")
 						  .Append(",\"adult\":").Append(p.Adult ? "true" : "false")
+						  // Who blocked whom. THIS is the payload the client's PLAYERS tab reads (short
+						  // keys); the detailed per-player dump further down carries the same two facts
+						  // under longer names. Both are needed — they are different messages, and only
+						  // this one feeds the list.
+						  .Append(",\"blockedMe\":").Append(BlockedByProbeModule.BlockedMe.Contains(p.UserId ?? "") ? "true" : "false")
+						  .Append(",\"blockedByMe\":").Append(BlockedByProbeModule.IBlocked.Contains(p.UserId ?? "") ? "true" : "false")
 						  .Append(",\"playerId\":").Append(p.PlayerId)
 						  .Append(",\"isLocal\":").Append(p.IsLocal ? "true" : "false")
 						  .Append(",\"isOwner\":").Append(p.IsOwner ? "true" : "false")
-						  .Append(",\"isMaster\":").Append(p.IsMaster ? "true" : "false");
+						  .Append(",\"isMaster\":").Append(p.IsMaster ? "true" : "false")
+						  // Live position for the client's PLAYERS card. hasPos is false when even the api
+						  // fallback could not place them; coords sanitised so a broken NaN transform cannot
+						  // make the whole sync invalid JSON.
+						  .Append(",\"hasPos\":").Append(p.HasPos ? "true" : "false")
+						  .Append(",\"px\":").Append(SafeF(p.Pos.x))
+						  .Append(",\"py\":").Append(SafeF(p.Pos.y))
+						  .Append(",\"pz\":").Append(SafeF(p.Pos.z));
 
 						// The tags this player carries, so the client can show and edit them without
 						// a second round trip to the server for data the mod already holds.
@@ -392,10 +468,16 @@ namespace VRChatArchiveMod.Modules
 			// Live state the client needs to draw its toggles in the right position — an orbit
 			// switch that does not know it is already on is just a button that lies.
 			string orbitMode = "off", orbitTarget = "";
+			string mimicTarget = "";
+			bool mimicMirror = false;
+			string voiceMimicTarget = "";
 			try
 			{
 				orbitMode = OrbitModule.Current.ToString().ToLowerInvariant();
 				orbitTarget = OrbitModule.TargetUid ?? "";
+				mimicTarget = MimicPoseModule.TargetUid ?? "";
+				mimicMirror = MimicPoseModule.Mirror;
+				voiceMimicTarget = VoiceMimicModule.TargetUid ?? "";
 			}
 			catch { }
 
@@ -409,20 +491,130 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 
-			sb.Append("],\"events\":[").Append(BuildEvents()).Append(']')
+			// And Force Grab, read once here so a pickup dropped mid-build cannot split the pair.
+			bool forceGrab = false; string forceGrabName = "";
+			try
+			{
+				forceGrab = ForceGrabModule.Holding;
+				forceGrabName = forceGrab ? (ForceGrabModule.HeldName ?? "") : "";
+			}
+			catch { }
+
+			sb.Append(']');
+
+			// THE WING ROW THAT WAS CLICKED. A click on a wing player row used to open the sealed
+			// in-game menu on the PLAYERS tab — a no-op since the menu was retired — so the row now
+			// hands the user to the CLIENT's PLAYERS page through this block. Seq-based, not
+			// consumed: it rides every sync once set, and the client acts on it once per new seq, so a
+			// sync lost to a timeout cannot lose the click. Not sent through QueueResult on purpose —
+			// PlayersPage.DrainDumps drains that queue wholesale onto the clipboard.
+			try
+			{
+				var ws = WingSelect;
+				if (ws.seq > 0 && !string.IsNullOrEmpty(ws.userId))
+					sb.Append(",\"wingSelect\":{\"seq\":").Append(ws.seq)
+					  .Append(",\"userId\":").Append(Json(ws.userId))
+					  .Append(",\"name\":").Append(Json(ws.name ?? "")).Append('}');
+			}
+			catch { }
+
+			sb.Append(",\"events\":[").Append(BuildEvents()).Append(']')
 			  .Append(",\"results\":[").Append(TakeResults()).Append(']')
 			  .Append(",\"seq\":").Append(0)
 			  .Append(",\"applied\":").Append(_applied)
 			  .Append(",\"world\":").Append(Json(SafeWorld()))
 			  .Append(",\"orbitMode\":").Append(Json(orbitMode))
 			  .Append(",\"orbitTarget\":").Append(Json(orbitTarget))
+			  .Append(",\"mimicTarget\":").Append(Json(mimicTarget))
+			  .Append(",\"mimicMirror\":").Append(mimicMirror ? "true" : "false")
+			  .Append(",\"voiceMimicTarget\":").Append(Json(voiceMimicTarget))
 			  .Append(",\"objectOrbit\":").Append(objOrbit ? "true" : "false")
 			  .Append(",\"objectOrbitCenter\":").Append(Json(objOrbitCenter))
 			  .Append(",\"objectOrbitCount\":").Append(objOrbitCount)
+			  // The soundboard: its clip list (so the client can draw a button per clip without
+			  // hardcoding them) and the recent who-played-what feed. Both are a few dozen bytes.
+			  .Append(",\"soundboard\":").Append(BuildSoundboard())
+			  // Whether the chatbox animation is running, so the client's button can read TOGGLED
+			  // rather than pretending it started something it cannot see.
+			  .Append(",\"badApple\":").Append(BadAppleModule.Playing ? "true" : "false")
+			  // Force Pickup is a state, so the client's toggle can show what is really on.
+			  .Append(",\"forceJump\":").Append(ForceJumpModule.Active ? "true" : "false")
+			  // GHOST: the local player's network serializer held off (others see you frozen).
+			  .Append(",\"ghost\":").Append(GhostModule.Active ? "true" : "false")
+			  // FLOAT OBJECTS: gravity removed from every pickup's body (ObjectGravityModule), and how many.
+			  .Append(",\"floatObjects\":").Append(ObjectGravityModule.Active ? "true" : "false")
+			  .Append(",\"floatObjectsCount\":").Append(ObjectGravityModule.Count)
+			  // MENU BACKGROUNDS: state and how many options were unlocked, so the client's switch
+			  // reflects reality instead of whatever it was last clicked to.
+			  .Append(",\"forceJoinStatus\":").Append(Json(Core.ForceJoin.LastStatus ?? ""))
+			  .Append(",\"launchpadConsole\":").Append(LaunchpadConsoleModule.Active ? "true" : "false")
+			  .Append(",\"menuBackgrounds\":").Append(VrcPlusBackgroundsModule.Active ? "true" : "false")
+			  .Append(",\"menuBackgroundsCount\":").Append(VrcPlusBackgroundsModule.Count)
+			  .Append(",\"menuBackgroundsStatus\":").Append(Json(VrcPlusBackgroundsModule.Status ?? ""))
+			  .Append(",\"ghostStatus\":").Append(Json(GhostModule.Status ?? ""))
+			  .Append(",\"playerGrab\":").Append(PlayerGrabModule.Active ? "true" : "false")
+			  .Append(",\"playerGrabState\":").Append(Json(PlayerGrabModule.StateText ?? ""))
+			  .Append(",\"mark\":").Append(MarkModule.HasMark ? "true" : "false")
+			  .Append(",\"markArt\":").Append(MarkModule.ArtPlaying ? "true" : "false")
+			  .Append(",\"markMode\":").Append(Json(MarkModule.Mode ?? "local"))
+			  // VRCHAT NETWORK telemetry (grid, objects owned, move budget, outbound events/s, backlog) so
+			  // the client can show what the network mode is really doing; "" when it is not running.
+			  .Append(",\"markNet\":").Append(Json(MarkModule.NetInfo ?? ""))
+			  .Append(",\"forcePickup\":").Append(ForcePickupModule.Active ? "true" : "false")
+			  .Append(",\"forcePickupCount\":").Append(ForcePickupModule.Unlocked)
+			  // Force Grab too: the client's FUN button reads "DROP <name>" while something is held
+			  // and "GRAB WHAT YOU AIM AT" otherwise. Read here on the main thread (BuildSync always
+			  // is now) — Holding looks at live pickup references.
+			  .Append(",\"forceGrab\":").Append(forceGrab ? "true" : "false")
+			  .Append(",\"forceGrabName\":").Append(Json(forceGrabName))
+			  // WHAT THE MOD LAST SAID, so a refusal or a result surfaces in the client. Every action
+			  // is "applied" the moment it is queued (see Apply), so these two plain strings are the
+			  // only channel a false return, a missing player or an Archive-button outcome has left.
+			  // Always present, "" when there is nothing to say — the client diffs them.
+			  .Append(",\"lastStatus\":").Append(Json(VaTagsModule.LastStatus ?? ""))
+			  .Append(",\"favBtnStatus\":").Append(Json(ArchiveFavButtonModule.Status ?? ""))
+			  // WHAT THE GUARDS HAVE STOPPED, so the client's protection page shows the mod is actually
+			  // doing something and not just ticking. Four guards, one counter and one "last" each:
+			  // bundle (refused AssetBundle loads), photon (dropped/suspended Photon events), udon
+			  // (blocked Udon events), avatar (anti-crash scans and neutralisations). Counters only,
+			  // never a list — the per-event detail lives in the LOGGING console, and this block rides
+			  // every sync. Each read is guarded separately: a guard that is not loaded must not cost
+			  // the client the rest of the sync.
+			  .Append(",\"protection\":").Append(BuildProtection())
 			  // TAKEN, not copied: whoever gets this sync gets the Udon list, and the next sync carries
-			  // null instead of repeating it. Interlocked because BuildSync runs on the main thread on
-			  // an ordinary poll but on a pool thread when the schema POST above had to await first.
+			  // null instead of repeating it. Interlocked stays as belt and braces: BuildSync is now
+			  // ALWAYS entered on the main thread (SyncAsync builds the body before its first await),
+			  // but OnMain-queued udon work writes this field from the same thread and an exchange is
+			  // the cheapest way to guarantee one sync takes it exactly once.
 			  .Append(",\"udon\":").Append(System.Threading.Interlocked.Exchange(ref _udonPayload, null) ?? "null")
+			  .Append('}');
+			return sb.ToString();
+		}
+
+		// THE PROTECTION BLOCK, always present with every key, so the client never has to guess
+		// whether a missing field means "zero" or "the mod is older than the page". Plain statics
+		// only — no Unity object is touched, so this is safe from any thread, though BuildSync
+		// calls it on the main one anyway. A guard whose read throws (module not started, static
+		// not initialised) contributes its zero/"" and the others still report.
+		private static string BuildProtection()
+		{
+			int bundleBlocked = 0, photonBlocked = 0, photonSuspended = 0, udonBlocked = 0, avatarsScanned = 0, avatarNeutralized = 0;
+			string bundleLast = "", photonLast = "", udonLast = "", avatarLast = "";
+			try { bundleBlocked = AssetBundlePatchModule.Blocked; bundleLast = AssetBundlePatchModule.LastBlocked ?? ""; } catch { }
+			try { photonBlocked = PhotonGuardModule.Blocked; photonSuspended = PhotonGuardModule.SuspendedCount; photonLast = PhotonGuardModule.LastBlocked ?? ""; } catch { }
+			try { udonBlocked = UdonLogModule.BlockedTotal; udonLast = UdonLogModule.LastBlocked ?? ""; } catch { }
+			try { avatarsScanned = AntiCrashModule.AvatarsScanned; avatarNeutralized = AntiCrashModule.NeutralizedTotal; avatarLast = AntiCrashModule.LastAvatar ?? ""; } catch { }
+			var sb = new StringBuilder(256);
+			sb.Append("{\"bundleBlocked\":").Append(bundleBlocked)
+			  .Append(",\"bundleLast\":").Append(Json(bundleLast))
+			  .Append(",\"photonBlocked\":").Append(photonBlocked)
+			  .Append(",\"photonSuspended\":").Append(photonSuspended)
+			  .Append(",\"photonLast\":").Append(Json(photonLast))
+			  .Append(",\"udonBlocked\":").Append(udonBlocked)
+			  .Append(",\"udonLast\":").Append(Json(udonLast))
+			  .Append(",\"avatarsScanned\":").Append(avatarsScanned)
+			  .Append(",\"avatarNeutralized\":").Append(avatarNeutralized)
+			  .Append(",\"avatarLast\":").Append(Json(avatarLast))
 			  .Append('}');
 			return sb.ToString();
 		}
@@ -474,7 +666,11 @@ namespace VRChatArchiveMod.Modules
 		// Reads .enabled live off each behaviour rather than trusting what the last scan recorded:
 		// a world switches its own scripts on and off constantly, and a row showing OFF because we
 		// once saw it OFF is a row that lies. MUST run on the main thread — every caller queues.
-		private static string BuildUdon()
+		// withItems=false: a per-script answer (events / vars of ONE behaviour) — the list itself has
+		// not changed, so it is not rebuilt nor resent. The client only replaces its list when "items"
+		// is present, so leaving the key out is safe. This was the dump's lag: rebuilding and resending
+		// every row, with an il2cpp .enabled read per row, twice per script on the main thread.
+		private static string BuildUdon(bool withItems = true)
 		{
 			var sb = new StringBuilder(16 * 1024);
 			var rows = UdonManagerModule.Snapshot();
@@ -495,10 +691,12 @@ namespace VRChatArchiveMod.Modules
 			  .Append(",\"worldId\":").Append(Json(worldId))
 			  .Append(",\"worldName\":").Append(Json(worldName))
 			  .Append(",\"total\":").Append(rows.Count)
-			  .Append(",\"off\":").Append(UdonManagerModule.DisabledByUs)
-			  .Append(",\"items\":[");
+			  .Append(",\"off\":").Append(UdonManagerModule.DisabledByUs);
 
 			int n = 0;
+			if (withItems)
+			{
+			sb.Append(",\"items\":[");
 			for (int i = 0; i < rows.Count && n < MaxUdonRows; i++)
 			{
 				var e = rows[i];
@@ -517,12 +715,15 @@ namespace VRChatArchiveMod.Modules
 				  .Append(",\"p\":").Append(Json(e.Path))
 				  .Append(",\"d\":").Append(d.ToString("F1", CultureInfo.InvariantCulture))
 				  .Append(",\"on\":").Append(on ? "true" : "false")
-				  .Append(",\"ours\":").Append(e.OffByUs ? "true" : "false").Append('}');
+				  .Append(",\"ours\":").Append(e.OffByUs ? "true" : "false")
+				  .Append(",\"o\":").Append(Json(e.Owner ?? ""))
+				  .Append(",\"m\":").Append(e.Mine ? "true" : "false").Append('}');
 			}
 			// NO SILENT CAP. If a world holds more behaviours than one message should carry, the
 			// client is told how many it is actually looking at rather than left to assume the list
 			// is complete.
 			sb.Append("],\"shown\":").Append(n);
+			}
 
 			// The entry points of one behaviour, when the client asked for them. Read once per
 			// selection and never during a scan: it costs a reflected call per behaviour.
@@ -538,6 +739,14 @@ namespace VRChatArchiveMod.Modules
 					  .Append(",\"g\":").Append(UdonManagerModule.IsGlobalEvent(null, ev) ? "true" : "false").Append('}');
 				}
 				sb.Append("]}");
+			}
+
+			// Every script's events, once, when the client asked for them. g = network-eligible names,
+			// l = local-only (underscore) names. Consumed here so it is not resent every sync.
+			if (_udonAllEvents != null)
+			{
+				sb.Append(",\"eventsAll\":").Append(_udonAllEvents);
+				_udonAllEvents = null;
 			}
 
 			// The variables of one behaviour, on the same terms as its events: only when asked for,
@@ -556,7 +765,8 @@ namespace VRChatArchiveMod.Modules
 					sb.Append("{\"n\":").Append(Json(v.Name))
 					  .Append(",\"t\":").Append(Json(v.Type))
 					  .Append(",\"v\":").Append(Json(v.Value))
-					  .Append(",\"e\":").Append(v.Editable ? "true" : "false").Append('}');
+					  .Append(",\"e\":").Append(v.Editable ? "true" : "false")
+					  .Append(",\"s\":").Append(v.Synced ? "true" : "false").Append('}');
 				}
 				sb.Append("]}");
 			}
@@ -602,6 +812,16 @@ namespace VRChatArchiveMod.Modules
 			sb.Append("  \"isOwner\": ").Append(p.IsOwner ? "true" : "false").Append(",\n");
 			sb.Append("  \"vrcPlus\": ").Append(p.Plus ? "true" : "false").Append(",\n");
 			sb.Append("  \"ageVerified\": ").Append(p.Adult ? "true" : "false").Append(",\n");
+			// Block relationship, both directions, from the account's own moderation lists — NOT from
+			// how the avatar is drawn. "blockedMe" is the one worth seeing: VRChat never says it out
+			// loud, and the client draws such a player as a plain capsule with no explanation.
+			try
+			{
+				string uid = p.UserId ?? "";
+				sb.Append("  \"blockedMe\": ").Append(BlockedByProbeModule.BlockedMe.Contains(uid) ? "true" : "false").Append(",\n");
+				sb.Append("  \"blockedByMe\": ").Append(BlockedByProbeModule.IBlocked.Contains(uid) ? "true" : "false").Append(",\n");
+			}
+			catch { }
 
 			try
 			{
@@ -788,14 +1008,28 @@ namespace VRChatArchiveMod.Modules
 
 					string kind = Str(c, "kind");
 					string cid = Str(c, "id");
-					Core.ConfigWatch.ApplyingFrom = "from the client";
+					string cval = Str(c, "value");
 					bool applied;
-					try
+					if (kind == "set")
 					{
-						applied = kind == "set" ? ApplySet(cid, Str(c, "value"))
-							: kind == "action" && ApplyAction(cid, Str(c, "value"));
+						// A config write is managed-only and safe on this thread.
+						Core.ConfigWatch.ApplyingFrom = "from the client";
+						try { applied = ApplySet(cid, cval); }
+						finally { Core.ConfigWatch.ApplyingFrom = null; }
 					}
-					finally { Core.ConfigWatch.ApplyingFrom = null; }
+					else if (kind == "action")
+					{
+						// MAIN THREAD ONLY. Apply() runs in the continuation of an awaited HTTP call \u2014 a
+						// thread-pool thread with no IL2CPP GC attachment. An action touches Unity/IL2CPP, and
+						// ObjectOrbit's Collect() alone does Resources.FindObjectsOfTypeAll and allocates
+						// thousands of proxies; doing that here is a \"Fatal error in GC: Collecting from unknown
+						// thread\". So EVERY action is queued onto the frame (the udon/force cases already do this
+						// internally; this covers the older clone/teleport/orbit/objectOrbit/video ones too).
+						// \"Applied\" therefore means ACCEPTED \u2014 the action runs on the next frame.
+						OnMain(() => ApplyAction(cid, cval));
+						applied = true;
+					}
+					else applied = false;
 
 					if (applied)
 					{
@@ -835,7 +1069,7 @@ namespace VRChatArchiveMod.Modules
 				string section = id.Substring(0, slash), key = id.Substring(slash + 1);
 				if (IsInternal(section, key)) return false;   // never settable from outside the game
 
-				foreach (var e in DevToolsModule.Config())
+				foreach (var e in Core.ConfigRegistry.Config())
 				{
 					if (e?.Raw == null) continue;
 					if (!string.Equals(e.Section, section, StringComparison.OrdinalIgnoreCase)) continue;
@@ -869,6 +1103,17 @@ namespace VRChatArchiveMod.Modules
 			return null;
 		}
 
+		// A REFUSAL THE CLIENT CAN SEE. ApplyAction runs from the main-thread queue, AFTER Apply()
+		// has already logged the command as "applied" (applied means accepted there) — so a false
+		// return from here reaches nobody. The status string rides the next sync as "lastStatus"
+		// and the client paints it, which is the only way an empty id or a player who already left
+		// stops looking like a button that does nothing.
+		private static bool Refuse()
+		{
+			VaTagsModule.LastStatus = "mod could not find that player/id";
+			return false;
+		}
+
 		// One-shot things that are not a setting: wear an avatar, clone a player, reset movement.
 		private static bool ApplyAction(string id, string value)
 		{
@@ -877,7 +1122,7 @@ namespace VRChatArchiveMod.Modules
 				switch (id)
 				{
 					case "wear":
-						if (string.IsNullOrEmpty(value)) return false;
+						if (string.IsNullOrEmpty(value)) return Refuse();
 						VaTagsModule.WearById(value, "");
 						return true;
 
@@ -886,7 +1131,7 @@ namespace VRChatArchiveMod.Modules
 					case "clone":
 						{
 							var p = FindPlayer(value);
-							if (p == null) return false;
+							if (p == null) return Refuse();
 							VaTagsModule.CloneAvatar(p);
 							return true;
 						}
@@ -894,7 +1139,7 @@ namespace VRChatArchiveMod.Modules
 					case "teleport":
 						{
 							var p = FindPlayer(value);
-							if (p == null) return false;
+							if (p == null) return Refuse();
 							VaTagsModule.TeleportTo(p);
 							return true;
 						}
@@ -902,7 +1147,7 @@ namespace VRChatArchiveMod.Modules
 					case "orbit":
 						{
 							var p = FindPlayer(value);
-							if (p == null) return false;
+							if (p == null) return Refuse();
 							OrbitModule.Toggle(OrbitModule.Mode.Orbit, p);
 							return true;
 						}
@@ -910,17 +1155,47 @@ namespace VRChatArchiveMod.Modules
 					case "sit":
 						{
 							var p = FindPlayer(value);
-							if (p == null) return false;
+							if (p == null) return Refuse();
 							OrbitModule.Toggle(OrbitModule.Mode.Sit, p);
 							return true;
 						}
+
+					// Mimic: copy somebody's pose onto your own avatar (MimicPoseModule). A toggle on
+					// the same player stops it; a different player switches the target.
+					case "mimic":
+						{
+							var p = FindPlayer(value);
+							if (p == null) return Refuse();
+							MimicPoseModule.Toggle(p);
+							return true;
+						}
+					case "mimicStop":
+						MimicPoseModule.Stop("stopped from the client");
+						return true;
+					case "mimicMirror":   // "1" / "0": mirror the copied pose (their left = your right)
+						MimicPoseModule.SetMirror(value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
+						return true;
+
+					// Voice mimic: park at somebody's head so your spatial voice seems to come from
+					// them (VoiceMimicModule). Same toggle shape as mimic: same player stops it, a
+					// different player switches the target.
+					case "voiceMimic":
+						{
+							var p = FindPlayer(value);
+							if (p == null) return Refuse();
+							VoiceMimicModule.Toggle(p);
+							return true;
+						}
+					case "voiceMimicStop":
+						VoiceMimicModule.Stop("stopped from the client");
+						return true;
 
 					// Objects orbiting a player — the ring feature that already existed in the
 					// in-game menu but had no way in from the client.
 					case "objectOrbit":
 						{
 							var p = FindPlayer(value);
-							if (p == null) return false;
+							if (p == null) return Refuse();
 							ObjectOrbitModule.ToggleOnPlayer(p);
 							return true;
 						}
@@ -966,18 +1241,112 @@ namespace VRChatArchiveMod.Modules
 					// Force jump — a one-shot upward launch of the local player. value = optional force
 					// override (metres/second); empty means use the configured default. Ordinary local
 					// movement, queued to the main thread like everything that touches the player.
+					// FORCE JUMP: a TOGGLE, not a one-shot. While on, it holds your jump impulse open so you
+					// can jump (Space) at the configured strength EVEN in worlds that disabled jumping;
+					// toggling off restores the world's own jump. value is ignored — strength is the slider.
 					case "forceJump":
-						{
-							float f = 0f;
-							if (!string.IsNullOrEmpty(value))
-								float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out f);
-							OnMain(() => ForceJumpModule.Launch(f));
-							return true;
-						}
+						OnMain(() => ForceJumpModule.Toggle());
+						return true;
 
-					// Force grab: toggle grab/drop of whatever the crosshair is on. Aim happens in the
-					// game, so the button is really a drop / re-grab \u2014 the reach and the lock override live
-					// in the mod. Queued to the main thread; it raycasts and drives transforms.
+					// GHOST: toggle the local player's FlatBufferNetworkSerializer — frozen for everyone
+					// else, moving for yourself. Exactly the UnityExplorer gesture, as one button.
+					case "ghost":
+						OnMain(() => GhostModule.Toggle());
+						return true;
+					// FLOAT OBJECTS: useGravity = false on every pickup's Rigidbody (yours float for everyone).
+					case "floatObjects":
+						OnMain(() => ObjectGravityModule.Toggle());
+						return true;
+
+					// MENU BACKGROUNDS: the VRC+ menu backgrounds, animated ones included, shown
+					// locally. Without a command the module was registered and could never be switched
+					// on — it shipped as dead code.
+					case "menuBackgrounds":
+						OnMain(() => VrcPlusBackgroundsModule.Toggle());
+						return true;
+
+					// LAUNCH PAD CONSOLE: the event console in place of VRChat's promo carousel.
+					case "launchpadConsole":
+						OnMain(() => LaunchpadConsoleModule.Toggle());
+						return true;
+
+					// ARCHIVE FEED: lines pushed by the desktop client — what the AUTO ARCHIVER is
+					// uploading and what the CACHE VIEWER is recording — so the in-game console can
+					// show the work the Archive is actually doing while you play.
+					// Payload is "<archiver|cache>|<text>"; the text may itself contain '|', so the
+					// split takes only the FIRST separator.
+					case "archiveLog":
+					{
+						string payload = value ?? "";
+						int cut = payload.IndexOf('|');
+						string kindStr = cut >= 0 ? payload.Substring(0, cut) : "archiver";
+						string text = cut >= 0 ? payload.Substring(cut + 1) : payload;
+						var kind = string.Equals(kindStr, "cache", StringComparison.OrdinalIgnoreCase)
+							? Core.ArchiveFeed.Kind.Cache : Core.ArchiveFeed.Kind.Archiver;
+						// No OnMain: this only appends to a list, and the console reads it on its own
+						// tick. Hopping to the main thread for a string would serialise the uploader.
+						Core.ArchiveFeed.Add(kind, text);
+						return true;
+					}
+
+					// Switches the console between ARCHIVER LOGS and CACHE LOGS.
+					case "archiveLogToggle":
+						OnMain(() => Core.ArchiveFeed.Toggle());
+						return true;
+
+					// FORCE JOIN: go to a world or instance by id. OnMain because GoToRoom starts a room
+					// transition, which is main-thread work.
+					case "forceJoin":
+					{
+						string room = value ?? "";
+						OnMain(() => Core.ForceJoin.Go(room));
+						return true;
+					}
+
+					// WHO BLOCKED ME: asked ONLY here, never on a timer. The fetch needs the il2cpp
+					// delegate bridge, which this mod documents as able to kill the process, so it is
+					// something the user chooses to do — not something that happens to them.
+					case "whoBlockedMe":
+						OnMain(() => BlockedByProbeModule.RequestFetch());
+						return true;
+
+					// DUMP MENU TREE: writes VRChat's live menu hierarchy to a text file. Read-only, and
+					// the prerequisite for building our UI out of CLONES of VRChat's own buttons rather
+					// than hand-made GameObjects — a clone needs the PATH of what it clones, and those
+					// paths move with every VRChat release (Page_DevTools, which a reference client
+					// clones for its tab, no longer exists on this build; it is Page_Launchpad now).
+					case "dumpUi":
+						OnMain(() => UiTreeDumpModule.Request());
+						return true;
+
+					// PLAYER GRAB (mod users grab each other): the toggle, and the desktop aim grab / release.
+					case "playerGrab":
+						OnMain(() => PlayerGrabModule.Toggle());
+						return true;
+					case "playerGrabAim":
+						OnMain(() => PlayerGrabModule.GrabOrReleaseAimed());
+						return true;
+
+					// MARK: an aim-placed anchor for the world's loose objects (TP / orbit / shapes / object art).
+					case "markPut": OnMain(() => MarkModule.PutMark()); return true;
+					case "markClear": OnMain(() => MarkModule.Clear()); return true;
+					case "markTp": OnMain(() => MarkModule.TeleportObjectsToMark()); return true;
+					case "markOrbit": OnMain(() => MarkModule.OrbitAroundMark()); return true;
+					case "markShape": { string shp = value; OnMain(() => MarkModule.Shape(shp)); return true; }
+					case "markMode": { string mm = value; OnMain(() => MarkModule.SetMode(mm)); return true; }   // local | vrchat for shapes / TP / orbit
+					case "markBadApple": { string md = value; OnMain(() => MarkModule.ToggleBadApple(md)); return true; }   // value = local | vrchat
+
+					// FORCE PICKUP: a toggle, not a one-shot. Unlocks the world's locked pickups so you
+					// grab them with your own hands; toggling off puts every one back.
+					case "forcePickup":
+						OnMain(() => ForcePickupModule.Toggle());
+						return true;
+
+					// FORCE GRAB: toggle grab/drop of whatever the crosshair is on. Aim happens in the
+					// game, so the client's button is really a grab / drop \u2014 the reach and the lock
+					// override live in the mod (Fun/ForceGrab*). This is the ONLY way in: the in-game
+					// hotkey is gone, and the client draws its button from the forceGrab/forceGrabName
+					// pair BuildSync sends back. Queued to the main thread; it raycasts and drives transforms.
 					case "forceGrab":
 						OnMain(() => ForceGrabModule.Toggle());
 						return true;
@@ -990,7 +1359,7 @@ namespace VRChatArchiveMod.Modules
 					case "dumpUser":
 						{
 							var p = FindPlayer(value);
-							if (p == null) return false;
+							if (p == null) return Refuse();
 							QueueResult("user", value, DumpUser(p));
 							return true;
 						}
@@ -1009,9 +1378,10 @@ namespace VRChatArchiveMod.Modules
 						return true;
 
 					case "refreshFavs":
+						// Only the AVATAR list is refreshed: world/user favourites are the client's job
+						// (Plugin.cs:75-88 — WorldFavoritesModule / UserFavoritesModule are not registered,
+						// so refreshing them was two POSTs per favourite change that nothing ever read).
 						_ = FavoritesModule.RefreshAsync();
-						_ = WorldFavoritesModule.RefreshAsync();
-						_ = UserFavoritesModule.RefreshAsync();
 						return true;
 
 					// ---- UDON MANAGER ------------------------------------------------------------
@@ -1066,6 +1436,79 @@ namespace VRChatArchiveMod.Modules
 							return true;
 						}
 
+					// SOUNDBOARD. "sbPlay" broadcasts a clip KEY to the archive's feed, which every mod
+					// client polls and plays locally with its own volume \u2014 no audio ever crosses the wire.
+					// "sbPreview" plays it for you alone and announces nothing.
+					// BAD APPLE in the chatbox. Toggles the OSC playback thread; VRChat's own OSC input
+					// must be enabled in the radial menu for anything to appear.
+					case "badApple":
+						OnMain(() => BadAppleModule.RequestToggle());
+						return true;
+
+					// ---- PROTECTION ---------------------------------------------------------------
+					//
+					// Both are one-shots against guard state, not settings, so they live here and not
+					// in ApplySet. Queued like everything else: the anti-crash rescan walks live
+					// avatar hierarchies, which is main-thread work. Apply() already logged the
+					// command as accepted; the line inside the lambda is the trace that it actually
+					// ran on the frame, which is the half a "button that does nothing" report needs.
+					//
+					// RESCAN: forget which avatars were already processed and run the scan again, so a
+					// threshold changed in the client applies to avatars already in the room instead of
+					// only to the next one to load.
+					case "antiCrashRescan":
+						OnMain(() =>
+						{
+							AntiCrashModule.RequestRescan();
+							VRChatArchiveModPlugin.Logger.LogInfo("[ModControl] applied action antiCrashRescan");
+						});
+						return true;
+
+					// RESET: lift every (actor, code) suspension and zero the counters. A player muted
+					// for a flood that has stopped gets their events back at once instead of waiting
+					// out SuspendSeconds; the block list from config is NOT touched.
+					case "photonGuardReset":
+						OnMain(() =>
+						{
+							PhotonGuardModule.Reset();
+							VRChatArchiveModPlugin.Logger.LogInfo("[ModControl] applied action photonGuardReset");
+						});
+						return true;
+
+					case "sbPlay":
+					case "sbPreview":
+						{
+							if (string.IsNullOrEmpty(value)) return false;
+							bool preview = id == "sbPreview";
+							OnMain(() =>
+							{
+								foreach (var c in SoundboardModule.Clips)
+								{
+									if (c == null || !string.Equals(c.Key, value, StringComparison.OrdinalIgnoreCase)) continue;
+									if (preview) SoundboardModule.Preview(c); else SoundboardModule.Send(c);
+									break;
+								}
+							});
+							return true;
+						}
+
+					// PRESS a script's interact button on the main thread. The world's _interact handler
+					// runs and networks its own effect \u2014 the "global interact".
+					case "udonInteract":
+						{
+							if (!int.TryParse(value, out int bid)) return false;
+							OnMain(() =>
+							{
+								var e = UdonManagerModule.ById(bid);
+								// A miss must SAY so: the client's INTERACT toast only asserts "queued" and then
+								// shows the mod's status line, so a silent no-op here read as a broken button.
+								if (e != null) UdonManagerModule.Interact(e);
+								else UdonManagerModule.Status = "interact: script " + bid + " is gone — press SCAN";
+								_udonPayload = BuildUdon();
+							});
+							return true;
+						}
+
 					// The entry points of one script, answered on the next sync.
 					case "udonEvents":
 						{
@@ -1075,12 +1518,42 @@ namespace VRChatArchiveMod.Modules
 								var e = UdonManagerModule.ById(bid);
 								_udonEventsId = bid;
 								_udonEventList = e != null ? UdonManagerModule.EntryPoints(e) : new List<string>();
-								_udonPayload = BuildUdon();
+								_udonPayload = BuildUdon(false);
 							});
 							return true;
 						}
 
 					// The variables of one script, answered on the next sync.
+					// Entry points of EVERY listed script in one payload. One reflected call per behaviour,
+					// so a 300-script world costs a few hundred milliseconds ONCE, on demand, never on a timer.
+					case "udonEventsAll":
+						OnMain(() =>
+						{
+							var rows = UdonManagerModule.Snapshot();
+							var sbA = new StringBuilder(64 * 1024);
+							sbA.Append('[');
+							int nA = 0;
+							foreach (var e in rows)
+							{
+								if (e == null || e.B == null) continue;
+								List<string> eps;
+								try { eps = UdonManagerModule.EntryPoints(e); } catch { continue; }
+								if (eps == null || eps.Count == 0) continue;
+								if (nA++ > 0) sbA.Append(',');
+								sbA.Append("{\"id\":").Append(e.Id).Append(",\"g\":[");
+								int g = 0, l = 0;
+								foreach (var ev in eps) if (UdonManagerModule.IsGlobalEvent(null, ev)) { if (g++ > 0) sbA.Append(','); sbA.Append(Json(ev)); }
+								sbA.Append("],\"l\":[");
+								foreach (var ev in eps) if (!UdonManagerModule.IsGlobalEvent(null, ev)) { if (l++ > 0) sbA.Append(','); sbA.Append(Json(ev)); }
+								sbA.Append("]}");
+							}
+							sbA.Append(']');
+							_udonAllEvents = sbA.ToString();
+							VRChatArchiveModPlugin.Logger.LogInfo("[UdonManager] events of " + nA + " script(s) sent to the client in one answer.");
+							_udonPayload = BuildUdon();
+						});
+						return true;
+
 					case "udonVars":
 						{
 							if (!int.TryParse(value, out int bid)) return false;
@@ -1091,14 +1564,32 @@ namespace VRChatArchiveMod.Modules
 								_udonVarList = e != null
 									? UdonManagerModule.Variables(e)
 									: new List<UdonManagerModule.Var>();
-								_udonPayload = BuildUdon();
+								_udonPayload = BuildUdon(false);
 							});
 							return true;
 						}
 
 					// "<id>|<name>|<value>". The VALUE may itself contain a '|' — a world's string variable
 					// can hold anything — so only the first two separators are separators.
+					// "<id>". Networking.SetOwner(localPlayer, object): after it our synced writes are the ones
+					// VRChat keeps and RUN ON OWNER runs on us. Refused by the mod on an object with no network
+					// state (SetOwner there crashes the game), and the status line says so.
+					case "udonOwn":
+						{
+							if (!int.TryParse(value, out int obid)) return false;
+							OnMain(() =>
+							{
+								var e = UdonManagerModule.ById(obid);
+								if (e != null) UdonManagerModule.TakeOwnership(e);
+								_udonPayload = BuildUdon();
+							});
+							return true;
+						}
+
+					// udonSetVarSync: same payload, but the mod takes ownership first and requests serialization
+					// after, so the value reaches everyone instead of snapping back on the owner's next tick.
 					case "udonSetVar":
+					case "udonSetVarSync":
 						{
 							string raw = value ?? "";
 							int p1 = raw.IndexOf('|');
@@ -1113,7 +1604,7 @@ namespace VRChatArchiveMod.Modules
 								var e = UdonManagerModule.ById(bid);
 								if (e != null)
 								{
-									UdonManagerModule.SetVariable(e, vname, vtext);
+									UdonManagerModule.SetVariable(e, vname, vtext, id == "udonSetVarSync");
 									// RE-READ IMMEDIATELY. The point of writing is seeing whether it took, and a
 									// synced variable owned by somebody else can already have snapped back to
 									// theirs by now. Showing the value we asked for would hide exactly that.
@@ -1130,6 +1621,7 @@ namespace VRChatArchiveMod.Modules
 					// everyone in the instance over VRChat's own networking. A mistyped value must never
 					// be able to turn the first into the second.
 					case "udonRun":
+					case "udonRunOwner":     // "<id>|<event>" -> the object's OWNER only
 					case "udonRunGlobal":
 						{
 							int bar = (value ?? "").IndexOf('|');
@@ -1141,7 +1633,8 @@ namespace VRChatArchiveMod.Modules
 								var e = UdonManagerModule.ById(bid);
 								if (e != null)
 								{
-									if (global) UdonManagerModule.RunGlobal(e, ev);
+									if (id == "udonRunOwner") UdonManagerModule.RunOwner(e, ev);
+									else if (global) UdonManagerModule.RunGlobal(e, ev);
 									else UdonManagerModule.RunLocal(e, ev);
 								}
 								_udonPayload = BuildUdon();
@@ -1151,6 +1644,70 @@ namespace VRChatArchiveMod.Modules
 
 					// "<id>|<event>". Runs the event LOCALLY and reports which of the behaviour's
 					// variables changed -- the "what does this event do" answer. Never networked.
+					// PRESET: fire one event on EVERY script whose object name matches a pattern. The client's
+					// world presets (Murder / Prison / Among Us) are all this one command. Value is
+					// "<scope>|<match>|<event>|<pattern>" — scope global|local|owner|interact, match
+					// exact|prefix|contains. The event may be empty for interact. The pattern is last so it
+					// can itself contain no separators we need past the third '|'.
+					case "udonRunMatch":
+						{
+							string raw = value ?? "";
+							string[] parts = raw.Split(new[] { '|' }, 4);
+							if (parts.Length < 4) return false;
+							string scope = parts[0], match = parts[1], ev = parts[2], pattern = parts[3];
+							OnMain(() =>
+							{
+								// UNKNOWN SCOPE IS REFUSED, never turned into a global broadcast.
+								if (!UdonManagerModule.IsScope(scope))
+								{
+									UdonManagerModule.Status = "unknown scope '" + scope + "' — nothing sent (use global/local/owner/interact)";
+									_udonPayload = BuildUdon();
+									return;
+								}
+								var hits = UdonManagerModule.MatchEntries(pattern, match);
+								string what = string.Equals(scope, "interact", StringComparison.OrdinalIgnoreCase) ? "interact" : ev;
+								UdonManagerModule.MatchBegin(hits.Count, what, pattern);
+								_udonPayload = BuildUdon();
+								// ONE PACED STEP PER OBJECT. PumpMain spends ~1-2 of these per frame, so even a
+								// preset that matches hundreds of objects goes out at the same cadence a single
+								// udonRunGlobal would — no burst, no disconnect.
+								foreach (var entry in hits)
+								{
+									var e = entry;
+									OnMain(() => { UdonManagerModule.RunOneTracked(scope, ev, e); _udonPayload = BuildUdon(); });
+								}
+							});
+							return true;
+						}
+
+					// PER-PLAYER preset: fire one world event aimed at ONE player. Value is
+					// "<userId>|<scope>|<match>|<event>|<by>|<pattern>" — by = near (the matching Udon
+					// object closest to that player) or label (the object nearest the world-UI text that
+					// shows their name). The PATTERN IS LAST, like udonRunMatch: it is the one free-text
+					// field, so it may itself contain '|' and still arrive whole. The client's PLAYERS page
+					// drives this from its per-player presets.
+					case "udonPlayerEvent":
+						{
+							string raw = value ?? "";
+							string[] parts = raw.Split(new[] { '|' }, 6);
+							if (parts.Length < 6) return false;
+							string uid = parts[0], scope = parts[1], match = parts[2], ev = parts[3], by = parts[4], pattern = parts[5];
+							OnMain(() =>
+							{
+								if (!UdonManagerModule.IsScope(scope))
+								{
+									UdonManagerModule.Status = "unknown scope '" + scope + "' — nothing sent";
+									_udonPayload = BuildUdon();
+									return;
+								}
+								var p = FindPlayer(uid);
+								if (p == null) { UdonManagerModule.Status = "that player is no longer in the instance"; _udonPayload = BuildUdon(); return; }
+								UdonManagerModule.RunOnPlayer(p.Name, p.Position, p.HasPos, scope, ev, pattern, match, by);
+								_udonPayload = BuildUdon();
+							});
+							return true;
+						}
+
 					case "udonRunDiff":
 						{
 							int bar = (value ?? "").IndexOf('|');
@@ -1168,15 +1725,7 @@ namespace VRChatArchiveMod.Modules
 							return true;
 						}
 
-					// A dump, by job name. The client's DEVTOOLS section lists these; the mod owns
-					// what each one actually captures, so only the name crosses the wire.
-					case "dump":
-						{
-							if (string.IsNullOrEmpty(value)) return false;
-							if (!Enum.TryParse(value, true, out CaptureModule.Job job)) return false;
-							CaptureModule.Request(job);
-							return true;
-						}
+
 				}
 			}
 			catch { }
@@ -1230,6 +1779,70 @@ namespace VRChatArchiveMod.Modules
 			=> e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? (v.GetString() ?? "") : "";
 
 		// Minimal JSON string encoder — the mod builds its payloads by hand everywhere else too.
+		// THE SOUNDBOARD, as the client's FUN page draws it: what can be played, and who played what.
+		// The history is the mod's own rolling log, so the console shows every clip the instance heard,
+		// not just the ones this client sent.
+		private static string BuildSoundboard()
+		{
+			var sb = new StringBuilder(1024);
+			sb.Append("{\"clips\":[");
+			try
+			{
+				var clips = SoundboardModule.Clips;
+				for (int i = 0; i < clips.Length; i++)
+				{
+					if (clips[i] == null) continue;
+					if (i > 0) sb.Append(',');
+					sb.Append("{\"key\":").Append(Json(clips[i].Key))
+					  .Append(",\"label\":").Append(Json(clips[i].Label));
+
+					// THE ICON, inline as base64. The client cannot read a Texture2D out of the game, and
+					// shipping the PNGs beside it would mean two copies to keep in step \u2014 so the picture
+					// travels with the clip list. Sent ONCE per clip: after that the client has it and we
+					// send only the name, because these ride every sync.
+					try
+					{
+						string res = string.IsNullOrEmpty(clips[i].Image) ? "5560-heart-rem.png" : clips[i].Image;
+						if (_iconSent.Add(clips[i].Key))
+						{
+							byte[] png = Core.AssetLoader.RawBytes(res);
+							if (png != null && png.Length > 0 && png.Length < 512 * 1024)
+								sb.Append(",\"icon\":").Append(Json(System.Convert.ToBase64String(png)));
+						}
+					}
+					catch { }
+					sb.Append('}');
+				}
+			}
+			catch { }
+			sb.Append("],\"recent\":[");
+			try
+			{
+				var hist = SoundboardModule.Recent();
+				// Newest last in the mod's list; the client renders it as a console.
+				for (int i = 0; i < hist.Count; i++)
+				{
+					var h = hist[i];
+					if (h == null) continue;
+					if (i > 0) sb.Append(',');
+					sb.Append("{\"t\":").Append(Json(h.When))
+					  .Append(",\"who\":").Append(Json(h.Who))
+					  .Append(",\"what\":").Append(Json(h.What)).Append('}');
+				}
+			}
+			catch { }
+			sb.Append("],\"status\":").Append(Json(SoundboardModule.LastStatus ?? ""));
+			return sb.Append('}').ToString();
+		}
+
+		// A float for JSON: invariant culture (never a comma decimal) and NaN/Infinity flattened to 0
+		// so one broken transform cannot corrupt the whole payload.
+		private static string SafeF(float v)
+		{
+			if (float.IsNaN(v) || float.IsInfinity(v)) v = 0f;
+			return v.ToString("F2", CultureInfo.InvariantCulture);
+		}
+
 		private static string Json(string s)
 		{
 			if (s == null) return "\"\"";

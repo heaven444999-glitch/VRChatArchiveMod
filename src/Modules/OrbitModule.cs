@@ -64,6 +64,8 @@ namespace VRChatArchiveMod.Modules
 
 		public static void Stop(string why)
 		{
+			// The orbit hands the network a velocity every frame; the mode ending must hand it a zero once.
+			try { var lp = PlayerRef.LocalPlayer(); if (lp != null) PlayerRef.ZeroVelocity(lp); } catch { }
 			if (Current == Mode.Off) return;
 			Current = Mode.Off;
 			TargetUid = null;
@@ -81,6 +83,10 @@ namespace VRChatArchiveMod.Modules
 
 		private bool _hotkeyWasDown;
 
+		// Previous frame's orbit position, for the velocity the network is handed (see OnUpdate).
+		private static Vector3 _prevPos;
+		private static bool _velValid;
+
 		public override void OnUpdate()
 		{
 			// RightShift+O throws the world's props into a ring around you (ObjectOrbitModule).
@@ -93,7 +99,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 
-			if (Current == Mode.Off) return;
+			if (Current == Mode.Off) { _velValid = false; return; }   // next start begins with no stale velocity
 
 			// SCROLL = RADIUS, while orbiting. Reaching for the slider in the mod menu to nudge how
 			// far out you circle means opening the menu, which hides the very thing you are
@@ -183,24 +189,34 @@ namespace VRChatArchiveMod.Modules
 				//
 				// Writing the transform is the same path the fly code uses, and it reads as ordinary
 				// movement, so their client smooths it the way it smooths walking.
+				// WHAT THE NETWORK NEEDS TO DRAW A CIRCLE: a VELOCITY. VRChat serialises a remote
+				// player as position + velocity on a slow tick and dead-reckons in between; a player
+				// whose position changes but whose velocity reads zero is drawn stepping from sample
+				// to sample, which is the stutter other people saw. So the orbit's own tangential
+				// velocity is set every frame (it also cancels the gravity build-up the old
+				// ZeroVelocity call was there for). And the rotation nudge no longer uses the plain
+				// TeleportTo: that overload is a SNAP by contract, so every 4 degrees the remote rig
+				// jumped. lerpOnRemote is VRChat's own flag for "interpolate this on other clients".
+				float dtv = Mathf.Max(Time.deltaTime, 0.0001f);
+				Vector3 vel = _velValid ? (pos - _prevPos) / dtv : Vector3.zero;
+				if (vel.sqrMagnitude > 30f * 30f) vel = vel.normalized * 30f;   // a teleport-in, not a velocity
+				_prevPos = pos; _velValid = true;
+
 				var t = PlayerRef.LocalTransform();
 				if (t != null)
 				{
 					t.position = pos;
-					// Rotation only when it has really moved. It still goes through TeleportTo — the
-					// only thing that reliably turns the rig — but a few degrees of slack keeps that
-					// call rare instead of once a frame.
-					if (Quaternion.Angle(t.rotation, rot) > 4f) api.TeleportTo(pos, rot);
+					if (Quaternion.Angle(t.rotation, rot) > 4f)
+						api.TeleportTo(pos, rot, VRC.SDKBase.VRC_SceneDescriptor.SpawnOrientation.AlignPlayerWithSpawnPoint, true);
 				}
 				else
 				{
-					api.TeleportTo(pos, rot);
+					api.TeleportTo(pos, rot, VRC.SDKBase.VRC_SceneDescriptor.SpawnOrientation.AlignPlayerWithSpawnPoint, true);
 				}
+				try { api.SetVelocity(vel); } catch { }
 
-				// Moving every frame leaves gravity accumulating a fall speed that snaps you
-				// down the instant the mode ends.
-				var local = PlayerRef.LocalPlayer();
-				if (local != null) PlayerRef.ZeroVelocity(local);
+				// (Velocity is now written above every frame; zeroing it here again would hand the
+				// network the very zero that made the orbit stutter for everyone else.)
 			}
 			catch (Exception e)
 			{

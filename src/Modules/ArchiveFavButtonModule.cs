@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Il2CppInterop.Runtime;
@@ -38,6 +38,8 @@ namespace VRChatArchiveMod.Modules
 		private Transform _metaBtn;
 		private TMPro.TMP_Text _label;
 		private float _next;
+		// Consecutive passes that did not find the marketplace pane; drives the back-off above.
+		private int _misses;
 
 		// The avatar the pane is currently showing. Name is cheap to read every pass and tells us
 		// when the selection changed; the id costs a subtree scan, so it is resolved once per
@@ -47,6 +49,8 @@ namespace VRChatArchiveMod.Modules
 		private bool _busy;
 
 		public static string Status = "";
+		// Written by Run()'s pool-thread continuation, consumed by OnUpdate on the main thread.
+		private static volatile string _pendingToast;
 
 		public override void OnUpdate()
 		{
@@ -60,14 +64,34 @@ namespace VRChatArchiveMod.Modules
 				// even a fully-built button coasts at once a second, since the whole point of the
 				// pass is to REACT to the pane changing.
 				float now = Time.realtimeSinceStartup;
+
+				// A status produced off the main thread (Run's continuation) is toasted here, before
+				// the throttle below, so it shows the next frame rather than up to four seconds later.
+				string pending = _pendingToast;
+				if (pending != null) { _pendingToast = null; Core.Toast.Show(pending); }
+
 				if (now < _next) return;
 				bool menuOpen = false;
 				try { menuOpen = Core.QuickMenu.MainVisible; } catch { }
-				_next = now + (menuOpen ? (_btn == null ? 0.5f : 1f) : 4f);
 
-				PumpApply();
+				// BACK OFF WHEN THE PANE IS NOT THERE. Looking for it is cheap now, but retrying twice
+				// a second forever while somebody browses the rest of the menu is still pure waste. Each
+				// consecutive miss doubles the wait, up to eight seconds; the counter resets the moment
+				// the pane is found or the menu is closed, so opening an avatar still gets its button
+				// promptly rather than after the longest interval.
+				if (!menuOpen) _misses = 0;
+				float wait = menuOpen
+					? (_btn != null ? 1f : Mathf.Min(8f, 0.5f * (1 << Mathf.Min(4, _misses))))
+					: 4f;
+				_next = now + wait;
 
-				if (_row == null || _btn == null) { Build(); return; }
+				if (_row == null || _btn == null)
+				{
+					Build();
+					// Found it: drop straight back to the responsive cadence.
+					if (_btn != null) _misses = 0; else if (_misses < 4) _misses++;
+					return;
+				}
 
 				// Re-checked every pass: one Find and an int compare, and it is what keeps Apply
 				// working across the pane being rebuilt.
@@ -285,12 +309,13 @@ namespace VRChatArchiveMod.Modules
 			try
 			{
 				string id = CurrentId();
-				if (string.IsNullOrEmpty(id)) { Status = "no avatar id on this pane"; return; }
+				if (string.IsNullOrEmpty(id)) { Status = "no avatar id on this pane"; Core.Toast.Show(Status); return; }
 				GUIUtility.systemCopyBuffer = id;
 				Status = "copied " + id;
+				Core.Toast.Show(Status);
 				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] copied id " + id);
 			}
-			catch (Exception e) { Status = "copy failed: " + e.Message; }
+			catch (Exception e) { Status = "copy failed: " + e.Message; Core.Toast.Show(Status); }
 		}
 
 		private void GetMetadata()
@@ -315,6 +340,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					GUIUtility.systemCopyBuffer = id;
 					Status = "avatar not loaded here — id copied; use the client's Get metadata for the full record";
+					Core.Toast.Show(Status);
 					return;
 				}
 
@@ -330,9 +356,10 @@ namespace VRChatArchiveMod.Modules
 
 				GUIUtility.systemCopyBuffer = sb.ToString();
 				Status = "metadata copied to clipboard";
+				Core.Toast.Show(Status);
 				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] metadata copied:\n" + sb);
 			}
-			catch (Exception e) { Status = "metadata failed: " + e.Message; }
+			catch (Exception e) { Status = "metadata failed: " + e.Message; Core.Toast.Show(Status); }
 		}
 
 		private static string Str(object o, string prop)
@@ -445,6 +472,7 @@ namespace VRChatArchiveMod.Modules
 				if (string.IsNullOrEmpty(_id))
 				{
 					Status = "could not tell which avatar is shown";
+					Core.Toast.Show(Status);
 					VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] no avatar id found on the detail pane.");
 					return;
 				}
@@ -470,7 +498,14 @@ namespace VRChatArchiveMod.Modules
 				VRChatArchiveModPlugin.Logger.LogInfo($"[ArchiveFavBtn] {(remove ? "remove" : "add")} {_id} -> {ok}");
 			}
 			catch (Exception e) { Status = "failed: " + e.Message; }
-			finally { _busy = false; }
+			finally
+			{
+				_busy = false;
+				// This continuation runs on a POOL thread (the await above resumes wherever the HTTP
+				// call completed — BepInEx has no Unity synchronisation context). The toast stamps
+				// Unity time, so it is queued here and shown from OnUpdate on the main thread.
+				_pendingToast = Status;
+			}
 		}
 
 		// ------------------------------------------------------------------ Apply
@@ -511,9 +546,6 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] Apply hook: " + e.Message); }
 		}
 
-		private static string _applyWatch = "";
-		private static float _applyUntil;
-
 		private void OnApply()
 		{
 			try
@@ -521,6 +553,16 @@ namespace VRChatArchiveMod.Modules
 				string id = _id;
 				if (string.IsNullOrEmpty(id)) id = ResolveId();
 				if (string.IsNullOrEmpty(id)) return;
+
+				// ARCHIVE AVATARS ONLY. This hook is ADDED to VRChat's own Apply, which has already
+				// run by the time we get here — so on an ordinary avatar (one you own, a public one
+				// from the marketplace) the game has just switched you and there is nothing left to
+				// do. Re-issuing WearById on top of it wore every avatar TWICE: two clone requests,
+				// two loads, and a "switching…" status on panes that never needed our help. The
+				// only case this hook exists for is an avatar that reached the pane through OUR
+				// category (a favourite, or the id we last previewed), which VRChat's client may
+				// decline to wear from its borrowed list slot. Anything else is left to the game.
+				if (!(FavoritesModule.Has(id) || string.Equals(ArchiveHijackModule.LastPreviewedId, id, StringComparison.Ordinal))) return;
 
 				// Already wearing it: nothing to do.
 				if (string.Equals(VaTagsModule.LocalAvatarId(), id, StringComparison.Ordinal)) return;
@@ -531,48 +573,17 @@ namespace VRChatArchiveMod.Modules
 				// rules. So select refused, every time, for reasons that have nothing to do with the
 				// avatar. WearById clones by id and ignores the list entirely — it is the exact path
 				// the mod's own WEAR button uses, which is what "make Apply do what WEAR does" means.
-				_applyWatch = "";
 				Status = "switching…";
+				Core.Toast.Show(Status);
 				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] apply -> WearById " + id);
 				try { VaTagsModule.WearById(id, _seenName); }
-				catch (Exception we) { Status = "wear failed: " + we.Message; }
+				catch (Exception we) { Status = "wear failed: " + we.Message; Core.Toast.Show(Status); }
 			}
 			catch (Exception e)
 			{
 				Status = "apply failed: " + e.Message;
 				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] apply: " + e.Message);
 			}
-		}
-
-		// Watched rather than read from a response: reading one means constructing an ApiContainer,
-		// and hand-building the game's own objects is what crashed the game earlier today. Whether
-		// the avatar actually changed is the honest answer anyway.
-		private void PumpApply()
-		{
-			if (string.IsNullOrEmpty(_applyWatch)) return;
-			try
-			{
-				if (string.Equals(VaTagsModule.LocalAvatarId(), _applyWatch, StringComparison.Ordinal))
-				{
-					Status = "switched";
-					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] select accepted.");
-					_applyWatch = "";
-					return;
-				}
-				if (Time.realtimeSinceStartup >= _applyUntil)
-				{
-					// Fall through to the SAME path the mod's own WEAR button uses. Two buttons for
-					// one action have to behave the same way, and WEAR already works from the
-					// FAVORITES tab — Apply refusing where WEAR succeeds is just an inconsistency
-					// inside our own app.
-					string id = _applyWatch;
-					_applyWatch = "";
-					Status = "select did not take — trying the same route as WEAR…";
-					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] select did not take for " + id + ", falling back to WearById.");
-					try { VaTagsModule.WearById(id, _seenName); } catch (Exception we) { Status = "wear failed: " + we.Message; }
-				}
-			}
-			catch { _applyWatch = ""; }
 		}
 
 		// ------------------------------------------------------------------ which avatar?
@@ -602,10 +613,48 @@ namespace VRChatArchiveMod.Modules
 				string hit = "";
 				Scan(root, 0, ref hit);
 				if (!string.IsNullOrEmpty(hit))
+				{
 					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] resolved avatar id " + hit);
-				return hit;
+					return hit;
+				}
+				// THE AVATAR YOU ARE WEARING. When the pane shows the avatar you already have on,
+				// VRChat flips "Try" to "Applied" and no longer binds an avatar to the action buttons,
+				// so the subtree holds no avtr_ string at all and the scan comes back empty — that was
+				// "could not tell which avatar is shown" on your own avatar. The case is unambiguous:
+				// the shown avatar IS the worn one, whose id the local player knows.
+				string worn = WornIdIfPaneShowsIt();
+				if (!string.IsNullOrEmpty(worn))
+					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] pane shows the worn avatar -> " + worn);
+				return worn ?? "";
 			}
 			catch { return ""; }
+		}
+
+		// Two signals, either is enough: VRChat's own Try button reading "Applied" (English UI), or
+		// the pane's avatar name matching the worn avatar's name (any language). A merely DISABLED
+		// Try button is deliberately NOT a signal — a private / non-cloneable avatar disables it too,
+		// and that would pin the wrong id on someone else's avatar.
+		private string WornIdIfPaneShowsIt()
+		{
+			try
+			{
+				bool applied = false;
+				try
+				{
+					var t = _row != null ? _row.Find("Try_Avatar_Button/Text_ButtonName") : null;
+					var tmp = t != null ? t.GetComponent<TMPro.TMP_Text>() : null;
+					applied = tmp != null
+						&& string.Equals((tmp.text ?? "").Trim(), "Applied", StringComparison.OrdinalIgnoreCase);
+				}
+				catch { }
+				string wornName = VaTagsModule.LocalAvatarName();
+				string paneName = NameOnPane();
+				bool sameName = !string.IsNullOrEmpty(wornName) && !string.IsNullOrEmpty(paneName)
+					&& string.Equals(wornName.Trim(), paneName.Trim(), StringComparison.Ordinal);
+				if (!applied && !sameName) return null;
+				return VaTagsModule.LocalAvatarId();
+			}
+			catch { return null; }
 		}
 
 		private static void Scan(Transform t, int depth, ref string hit)
@@ -772,24 +821,32 @@ namespace VRChatArchiveMod.Modules
 		// The panel lives under the main menu, so that is where we look. Core.QuickMenu caches that
 		// canvas and re-finds it only when destroyed, so this is a few thousand nodes at worst and
 		// nothing at all while the menu is closed.
+		// FINDING THE PANE COST 964 ms/s \u2014 96% of a whole second, and the game ran at 1 fps.
+		//
+		// This used to walk root.GetComponentsInChildren<Transform>(true): every node of VRChat's
+		// menu tree, INACTIVE ONES INCLUDED, which is thousands of transforms \u2014 and reading .name
+		// on each is a separate il2cpp interop call. One pass measured around half a second, and
+		// because the pane only exists while you are actually looking at an avatar, the usual
+		// outcome was to walk the whole tree, find nothing, and do it again half a second later,
+		// for as long as the menu stayed open on any other page.
+		//
+		// GameObject.Find does the same job in ONE native call: it searches active objects by name
+		// inside the engine, which is exactly the set we wanted (the check below was already
+		// discarding inactive hits). The managed walk is kept only as a fallback for the case the
+		// name is not unique in the scene, and it is then scoped to the menu root as before.
 		private static Transform FindByName(string name)
 		{
 			try
 			{
 				if (!Core.QuickMenu.MainVisible) return null;   // closed menu: the panel cannot exist
-				Transform root = Core.QuickMenu.Main();
-				if (root == null) return null;
 
-				foreach (var t in root.GetComponentsInChildren<Transform>(true))
+				try
 				{
-					if (t == null || t.name != name) continue;
-					try
-					{
-						if (!t.gameObject.activeInHierarchy) continue;   // the live pane, not the prefab
-					}
-					catch { continue; }
-					return t;
+					var go = GameObject.Find(name);
+					if (go != null) return go.transform;
 				}
+				catch { }
+				return null;
 			}
 			catch { }
 			return null;

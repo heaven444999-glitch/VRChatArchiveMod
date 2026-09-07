@@ -169,13 +169,24 @@ namespace VRChatArchiveMod.Modules
 
 				var pre  = new HarmonyMethod(typeof(UdonLogModule).GetMethod(nameof(RunProgramPrefix), BindingFlags.Static | BindingFlags.NonPublic));
 				var post = new HarmonyMethod(typeof(UdonLogModule).GetMethod(nameof(RunProgramPostfix), BindingFlags.Static | BindingFlags.NonPublic));
+				var preU = new HarmonyMethod(typeof(UdonLogModule).GetMethod(nameof(RunProgramUintPrefix), BindingFlags.Static | BindingFlags.NonPublic));
 
 				// NonPublic AND the base hierarchy. RunProgram(string) is the one entry point every Udon
 				// event funnels through, but which type in the hierarchy declares it, and whether it is
 				// public, has not been constant across game builds. Missing it means the whole subsystem
 				// silently does nothing, so the search is deliberately wider than "public on this type".
+				//
+				// TWO OVERLOADS, BOTH PATCHED. RunProgram(string) resolves a name to an entry address and
+				// then calls RunProgram(uint) — but the game also calls the uint overload DIRECTLY for hot
+				// lifecycle events and for entry points it has already resolved and cached. Those calls
+				// never carry a name, so the string prefix never sees them, and for a long time PANIC
+				// (BlockAll) "stopped everything" except the very events a crasher rides on. The uint
+				// prefix has no name to filter on, so it does exactly one thing: under BlockAll it drops
+				// the call. The console and the name/rate guards stay on the string overload, where the
+				// name is.
 				const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
 				var seen = new HashSet<string>(StringComparer.Ordinal);
+				int patchedUint = 0;
 				for (Type t = ub; t != null && t != typeof(object); t = t.BaseType)
 				{
 					MethodInfo[] methods;
@@ -184,16 +195,29 @@ namespace VRChatArchiveMod.Modules
 					{
 						if (m.Name != "RunProgram") continue;
 						var ps = m.GetParameters();
-						if (ps.Length != 1 || ps[0].ParameterType != typeof(string)) continue;   // skip the uint overload
+						if (ps.Length != 1) continue;
 						if (!seen.Add(m.DeclaringType?.FullName + "::" + m.ToString())) continue;   // one type can surface a base method twice
-						try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: pre, postfix: post); patched++; }
-						catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonLog] could not patch RunProgram: {e.Message}"); }
+						if (ps[0].ParameterType == typeof(string))
+						{
+							try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: pre, postfix: post); patched++; }
+							catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonLog] could not patch RunProgram(string): {e.Message}"); }
+						}
+						else if (ps[0].ParameterType == typeof(uint))
+						{
+							try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: preU); patchedUint++; }
+							catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonLog] could not patch RunProgram(uint): {e.Message}"); }
+						}
 					}
 				}
+				// Armed means the STRING overload is in: that is where the console, the rate guard and the
+				// name list live. The uint overload only matters for PANIC and is reported on its own so a
+				// build where it went missing is visible in the log instead of silently weakening BlockAll.
 				_hooked = patched > 0;
 				VRChatArchiveModPlugin.Logger.LogInfo(_hooked
-					? $"[UdonLog] armed — hooked {patched} Udon entry point(s)."
-					: "[UdonLog] no Udon entry point patched — the console will stay empty.");
+					? $"[UdonLog] armed — hooked {patched} RunProgram(string) and {patchedUint} RunProgram(uint) entry point(s)."
+					: $"[UdonLog] no RunProgram(string) entry point patched ({patchedUint} uint) — the console will stay empty.");
+				if (_hooked && patchedUint == 0)
+					VRChatArchiveModPlugin.Logger.LogWarning("[UdonLog] RunProgram(uint) not found — PANIC (BlockAll) will not stop cached/lifecycle entry points on this build.");
 			}
 			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[UdonLog] hook install failed: {e}"); }
 		}
@@ -254,6 +278,32 @@ namespace VRChatArchiveMod.Modules
 			"_onPlayerJoined", "_onPlayerLeft", "_start", "_onEnable", "_onDisable", "_onDestroy",
 		};
 
+		// NAME LIST. The rate guard only catches an event that behaves like a crasher; a world
+		// script that hurts you at a sane rate (a forced teleport, a seat grab, a screen-blanking
+		// toggle) never trips it. This is the surgical answer: block exactly the names you saw in
+		// the EVENTS console, nothing else. Parsed ONCE from ModConfig.UdonBlockNames and re-parsed
+		// only when that string changes (checked once per frame in RefreshFlags, never per event).
+		// NeverBlock still wins — a name on the list cannot wedge the world's join/leave/start.
+		private static readonly HashSet<string> BlockNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		private static string _blockNamesRaw;
+		private static bool _fNames;    // BlockNames.Count > 0, cached so the hot path reads one bool
+
+		private static void RefreshBlockNames()
+		{
+			string raw;
+			try { raw = ModConfig.UdonBlockNames.Value ?? ""; } catch { return; }
+			if (string.Equals(raw, _blockNamesRaw, StringComparison.Ordinal)) return;
+			_blockNamesRaw = raw;
+			BlockNames.Clear();
+			foreach (string part in raw.Split(','))
+			{
+				string n = part.Trim();
+				if (n.Length > 0) BlockNames.Add(n);
+			}
+			_fNames = BlockNames.Count > 0;
+			VRChatArchiveModPlugin.Logger.LogInfo($"[UdonLog] block list: {BlockNames.Count} event name(s).");
+		}
+
 		private static bool ShouldBlock(string ev)
 		{
 			try
@@ -262,6 +312,14 @@ namespace VRChatArchiveMod.Modules
 				if (NeverBlock.Contains(ev)) return false;
 
 				if (ModConfig.UdonBlockAll.Value)
+				{
+					Blocked(ev);
+					return true;
+				}
+
+				// Explicit name list: independent of the crasher guard, so you can keep the rate
+				// logic off and still pin a single hostile event.
+				if (_fNames && BlockNames.Contains(ev))
 				{
 					Blocked(ev);
 					return true;
@@ -323,8 +381,24 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				if (!ModConfig.UdonBlockAll.Value && !ModConfig.UdonBlockCrashers.Value) return true;
+				if (!_fNames && !ModConfig.UdonBlockAll.Value && !ModConfig.UdonBlockCrashers.Value) return true;
 				return !ShouldBlock(__0);
+			}
+			catch { return true; }   // never let the guard itself break the world
+		}
+
+		// Harmony PREFIX on RunProgram(uint). No name arrives here — only an already-resolved entry
+		// address — so there is nothing for the name list or the rate guard to key on, and NeverBlock
+		// cannot be honoured either. It therefore does the one thing PANIC promises: under BlockAll
+		// NOTHING runs, including the cached lifecycle entry points that used to slip past the string
+		// prefix. Counted in BlockedTotal; LastBlocked is left to the string path, which knows names.
+		private static bool RunProgramUintPrefix()
+		{
+			try
+			{
+				if (!ModConfig.UdonBlockAll.Value) return true;
+				BlockedTotal++;
+				return false;
 			}
 			catch { return true; }   // never let the guard itself break the world
 		}
@@ -348,6 +422,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			try { _fLog = ModConfig.UdonLogEnabled.Value; _fFrame = ModConfig.UdonLogFrameEvents.Value; }
 			catch { }
+			RefreshBlockNames();   // once per frame: a string compare, and a re-parse only when it changed
 		}
 
 		private static void RunProgramPostfix(object __instance, string __0)
@@ -494,19 +569,30 @@ namespace VRChatArchiveMod.Modules
 
 				float pad = Core.Hud.S(8f), colHead = Core.Hud.S(15f), rowH = Core.Hud.S(16f);
 				float margin = Core.Hud.S(16f);
-				float x = margin, w = Mathf.Min(Screen.width * 0.36f, Core.Hud.S(620f));
+				// Same width as the player list, the instance log and the radar — see Hud.SideWidth.
+				// This panel used to size itself from Screen.width and came out roughly twice as wide
+				// as the other three corners of the HUD.
+				float x = margin, w = Core.Hud.SideWidth;
 
 				// BOTTOM-LEFT corner of the four-corner HUD. It grows UPWARD from the bottom, so
 				// the newest line is always at the same place instead of the panel's height moving
 				// the whole list around. Height is capped to the lower half so it never reaches the
 				// players list in the top-left corner.
-				float maxH = Screen.height * 0.42f;
-				int fit = Mathf.Max(1, Mathf.FloorToInt((maxH - Core.Hud.HeaderH - colHead - pad) / rowH));
-				max = Mathf.Min(max, fit);
+				// SAME BLOCK AS THE RADAR. The radar panel is its square map plus a header
+				// (SideWidth + HeaderH + 4), and this sits in the opposite bottom corner, so the two
+				// are given identical outer dimensions and the bottom of the HUD reads as one row.
+				// Fixed rather than content-driven: a panel that resizes itself every time an event
+				// arrives cannot match a panel that never does.
+				float panelH = Core.Hud.HeaderH + Core.Hud.SideWidth + Core.Hud.S(4f);
+				int fit = Mathf.Max(1, Mathf.FloorToInt((panelH - Core.Hud.HeaderH - colHead - pad) / rowH));
+				// Fill the panel. The configured line count used to decide the panel's HEIGHT, so a
+				// small value simply made a shorter panel; now that the height is pinned to the
+				// radar's, honouring it would only leave dead space that can never be used.
+				max = fit;
 				int start = Mathf.Max(0, rows.Count - max);
 				int shown = Mathf.Max(1, rows.Count - start);
 
-				float h = Core.Hud.HeaderH + colHead + shown * rowH + pad;
+				float h = panelH;
 				float y = Screen.height - margin - h;      // grows upward from the bottom edge
 				var panel = new Rect(x, y, w, h);
 
@@ -515,21 +601,47 @@ namespace VRChatArchiveMod.Modules
 					+ (Paused ? "  [PAUSED]" : "");
 				var body = Core.Hud.Panel(panel, "EVENTS", right);
 
-				// fixed columns so everything lines up in a proportional font
-				float xTime = body.x + Core.Hud.S(6f), xWho = body.x + Core.Hud.S(64f), xObj = body.x + Core.Hud.S(194f), xEv = body.x + Core.Hud.S(350f);
+				// Columns as FRACTIONS of the panel, not fixed design pixels. They used to be absolute
+				// (+64, +194, +350), which was fine only at the width this panel happened to be: once
+				// it was narrowed to match the rest of the HUD, +350 landed outside the panel and the
+				// EVENT column would have been clipped away entirely. Proportions survive any width.
+				float bw = body.width;
+				float xTime = body.x + Core.Hud.S(6f);
+				float xWho = body.x + bw * 0.20f;
+				float xObj = body.x + bw * 0.42f;
+				float xEv = body.x + bw * 0.66f;
 				float evW = body.xMax - xEv - Core.Hud.S(6f);
+				// Each column is exactly as wide as the gap to the next one. These used to be three
+				// hard-coded numbers (54 / 126 / 152) that only happened to fit the old width; at the
+				// narrower size WHO would have run 33 px into OBJECT and OBJECT 50 px into EVENT.
+				float gap = Core.Hud.S(4f);
+				float wTime = xWho - xTime - gap;
+				float wWho = xObj - xWho - gap;
+				float wObj = xEv - xObj - gap;
+				// How many characters actually fit, rather than a fixed count: the truncation limits
+				// were sized for the wide panel, so at this width the text was clipped mid-glyph by
+				// the label rect instead of ending in an ellipsis.
+				float chW = 12f * 0.55f;   // _ovMono is 12 px; ~0.55 em per character in a proportional face
+				int cWho = Mathf.Max(4, (int)(wWho / chW));
+				int cObj = Mathf.Max(4, (int)(wObj / chW));
+				int cEv = Mathf.Max(6, (int)(evW / chW));
 
 				// header row
 				
 				// column labels
 				float cy = body.y;
 				_ovDim.normal.textColor = new Color(0.45f, 0.53f, 0.63f);
-				GUI.Label(new Rect(xTime, cy, 54f, 14f), "TIME", _ovDim);
-				GUI.Label(new Rect(xWho, cy, 126f, 14f), "WHO", _ovDim);
-				GUI.Label(new Rect(xObj, cy, 152f, 14f), "OBJECT", _ovDim);
+				GUI.Label(new Rect(xTime, cy, wTime, 14f), "TIME", _ovDim);
+				GUI.Label(new Rect(xWho, cy, wWho, 14f), "WHO", _ovDim);
+				GUI.Label(new Rect(xObj, cy, wObj, 14f), "OBJECT", _ovDim);
 				GUI.Label(new Rect(xEv, cy, evW, 14f), "EVENT", _ovDim);
 
-				// rows, zebra-striped, colour-coded per column
+				// rows, zebra-striped, colour-coded per column.
+				// Straight down from under the column headings. Bottom-anchoring was tried once the
+				// height became fixed — it keeps the newest line at a constant spot — but with a log
+				// that has only just started it pushed the handful of entries to the floor and left a
+				// tall gap under the headings, which reads as a broken panel. A console fills from the
+				// top; the empty space belongs at the bottom, and it disappears as events arrive.
 				float ry = cy + colHead;
 				for (int i = start; i < rows.Count; i++)
 				{
@@ -538,16 +650,16 @@ namespace VRChatArchiveMod.Modules
 					var e = rows[i];
 
 					_ovMono.normal.textColor = new Color(0.44f, 0.52f, 0.62f);
-					GUI.Label(new Rect(xTime, ry, 54f, rowH), e.Clock, _ovMono);
+					GUI.Label(new Rect(xTime, ry, wTime, rowH), e.Clock, _ovMono);
 					_ovMono.normal.textColor = e.Net ? new Color(0.50f, 0.69f, 1.00f)
 						: string.IsNullOrEmpty(e.User) ? new Color(0.5f, 0.6f, 0.72f) : ColorFor(e.User);
-					GUI.Label(new Rect(xWho, ry, 126f, rowH), string.IsNullOrEmpty(e.User) ? "world" : Trunc(e.User, 16), _ovMono);
+					GUI.Label(new Rect(xWho, ry, wWho, rowH), string.IsNullOrEmpty(e.User) ? "world" : Trunc(e.User, cWho), _ovMono);
 					_ovMono.normal.textColor = new Color(0.78f, 0.6f, 0.98f);
-					GUI.Label(new Rect(xObj, ry, 152f, rowH), Trunc(e.Obj, 20), _ovMono);
+					GUI.Label(new Rect(xObj, ry, wObj, rowH), Trunc(e.Obj, cObj), _ovMono);
 					// Network rows in blue, Udon rows in green: at a glance you know whether you are
 					// looking at a world script or at traffic off the wire.
 					_ovMono.normal.textColor = e.Net ? new Color(0.45f, 0.75f, 1.00f) : new Color(0.56f, 0.93f, 0.70f);
-					GUI.Label(new Rect(xEv, ry, evW, rowH), Trunc(e.Ev, 34) + (e.Repeats > 1 ? "  x" + e.Repeats : ""), _ovMono);
+					GUI.Label(new Rect(xEv, ry, evW, rowH), Trunc(e.Ev, cEv) + (e.Repeats > 1 ? "  x" + e.Repeats : ""), _ovMono);
 					ry += rowH;
 				}
 				if (rows.Count == 0)

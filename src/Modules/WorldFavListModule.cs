@@ -330,10 +330,9 @@ namespace VRChatArchiveMod.Modules
 
 		private void Inject(FavoriteArea area)
 		{
-			// The forced experiment takes priority when the user asked for it.
-			bool force = false;
-			try { force = ModConfig.ForceNewSection.Value; } catch { }
-			if (force) { InjectSynthetic(area); return; }
+			// The forced experiment is a compile-time constant now (ModConfig.ForceNewSection):
+			// there is no registered module to try it from, so it stopped being a setting.
+			if (ModConfig.ForceNewSection) { InjectSynthetic(area); return; }
 
 			try
 			{
@@ -469,9 +468,11 @@ namespace VRChatArchiveMod.Modules
 		protected override string ListId => "fvgrp_vrchatarchive_worlds";
 		protected override string ListName => "vrchatarchive_worlds";
 		protected override FavoriteType Kind => FavoriteType.World;
-		protected override bool Enabled { get { try { return ModConfig.WorldFavListEnabled.Value; } catch { return false; } } }
+		// Unconditional since 2026-09-01: the Favorites/* switches went, and whether this runs is
+		// decided by its Register line in Plugin.cs (currently disarmed).
+		protected override bool Enabled => true;
 		protected override Il2CppSystem.Collections.Generic.List<FavoriteListModel> Collection(FavoriteArea a) => a._worlds;
-		protected override int WantedSlot() { try { return ModConfig.WorldListSlot.Value; } catch { return 3; } }
+		protected override int WantedSlot() => ModConfig.WorldListSlot;
 		protected override List<string> Ids() => WorldFavoritesModule.Snapshot();
 		protected override int Rev => WorldFavoritesModule.Revision;
 	}
@@ -484,9 +485,9 @@ namespace VRChatArchiveMod.Modules
 		protected override string ListId => "fvgrp_vrchatarchive_users";
 		protected override string ListName => "vrchatarchive_users";
 		protected override FavoriteType Kind => FavoriteType.Friend;
-		protected override bool Enabled { get { try { return ModConfig.UserFavListEnabled.Value; } catch { return false; } } }
+		protected override bool Enabled => true;   // see WorldFavListModule
 		protected override Il2CppSystem.Collections.Generic.List<FavoriteListModel> Collection(FavoriteArea a) => a._friends;
-		protected override int WantedSlot() { try { return ModConfig.SocialListSlot.Value; } catch { return 2; } }
+		protected override int WantedSlot() => ModConfig.SocialListSlot;
 		protected override List<string> Ids() => UserFavoritesModule.Snapshot();
 		protected override int Rev => UserFavoritesModule.Revision;
 	}
@@ -501,7 +502,9 @@ namespace VRChatArchiveMod.Modules
 		protected override string ListId => "fvgrp_vrchatarchive_avatars";
 		protected override string ListName => "vrchatarchive_avatars";
 		protected override FavoriteType Kind => FavoriteType.Avatar;
-		protected override bool Enabled { get { try { return ModConfig.AvatarFavListEnabled.Value; } catch { return false; } } }
+		// Favorites/AvatarList went 2026-09-01; the Register line in Plugin.cs (commented out) is
+		// the switch now, so Enabled has nothing left to read.
+		protected override bool Enabled => true;
 		protected override Il2CppSystem.Collections.Generic.List<FavoriteListModel> Collection(FavoriteArea a) => a._avatars;
 		protected override List<string> Ids() => FavoritesModule.Snapshot();
 		protected override int Rev => FavoritesModule.Revision;

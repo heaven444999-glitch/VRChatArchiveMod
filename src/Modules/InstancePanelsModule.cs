@@ -86,6 +86,7 @@ namespace VRChatArchiveMod.Modules
 		private string[] _colLeft, _colRight, _colPos;
 		private int _colSig = -1;
 		private int _rosterVer;
+		private static float _diagNext;   // DIAGNOSTIC: throttle for the empty-platform log
 
 		private readonly ConcurrentQueue<string> _videoUrls = new ConcurrentQueue<string>();
 		private string _lastVideoUrl;
@@ -170,6 +171,7 @@ namespace VRChatArchiveMod.Modules
 			var current = new Dictionary<string, (string Name, string Avatar)>(StringComparer.OrdinalIgnoreCase);
 			var order = new List<(string Label, Color Col, string Badge, string Pid, bool Member, string Pos, bool Master)>();
 			_ownerName = "";
+			var diagNoPlat = new System.Collections.Generic.List<string>();   // DIAGNOSTIC
 
 			// READ THE SHARED ROSTER, don't rebuild it.
 			//
@@ -206,8 +208,25 @@ namespace VRChatArchiveMod.Modules
 							posText = $"{pv.x:F1} {pv.y:F1} {pv.z:F1}";
 						}
 
+						// DIAGNOSTIC: the overlay and the client read the SAME roster, so a player the
+						// client shows with a platform but the overlay does not must have an empty
+						// pe.Platform here at read time. Record who, log it throttled below.
+						if (string.IsNullOrEmpty(pe.Platform)) diagNoPlat.Add(pe.Name ?? "?");
+
 						if (pe.IsOwner) _ownerName = pe.Name;
-						order.Add((pe.IsLocal ? pe.Name + "  (you)" : pe.Name, Hex(pe.TrustColor), badge, pid, member, posText, pe.IsMaster));
+
+						// BLOCKED goes in FRONT OF THE NAME, not in the badge column: that column is
+						// sized to the character for "VRC+ 18+ PC" (badgeW = fs * 6.9f), and a seven
+						// letter word would spill left over the name of every row that has one.
+						string label = pe.IsLocal ? pe.Name + "  (you)" : pe.Name;
+						try
+						{
+							if (!pe.IsLocal && BlockedByProbeModule.BlockedMe.Contains(pe.UserId ?? ""))
+								label = "<color=#FF4B4B>BLOCKED</color> " + label;
+						}
+						catch { }
+
+						order.Add((label, Hex(pe.TrustColor), badge, pid, member, posText, pe.IsMaster));
 						if (!pe.IsLocal) current[uid] = (pe.Name, pe.AvatarName ?? "");
 					}
 					catch { }
@@ -216,6 +235,20 @@ namespace VRChatArchiveMod.Modules
 			catch { return; }
 
 			if (order.Count == 0) return;   // you are always enumerable → empty = transient glitch
+
+			// DIAGNOSTIC (temporary): who the overlay sees with no platform, at most every 8s.
+			if (diagNoPlat.Count > 0)
+			{
+				float now = Time.realtimeSinceStartup;
+				if (now >= _diagNext)
+				{
+					_diagNext = now + 8f;
+					int take = Mathf.Min(14, diagNoPlat.Count);
+					VRChatArchiveModPlugin.Logger.LogInfo(
+						"[InstancePanels] DIAG " + diagNoPlat.Count + "/" + order.Count + " players have NO platform in the roster the overlay reads: "
+						+ string.Join(", ", diagNoPlat.GetRange(0, take)) + (diagNoPlat.Count > take ? ", \u2026" : ""));
+				}
+			}
 
 			// World-change heuristic: previous and new REMOTE rosters share nobody.
 			int overlap = 0;
@@ -271,10 +304,75 @@ namespace VRChatArchiveMod.Modules
 			catch { return null; }
 		}
 
+		// THE SAME EVENTS, READABLE FROM OUTSIDE.
+		//
+		// _log is this module's private list and is drawn in IMGUI. The wing panel wants the identical
+		// feed rendered as real UI text in VRChat's own right wing, so the events are also kept here as
+		// finished rich-text lines. A string list, not the Entry type: the wing has no business knowing
+		// how this module models an event, and one formatting decision in one place means the wing and
+		// the IMGUI panel can never disagree about what happened.
+		public static readonly List<string> Feed = new List<string>();
+
+		// …and the same events again, split into their parts. The single pre-formatted string above is
+		// right for a one-label row, but the side panel lays its rows out in REAL columns, and a column
+		// layout cannot align text that has already been glued together with double spaces. Both lists
+		// are appended in the same place from the same values, so they still cannot disagree.
+		public struct FeedRow
+		{
+			public string Time;    // HH:mm
+			public string Badge;   // JOIN / LEFT / WORLD / AVATAR / VIDEO
+			public string Color;   // that badge's colour, "#RRGGBB"
+			public string Name;
+		}
+
+		public static readonly List<FeedRow> FeedRows = new List<FeedRow>();
+
+		private static string FeedColor(Kind k)
+		{
+			switch (k)
+			{
+				case Kind.Join: return "#2ED573";
+				case Kind.Left: return "#FF6B81";
+				case Kind.World: return "#7FB6FF";
+				case Kind.Avatar: return "#C39BFF";
+				default: return "#FFC08A";
+			}
+		}
+
+		private static string FeedBadge(Kind k)
+		{
+			switch (k)
+			{
+				case Kind.Join: return "JOIN";
+				case Kind.Left: return "LEFT";
+				case Kind.World: return "WORLD";
+				case Kind.Avatar: return "AVATAR";
+				default: return "VIDEO";
+			}
+		}
+
 		private void Add(Kind kind, string name, string detail = null)
 		{
 			_log.Add(new Entry { Time = DateTime.Now.ToString("HH:mm:ss"), Kind = kind, Name = name, Detail = detail });
 			if (_log.Count > MaxLog) _log.RemoveAt(0);
+
+			try
+			{
+				string hm = DateTime.Now.ToString("HH:mm");
+				Feed.Add("<color=#8FA3B8>" + hm + "</color>  <color="
+					+ FeedColor(kind) + ">" + FeedBadge(kind) + "</color>  " + Trunc(name ?? "", 40));
+				if (Feed.Count > MaxLog) Feed.RemoveAt(0);
+
+				FeedRows.Add(new FeedRow
+				{
+					Time = hm,
+					Badge = FeedBadge(kind),
+					Color = FeedColor(kind),
+					Name = Trunc(name ?? "", 40),
+				});
+				if (FeedRows.Count > MaxLog) FeedRows.RemoveAt(0);
+			}
+			catch { }
 
 			// Join notifier toast (independent of the panel visibility).
 			if (ModConfig.JoinNotifierEnabled.Value)
@@ -364,7 +462,7 @@ namespace VRChatArchiveMod.Modules
 				// ONE interface: no per-panel knobs. The only thing that varies is the screen, and
 				// Hud.Scale already handles that — the panels keep the same on-screen proportion at
 				// 1080p, 1440p and 4K without anybody configuring anything.
-				float baseW = Mathf.Clamp(Screen.width * 0.20f, Hud.S(280f), Screen.width * 0.30f);
+				float baseW = Hud.SideWidth;   // same width as the radar — see Hud.SideWidth
 				float top = margin;
 				// Leave the bottom half free for the events logger and the radar.
 				float h = Screen.height * 0.60f;
@@ -422,10 +520,12 @@ namespace VRChatArchiveMod.Modules
 
 		private void Plain(Rect r, string text, GUIStyle style, Color color)
 		{
-			var prev = style.normal.textColor;
+			// No save/restore: every GUI.Label drawn with these styles goes through Plain() or
+			// Shadowed(), which set the colour first, so restoring the previous one was two extra
+			// style.normal proxy fetches and two textColor calls per label per frame that nothing
+			// ever read back.
 			style.normal.textColor = color;
 			GUI.Label(r, text, style);
-			style.normal.textColor = prev;
 		}
 
 		// Same layout as the PLAYERS tab in the mod menu: [id] name in trust colour, badges on the
@@ -596,7 +696,11 @@ namespace VRChatArchiveMod.Modules
 			//
 			// The strings are rebuilt only when something in them changes — the roster, the layout,
 			// or the rainbow step — so a still list costs nothing but the draw.
-			int rainbowSlot = (int)(Time.realtimeSinceStartup * 12f);
+			// The slot only matters when a rainbow name is IN the bulk string, i.e. when there is no
+			// logo and members are not diverted to the per-row pass (line 663). With the logo present
+			// the bulk strings never contain a rainbow, so ticking the signature 12x/s only rebuilt
+			// byte-identical strings (and the undrawn _colRight/_colPos) twelve times a second.
+			int rainbowSlot = Core.AssetLoader.ArchiveLogo != null ? 0 : (int)(Time.realtimeSinceStartup * 12f);
 			int sig = _rosterVer * 397 ^ shown * 31 ^ cols * 17 ^ Mathf.RoundToInt(fs * 4f) ^ rainbowSlot;
 			if (sig != _colSig || _colLeft == null || _colLeft.Length != cols)
 			{
@@ -691,7 +795,12 @@ namespace VRChatArchiveMod.Modules
 
 				var e = _roster[i];
 				var logo = Core.AssetLoader.ArchiveLogo;
-				if (!e.Member || logo == null) continue;
+				bool showPos = posColW > 0f && !string.IsNullOrEmpty(e.Pos);
+
+				// MEMBER EXTRAS, per-row: a logo (a texture the bulk name string cannot hold) and a
+				// rainbow name. A non-member takes its name from the bulk _colLeft block below.
+				if (e.Member && logo != null)
+				{
 
 				// MEASURED placement — the real rendered width of each part decides where the next
 				// one starts, so it is correct on a proportional font as well as a monospace one.
@@ -712,11 +821,11 @@ namespace VRChatArchiveMod.Modules
 				GUI.DrawTexture(new Rect(x, y + (lh - fs) * 0.5f, fs, fs), logo, ScaleMode.ScaleToFit);
 				x += fs + 4f;
 
-				bool showPos = posColW > 0f && !string.IsNullOrEmpty(e.Pos);
-				float posW = showPos ? posColW : 0f;
-				float room = colW - badgeW - (x - cx) - posW;
-				int chars = Mathf.Max(4, (int)(room / (fs * 0.5f)));
-				Plain(new Rect(x, y, room, lh), Rainbow(Trunc(e.Label, chars), Time.realtimeSinceStartup), _mono, Color.white);
+					float posW = showPos ? posColW : 0f;
+					float room = colW - badgeW - (x - cx) - posW;
+					int chars = Mathf.Max(4, (int)(room / (fs * 0.5f)));
+					Plain(new Rect(x, y, room, lh), Rainbow(Trunc(e.Label, chars), Time.realtimeSinceStartup), _mono, Color.white);
+				}
 
 				// Badge and position for the member row, in the same columns the bulk rows use, so a
 				// member reads identically to everyone else — just with a rainbow name and a logo.
@@ -733,10 +842,8 @@ namespace VRChatArchiveMod.Modules
 				float colH = rows * lh;
 				if (!string.IsNullOrEmpty(_colLeft[c]))
 					Plain(new Rect(cx + 6f, rowsTop, colW - 12f - badgeW, colH), _colLeft[c], _mono, Color.white);
-				if (posColW > 0f && !string.IsNullOrEmpty(_colPos[c]))
-					Plain(new Rect(cx + colW - badgeW - posColW - 12f, rowsTop, posColW, colH), _colPos[c], _monoRight, CPos);
-				if (!string.IsNullOrEmpty(_colRight[c]))
-					Plain(new Rect(cx + colW - badgeW - 4f, rowsTop, badgeW, colH), _colRight[c], _monoRight, Hud.Dim);
+				// Badge and position are drawn per-row above (pinned to each row's y), NOT here as a
+				// multi-line block \u2014 that block, in the smaller badge font, drifted off the bottom rows.
 			}
 
 			if (_roster.Count > shown)

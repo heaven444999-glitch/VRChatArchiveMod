@@ -27,9 +27,25 @@ namespace VRChatArchiveMod.Modules
 
 		private const string QmRoot = "Canvas_QuickMenu(Clone)";
 
-		private static readonly Color Pink = new Color(1.000f, 0.416f, 0.835f);
-		private static readonly Color Violet = new Color(0.506f, 0.263f, 0.902f);
-		private static readonly Color TextViolet = new Color(0.827f, 0.643f, 1.000f);
+		// Defaults, used when the config hex is blank or unparseable. The live values come from
+		// config (QuickMenu/GradientStart, GradientEnd, TextColor) so they are editable from the
+		// desktop client's MOD SETTINGS page, and re-read cheaply each pass (cached by the hex string).
+		private static readonly Color PinkDefault = new Color(1.000f, 0.416f, 0.835f);
+		private static readonly Color VioletDefault = new Color(0.506f, 0.263f, 0.902f);
+		private static readonly Color TextVioletDefault = new Color(0.827f, 0.643f, 1.000f);
+
+		private static string _txtHex, _gsHex, _geHex;
+		private static Color _txtCol = new Color(0.827f, 0.643f, 1.000f), _gsCol = new Color(1.000f, 0.416f, 0.835f), _geCol = new Color(0.506f, 0.263f, 0.902f);
+		private static Color Hex(string h, ref string cacheKey, ref Color cacheVal, Color fallback)
+		{
+			if (h == cacheKey) return cacheVal;
+			cacheKey = h;
+			cacheVal = (!string.IsNullOrEmpty(h) && ColorUtility.TryParseHtmlString(h, out var c)) ? c : fallback;
+			return cacheVal;
+		}
+		private static Color TextCol() { try { return Hex(ModConfig.QmTextColor?.Value, ref _txtHex, ref _txtCol, TextVioletDefault); } catch { return TextVioletDefault; } }
+		private static Color GradStart() { try { return Hex(ModConfig.QmGradientStart?.Value, ref _gsHex, ref _gsCol, PinkDefault); } catch { return PinkDefault; } }
+		private static Color GradEnd() { try { return Hex(ModConfig.QmGradientEnd?.Value, ref _geHex, ref _geCol, VioletDefault); } catch { return VioletDefault; } }
 
 		// Targets found by the LAST full scan. Re-asserting colours on these is a handful of property
 		// writes; finding them again means walking every Image and every text in the menu, which is
@@ -55,6 +71,17 @@ namespace VRChatArchiveMod.Modules
 		private int _slot;   // which canvas the CURRENT scan is filling
 
 		private List<Target> _targets => _targetsBy[_slot];
+		// Set to true by anyone who ADDS UI under a themed canvas, so the next tick re-walks it
+		// instead of waiting out the scan cadence.
+		private static bool _dirty;
+
+		/// <summary>Ask for an immediate rescan. Call this right after creating menu UI of our own:
+		/// the full scan alternates canvases every 5 s, so a card created just after one ran waits up
+		/// to TEN seconds to be enrolled — and until then it keeps the flat dark colour it was built
+		/// with while every VRChat button around it is themed. That gap is exactly what made the
+		/// user-menu cards come out black next to their neighbours.</summary>
+		public static void Invalidate() { _dirty = true; }
+
 		private float _nextScan;
 		private bool _scanFlip;   // alternates the two canvases so one frame never pays for both
 
@@ -94,16 +121,61 @@ namespace VRChatArchiveMod.Modules
 		{
 			// Those Graphics belong to a canvas that may have been rebuilt; forget them rather than
 			// hold references we can no longer restore correctly.
+			// Both slots: `_live`/`_targets` only reach the canvas scanned last, and the other
+			// canvas's stale references would be re-asserted on dead objects after the reload.
 			_painted.Clear(); _texts.Clear(); _seen.Clear();
-			_live.Clear(); _targets.Clear();
+			_liveBy[0].Clear(); _liveBy[1].Clear(); _targetsBy[0].Clear(); _targetsBy[1].Clear();
 			_next = 0f; _nextScan = 0f;
 			Core.QuickMenu.Forget();   // the canvas may not survive the world change
+		}
+
+		// WHY A LABEL STAYS GREY, ANSWERED WITH ITS OWN STATE.
+		//
+		// Some menu labels take the theme colour and some do not — in the same row, at the same
+		// instant. Writing tmp.color harder cannot fix that, because there are exactly three ways a
+		// TMP ends up a colour other than the one in .color, and only one is a plain timing race:
+		//   1. .color really is grey     — someone writes it faster than our ~3 Hz pass;
+		//   2. enableVertexGradient      — TMP ignores .color entirely and uses the gradient;
+		//   3. a <color=…> tag in .text  — applied per character at layout, so it wins outright.
+		// Everything else in the pipeline (canvasRenderer colour, _FaceColor, alpha) MULTIPLIES, and
+		// multiplying a violet by anything cannot produce neutral grey.
+		//
+		// So rather than guess, each label that refuses reports which of the three it is. Ten of them,
+		// once per session: enough to name the mechanism, not enough to fill a log.
+		private static int _diagLeft = 10;
+		private static readonly HashSet<int> _diagSeen = new HashSet<int>();
+
+		private static void Diagnose(TMPro.TMP_Text t)
+		{
+			if (_diagLeft <= 0) return;
+			try
+			{
+				Color want = TextCol();
+				bool grad = false;
+				try { grad = t.enableVertexGradient; } catch { }
+				string txt = null;
+				try { txt = t.text; } catch { }
+				bool tagged = !string.IsNullOrEmpty(txt) && txt.IndexOf("<color", StringComparison.OrdinalIgnoreCase) >= 0;
+				bool kept = t.color == want;
+				if (kept && !grad && !tagged) return;   // took the colour, nothing to explain
+
+				if (!_diagSeen.Add(t.GetInstanceID())) return;
+				_diagLeft--;
+				VRChatArchiveModPlugin.Logger.LogInfo("[MenuTheme] '" + t.name + "' resists: "
+					+ (kept ? "" : "colour-overwritten ")
+					+ (grad ? "vertexGradient " : "")
+					+ (tagged ? "rich-text-tag " : "")
+					+ "| color=" + ColorUtility.ToHtmlStringRGBA(t.color)
+					+ " want=" + ColorUtility.ToHtmlStringRGBA(want)
+					+ (tagged ? " | text=" + (txt.Length > 60 ? txt.Substring(0, 60) : txt) : ""));
+			}
+			catch { }
 		}
 
 		private void Repaint()
 		{
 			float now = Time.realtimeSinceStartup;
-			if (now >= _nextScan || (_targetsBy[0].Count == 0 && _targetsBy[1].Count == 0))
+			if (_dirty || now >= _nextScan || (_targetsBy[0].Count == 0 && _targetsBy[1].Count == 0))
 			{
 				// ONE CANVAS PER SCAN, AND LESS OFTEN.
 				//
@@ -117,6 +189,7 @@ namespace VRChatArchiveMod.Modules
 				// re-asserts colours every tick from the cached target list, so what the user sees
 				// is unchanged — only the rediscovery is slower, and the menu's structure does not
 				// change between one three-second window and the next anyway.
+				_dirty = false;
 				_nextScan = now + 5f;
 				_scanFlip = !_scanFlip;
 				_slot = _scanFlip ? 0 : 1;
@@ -133,45 +206,60 @@ namespace VRChatArchiveMod.Modules
 			// Text is re-asserted on the FAST pass, not only when we rescan. VRChat's StyleEngine
 			// repaints a page the moment it is shown, so a colour only refreshed every 3 seconds
 			// flickers back to stock every time you change tab.
+			//
+			// BOTH canvases, and indexed by `canvas` — not through `_live`, which is a view on the
+			// slot of the LAST scan. The loop used to count the other canvas's list but read the
+			// current one, so it re-asserted the same texts twice (and walked past the end of the
+			// shorter list, swallowed by the catch) while the other canvas's text silently went
+			// back to stock between its scans.
 			for (int canvas = 0; canvas < 2; canvas++)
-			for (int i = 0; i < _liveBy[canvas].Count; i++)
 			{
-				try
+				var live = _liveBy[canvas];
+				for (int i = 0; i < live.Count; i++)
 				{
-					var t = _live[i];
-					if (t == null) continue;
-					if (t.color != TextViolet) t.color = TextViolet;
+					try
+					{
+						var t = live[i];
+						if (t == null) continue;
+						var tc = TextCol();
+						if (t.color != tc) t.color = tc;
+					}
+					catch { }
 				}
-				catch { }
 			}
 
 			// The cheap pass: no searching, just putting the colours back where VRChat may have
-			// undone them.
-			for (int i = 0; i < _targets.Count; i++)
+			// undone them. Same rule as the text: BOTH canvases' cached targets every tick,
+			// otherwise the canvas not scanned last keeps whatever VRChat restyled it to.
+			for (int canvas = 0; canvas < 2; canvas++)
 			{
-				var t = _targets[i];
-				try
+				var targets = _targetsBy[canvas];
+				for (int i = 0; i < targets.Count; i++)
 				{
-					if (t.Img == null) continue;
-					if (t.Sel != null)
+					var t = targets[i];
+					try
 					{
-						var cb = t.Sel.colors;
-						if (cb.normalColor != t.Want)
+						if (t.Img == null) continue;
+						if (t.Sel != null)
 						{
-							cb.normalColor = t.Want;
-							cb.highlightedColor = new Color(t.Want.r * 1.75f, t.Want.g * 1.55f, t.Want.b * 1.55f, 1f);
-							cb.pressedColor = new Color(t.Want.r * 2.3f, t.Want.g * 1.9f, t.Want.b * 1.9f, 1f);
-							cb.selectedColor = cb.highlightedColor;
-							cb.colorMultiplier = 1f;
-							t.Sel.colors = cb;
+							var cb = t.Sel.colors;
+							if (cb.normalColor != t.Want)
+							{
+								cb.normalColor = t.Want;
+								cb.highlightedColor = new Color(t.Want.r * 1.75f, t.Want.g * 1.55f, t.Want.b * 1.55f, 1f);
+								cb.pressedColor = new Color(t.Want.r * 2.3f, t.Want.g * 1.9f, t.Want.b * 1.9f, 1f);
+								cb.selectedColor = cb.highlightedColor;
+								cb.colorMultiplier = 1f;
+								t.Sel.colors = cb;
+							}
+						}
+						else if (t.Img.color != t.Want)
+						{
+							t.Img.color = t.Want;
 						}
 					}
-					else if (t.Img.color != t.Want)
-					{
-						t.Img.color = t.Want;
-					}
+					catch { }
 				}
-				catch { }
 			}
 		}
 
@@ -192,6 +280,12 @@ namespace VRChatArchiveMod.Modules
 				{
 					string n = p.name ?? "";
 					if (n == "VA_ArchiveFavButton" || n == "VA_CopyId" || n == "VA_GetMeta") return true;
+					// The two side panels (Core/PanelSkin.cs). Their text is a deliberate palette
+					// ported from the mod's IMGUI roster — trust-coloured names, green coordinates,
+					// coloured platform badges — and this pass would flatten all of it to one theme
+					// colour. That is exactly why the old panel's title rendered red: it was the one
+					// string with no colour tag on it.
+					if (n == "VA_PlayersPanel" || n == "VA_LogPanel") return true;
 				}
 			}
 			catch { }
@@ -243,7 +337,8 @@ namespace VRChatArchiveMod.Modules
 
 							int id = t.GetInstanceID();
 							if (_seen.Add(id)) _texts.Add((t, t.color));   // remember how to undo it
-							t.color = TextViolet;
+							t.color = TextCol();
+							Diagnose(t);
 							_live.Add(t);
 						}
 						catch { }
@@ -275,12 +370,37 @@ namespace VRChatArchiveMod.Modules
 						// violet at the bottom.
 						float y = 0.5f;
 						try { y = Mathf.Clamp01(tr.position.y / h); } catch { }
-						Color want = Color.Lerp(Pink, Violet, 1f - y);
-						// Kept dark enough to read white-on-top, and to sit against the wallpaper.
-						want = new Color(want.r * 0.34f, want.g * 0.30f, want.b * 0.46f, 1f);
+						Color want = Color.Lerp(GradStart(), GradEnd(), 1f - y);
+						// GLASS, NOT TAR. This used to multiply the tint down to about a third and force
+						// alpha to 1: every card in the menu became an OPAQUE near-black purple slab,
+						// which against the wallpaper simply reads as black -- and because the paint
+						// lands on a scan tick, a freshly built page showed VRChat's own look for a
+						// moment and then went dark, the "sometimes black" the owner reported. VRChat's
+						// cards are translucent; the theme now keeps the card's own alpha (floored so
+						// white text stays readable) and tints, rather than blackens, the colour.
+						float keepA = 1f;
+						try { keepA = im.color.a; } catch { }
+						if (keepA < 0.55f) keepA = 0.55f;
+						want = new Color(want.r * 0.62f, want.g * 0.55f, want.b * 0.80f, keepA);
 
-						int id = im.GetInstanceID();
-						if (_seen.Add(id)) _painted.Add((im, im.color));
+						// THE CARD FILL IS NO LONGER PAINTED — only the rim is.
+						//
+						// Tinting the Background never landed evenly: it happens on a scan tick, so a
+						// page that has just been built or restyled shows some cards themed and some
+						// still VRChat's, and the two states sit side by side in the same grid. The
+						// owner's user menu is the clearest case — half its tiles solid magenta, half
+						// black — and no cadence fixes it, because StyleElement repaints on its own
+						// schedule and we only ever get to answer afterwards.
+						//
+						// The RIM has none of that problem: it is a child WE create, nothing else
+						// writes to it, and it is what actually reads as the theme. So the colour now
+						// lives entirely in the outline and VRChat keeps its own card fill — which is
+						// also the look the owner asked for: "remove la couleur des bouton eux memes,
+						// on garde LE system de contour de color".
+						//
+						// _painted / _targets are left alone deliberately: they are the undo ledger and
+						// the fast re-assert list, and both are correct being empty of fills now. Cards
+						// painted by an earlier build simply drift back as StyleElement rewrites them.
 
 						// Hand the colour to the SELECTABLE when there is one, instead of only
 						// stamping the Image. VRChat tints a card on hover through its own
@@ -288,16 +408,19 @@ namespace VRChatArchiveMod.Modules
 						// writing the same pixel — which is the flicker you get when the mouse
 						// passes over a tile. Driving the ColorBlock makes hover and press derive
 						// FROM our colour, so there is nothing left to fight over.
+						/* fill painting removed — see the note above
 						var sel = im.GetComponentInParent<UnityEngine.UI.Selectable>();
 						if (sel != null && sel.targetGraphic != im) sel = null;
 						// A Selectable whose transition is NOT ColorTint ignores its ColorBlock
-						// entirely, so writing one is a no-op. Our own cloned cards are exactly that
-						// case — MenuCard sets Transition.None under keepStyle so VRChat's
-						// StyleElement can own them — which is why the two cards in the user menu
-						// stayed teal while every card around them went violet. Dropping the
-						// Selectable here sends them down the paint-the-Image path instead.
+						// entirely, so writing one is a no-op; such a card goes down the
+						// paint-the-Image path instead. Our own cloned cards no longer hit this:
+						// MenuCard always sets ColorTint now (a white tint under keepStyle, so hover
+						// and press react), so they take the Selectable path above like every stock
+						// card — expected, and it is what keeps their hover shade derived from the
+						// violet we write into normalColor here.
 						if (sel != null && sel.transition != UnityEngine.UI.Selectable.Transition.ColorTint) sel = null;
 						_targets.Add(new Target { Img = im, Sel = sel, Want = want, Ours = IsOurGrid(parent) });
+						*/
 
 						// The BACKGROUND above is themed for every card including ours, so the Archive tab
 						// matches the rest of the menu. The RIM is different: on our tiles it carries the
@@ -387,7 +510,11 @@ namespace VRChatArchiveMod.Modules
 				catch { }
 			}
 			_glows.Clear();
-			_painted.Clear(); _texts.Clear(); _seen.Clear(); _live.Clear(); _targets.Clear();
+			// BOTH canvases' lists, not `_live`/`_targets` — those are views on the CURRENT slot
+			// only, so the other canvas's targets survived a restore and were re-asserted violet on
+			// the next tick with the toggle off.
+			_painted.Clear(); _texts.Clear(); _seen.Clear();
+			_liveBy[0].Clear(); _liveBy[1].Clear(); _targetsBy[0].Clear(); _targetsBy[1].Clear();
 		}
 
 	}

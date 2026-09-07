@@ -10,12 +10,29 @@ namespace VRChatArchiveMod.Core
 	{
 		// --- Anti-Crash: master + per-vector toggles ---
 		public static ConfigEntry<bool> AntiCrashEnabled;
+		public static ConfigEntry<bool> BundleGuardEnabled;
+		public static ConfigEntry<bool> BundleGuardKeepValidation;
+		public static ConfigEntry<int> BundleGuardMaxMb;
 		public static ConfigEntry<bool> ClampParticles;
 		public static ConfigEntry<bool> ClampLights;
 		public static ConfigEntry<bool> ClampAudioSources;
 		public static ConfigEntry<bool> ClampCloth;
 		public static ConfigEntry<bool> ClampPhysBones;
 		public static ConfigEntry<bool> ClampContacts;
+		// Per-system caps, not just a component count: one ParticleSystem with maxParticles in the
+		// millions is a crasher the count clamp above never sees.
+		public static ConfigEntry<bool> ClampParticleCounts;
+		public static ConfigEntry<bool> ClampMeshes;          // polygon crashers (one mesh, or the total)
+		public static ConfigEntry<bool> ClampMaterials;       // shader / material bombs
+		public static ConfigEntry<bool> DisableAvatarCameras; // screen hijack / render crashers
+		public static ConfigEntry<bool> ClampTrails;          // Trail + Line renderer spam
+		public static ConfigEntry<bool> ClampConstraints;     // constraint chains that stall the animation thread
+		// Last resort: an avatar that trips MANY categories at once is a crasher by design, not a
+		// heavy avatar, and trimming it piece by piece still leaves the rest of it running.
+		public static ConfigEntry<bool> HideAvatarOverBudget;
+		public static ConfigEntry<bool> SelfHide;             // your own avatar not drawn on your screen (SelfHideModule)
+		public static ConfigEntry<bool> NsfwFilter;           // hide keyword-named renderers on other players' avatars (NsfwFilterModule)
+		public static ConfigEntry<string> NsfwKeywords;
 		public static ConfigEntry<bool> AntiBlockEnabled;
 		// Passive record of INBOUND Photon events. Receive-side only — the module never sends.
 		public static ConfigEntry<bool> NetworkLogEnabled;
@@ -29,31 +46,52 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<bool> UdonBlockAll;
 		public static ConfigEntry<int> UdonCrasherPerSecond;
 		public static ConfigEntry<int> UdonFloodPerSecond;
+		public static ConfigEntry<string> UdonBlockNames;   // always-block list, by event name
 		public static ConfigEntry<bool> UdonLogEnabled;
 		public static ConfigEntry<bool> UdonLogFrameEvents;
-		public static ConfigEntry<bool> UdonLogInterestingOnly;
-		public static ConfigEntry<bool> QMConsoleEnabled;
+		// Photon Guard: drop INBOUND Photon events by code, and mute an actor that floods one code.
+		// Receive-side only — a dropped event never reaches VRChat, and nothing is ever sent back.
+		public static ConfigEntry<bool> PhotonGuardEnabled;
+		public static ConfigEntry<bool> VoiceProbeEnabled;   // TEMPORARY voice-carrier probe
+		public static ConfigEntry<int> VoiceMimicCode;       // Photon event code that carries voice (1 on this build)
+		public static ConfigEntry<bool> VoiceMimicMuteSelf;  // drop our own outbound voice while relaying
+		public static ConfigEntry<string> PhotonGuardBlockCodes;
+		public static ConfigEntry<int> PhotonGuardRatePerSender;
+		public static ConfigEntry<int> PhotonGuardSuspendSeconds;
+		public static ConfigEntry<bool> PhotonGuardLogBlocked;
 		public static ConfigEntry<bool> QMTabEnabled;   // native VRChat QuickMenu tab
 		public static ConfigEntry<bool> UserMenuEnabled; // MOD FEATURES card on VRChat's per-user menu
 		public static ConfigEntry<bool> WingPlayersEnabled; // instance roster inside VRChat's left wing
 		public static ConfigEntry<bool> MenuSkinEnabled;
 		public static ConfigEntry<bool> MenuSkinClearVeil;
 		public static ConfigEntry<bool> MenuThemeEnabled;
+		public static ConfigEntry<string> QmTextColor;       // hex, VRChat menu text colour
+		public static ConfigEntry<string> QmGradientStart;   // hex, card sweep top
+		public static ConfigEntry<string> QmGradientEnd;     // hex, card sweep bottom
+		public static ConfigEntry<bool> QmBackgroundSolid;   // solid colour instead of the wallpaper image
+		public static ConfigEntry<string> QmBackgroundColor; // hex, used when Solid is on
+		public static ConfigEntry<float> QmWallpaperDim;     // 0..1, darken the wallpaper
+		public static ConfigEntry<string> QmCustomBackgroundImage; // custom wallpaper path, blank = Archive default
 		// (ArchiveFavListEnabled removed — the Archive category is always on. See Init.)
-		public static ConfigEntry<bool> ForceNewSection;       // add our own row instead of borrowing
-		public static ConfigEntry<bool> WorldFavListEnabled;
-		// WHICH list to take over, by its displayed name. Named rather than detected: two attempts
-		// at picking an "empty" one both stole a full one, because a list's contents are not in
-		// _favorites at the moment we look — VRChat shows 25/100 from somewhere else entirely.
-		public static ConfigEntry<int> WorldListSlot;
-		public static ConfigEntry<int> SocialListSlot;   // extra world favourites list
-		public static ConfigEntry<bool> UserFavListEnabled;    // extra social/friends favourites list
-		public static ConfigEntry<bool> AvatarFavListEnabled;  // extra avatar list (experimental)
+		// (WorldFavListEnabled / UserFavListEnabled / AvatarFavListEnabled removed 2026-09-01 — the
+		// modules they gated are unregistered, so the switches did nothing. See Init.)
+		// The three below WERE ConfigEntries. They are constants now because no registered module
+		// reads them, and a knob in the client for an experiment that cannot run is worse than
+		// none; the values and their reasons are kept for the day the injectors are re-armed.
+		// ForceNewSection: add our own sidebar row instead of borrowing an empty one. It arms a
+		// watchdog because a previous attempt made every world list vanish — a diagnostic, never
+		// the normal mode.
+		public const bool ForceNewSection = false;
+		// WHICH list to take over, by POSITION (0-based, sidebar order), not by displayed name:
+		// VRChat only stores a name for lists you renamed yourself — the rest are worlds2/worlds3/
+		// worlds4 internally and the menu derives the label. Two attempts at detecting an "empty"
+		// one both stole a full one, because a list's contents are not in _favorites at the moment
+		// we look — VRChat shows 25/100 from somewhere else entirely.
+		public const int WorldListSlot = 3;    // 0 = Favorite Worlds 1 … 3 = Favorite Worlds 4
+		public const int SocialListSlot = 2;   // 0 = Group 1, 1 = Group 2, 2 = Favorite Friends 3
 		// (ArchiveAutoClean removed 2026-08-28 — always on. See Init.)
 		public static ConfigEntry<string> ArchiveCategoryName;   // which shelf we borrow   // synthetic category in VRChat's own avatar menu
-		public static ConfigEntry<bool> MenuExclusive;
-		public static ConfigEntry<bool> MenuRecorder;   // temporary: records the menu as you browse it
-		public static ConfigEntry<bool> MenuCaptureEnabled;  // records each menu PAGE you open, with cell templates
+		// (MenuExclusive removed 2026-09-01 — it hid VRChat's QuickMenu behind a menu that is sealed.)
 		public static ConfigEntry<bool> ModControlEnabled;   // let the desktop client drive the mod's settings
 		// Soundboard: a member triggers a clip, every other mod plays it locally.
 		public static ConfigEntry<bool> SoundboardEnabled;
@@ -63,10 +101,6 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<float> SoundboardVolume;
 		public static ConfigEntry<float> SoundboardPollSeconds;
 		public static ConfigEntry<bool> DebugMode;      // verbose diagnostics build behaviour
-		public static ConfigEntry<bool> ShowDevTab;     // the DEV tools tab in the menu
-		public static ConfigEntry<bool> AudioWatchEnabled; // record which clips actually play
-		public static ConfigEntry<string> QMConsolePink;
-		public static ConfigEntry<string> QMConsoleViolet;
 		public static ConfigEntry<bool> UdonLogOverlay;
 		public static ConfigEntry<int> UdonLogOverlayLines;
 
@@ -77,6 +111,16 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<int> MaxCloth;            // MaxCloth = 75
 		public static ConfigEntry<int> MaxPhysBones;        // VRCPhysBone count cap
 		public static ConfigEntry<int> MaxContacts;         // VRCContact sender/receiver count cap
+		public static ConfigEntry<int> MaxParticlesPerSystem;  // maxParticles cap on ONE system
+		public static ConfigEntry<int> MaxEmissionRate;        // rateOverTime cap on ONE system
+		public static ConfigEntry<int> MaxTotalParticles;      // particle budget for the whole avatar
+		public static ConfigEntry<int> MaxTrianglesPerMesh;    // one mesh past this = renderer off
+		public static ConfigEntry<int> MaxTotalTriangles;      // triangle budget for the whole avatar
+		public static ConfigEntry<int> MaxTrianglesPerVertex;  // triangles per vertex: an index buffer written to amplify
+		public static ConfigEntry<int> MaxMaterialSlots;       // material-slot budget for the whole avatar
+		public static ConfigEntry<int> MaxTrailRenderers;      // Trail + Line renderers combined
+		public static ConfigEntry<int> MaxConstraints;         // Unity + VRC constraints combined
+		public static ConfigEntry<int> HideAvatarTrips;        // categories tripped before the avatar is hidden
 
 		// --- Scan cadence ---
 		public static ConfigEntry<int> ScanIntervalFrames;  // poll every N frames
@@ -115,7 +159,6 @@ namespace VRChatArchiveMod.Core
 
 		// --- Instance panels (player list + join/leave log) ---
 		public static ConfigEntry<bool> InstancePanelsEnabled;
-		public static ConfigEntry<float> InstancePanelsScale;   // overall size + font scale
 
 		// --- Join notifier (transient on-screen toast on join/leave) ---
 		public static ConfigEntry<bool> JoinNotifierEnabled;
@@ -147,11 +190,11 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<float> ObjOrbitMaxSize;
 		public static ConfigEntry<bool> ObjOrbitSpin;
 		public static ConfigEntry<bool> ObjOrbitSynced;
+		public static ConfigEntry<bool> BadAppleMusic;          // play the embedded soundtrack with the object show
+		public static ConfigEntry<float> BadAppleMusicVolume;   // and how loud, locally
 
 		// --- Full game log capture (passive Unity log sink → file; never touches Photon) ---
 		public static ConfigEntry<bool> AllowIl2CppDelegates;
-		public static ConfigEntry<bool> LogCaptureEnabled;
-		public static ConfigEntry<bool> LogCaptureStackTraces;
 
 		// --- Bad Apple chatbox player (OSC) ---
 		public static ConfigEntry<bool> BadAppleLoop;
@@ -160,13 +203,8 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<int> BadAppleOscPort;
 		public static ConfigEntry<string> BadAppleCharset;
 
-		// --- Menu input capture ---
-		public static ConfigEntry<bool> MenuCaptureInput;
-		public static ConfigEntry<bool> AltFreeCursor;      // Left Alt = free the cursor + movement
-
-		// --- Menu appearance (persisted) ---
-		public static ConfigEntry<int> UiAccent;             // accent color preset index
-		public static ConfigEntry<float> UiScale;            // overall menu scale
+		// --- Free cursor ---
+		public static ConfigEntry<bool> AltFreeCursor;      // HOLD Alt = free the cursor + movement
 
 		// --- Movement (local, self-only) ---
 		public static ConfigEntry<bool> FlyEnabled;
@@ -190,9 +228,6 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<bool> ArrowRotateEnabled;   // arrow-key rotation while flying (deg/sec)
 
 		// --- Era (2017 / 2018 / current look) ---
-		public static ConfigEntry<bool> LoadingScreenEnabled;
-		public static ConfigEntry<bool> LoadingMusic;
-		public static ConfigEntry<float> LoadingMusicVolume;
 
 		// --- Spawn stinger (plays once when you finish loading into an instance) ---
 		public static ConfigEntry<bool> SpawnSoundEnabled;
@@ -200,39 +235,81 @@ namespace VRChatArchiveMod.Core
 
 		// --- Custom nameplates (2018-style frame drawn over the world) ---
 
-		// --- ESP (visualization only) ---
-		public static ConfigEntry<bool> EspEnabled;
-		public static ConfigEntry<bool> EspBox;
-		public static ConfigEntry<bool> EspSkeleton;   // bone-to-bone wireframe instead of a flat capsule
+		// --- ESP (visualization only) — every switch is independent of the others ---
+		// (The screen-space box / skeleton / name / distance overlay is gone: the glows and the
+		// 3D capsule are the ESP now, and each one is its own toggle. Fields are further down.)
 		public static ConfigEntry<float> ForceGrabRange;
 		public static ConfigEntry<float> ForceJumpForce;
 		public static ConfigEntry<bool> ForceGrabAnyObject;
-		public static ConfigEntry<bool> EspCapsule;
-		public static ConfigEntry<bool> EspThroughWalls;   // real 3D capsule lit by VRChat's own glow
-		public static ConfigEntry<bool> EspPortals;   // world portals
-		public static ConfigEntry<bool> EspItems;     // grabbable pickups
+		public static ConfigEntry<float> ForcePickupRange;
+		public static ConfigEntry<bool> ForcePickupAllowTheft;
+		// PLAYER GRAB (mod users grab / throw each other) + MARK (aim-placed anchor for object TP / shapes / art).
+		public static ConfigEntry<float> PlayerGrabFollow, PlayerGrabThrowForce, PlayerGrabInertia, PlayerGrabReach, PlayerGrabAimRange;
+		public static ConfigEntry<bool> PlayerGrabAllowEscape;
+		public static ConfigEntry<float> MarkArtSize;
+		public static ConfigEntry<bool> EspEnabled;        // 2D screen box ESP (box / name / distance / skeleton) — its own switch
+		public static ConfigEntry<bool> EspBox;
+		public static ConfigEntry<bool> EspSkeleton;       // bone-to-bone wireframe instead of a flat box
 		public static ConfigEntry<bool> EspName;
 		public static ConfigEntry<bool> EspDistance;
-		public static ConfigEntry<float> EspMaxDistance;
-		public static ConfigEntry<bool> EspHighlight;   // outline glow via VRChat's HighlightsFX
+		public static ConfigEntry<bool> EspCapsule;        // glowing 3D capsule around each player
+		public static ConfigEntry<bool> EspHighlight;      // outline glow on the avatar mesh (HighlightsFX)
+		public static ConfigEntry<bool> EspPortals;        // glow on world portals
+		public static ConfigEntry<bool> EspItems;          // glow on grabbable pickups
+		public static ConfigEntry<bool> EspThroughWalls;   // capsules drawn over the world geometry
+		public static ConfigEntry<float> EspMaxDistance;   // capsule range; 0 = unlimited
+		public static ConfigEntry<bool> EspHideFromCamera; // ESP kept out of your own camera / stream / mirrors
 
 		public static void Init(ConfigFile cfg)
 		{
 			AntiCrashEnabled = cfg.Bind("AntiCrash", "Enabled", true,
-				"Master switch for the avatar anti-crash protection.");
+				"Master switch for the avatar anti-crash protection. OFF puts every clamped avatar back the way it was (components re-enabled, particle limits restored, hidden avatars shown) and also turns BundleGuard off. ON rescans everyone.");
 
+			BundleGuardEnabled = cfg.Bind("AntiCrash", "BundleGuard", true,
+				"Asset-bundle protection: refuse to load a bundle whose SOURCE is not VRChat's own content delivery, and never serve a local cache file that is empty or absurdly large. This guards the download side; the clamps above guard what a loaded avatar then does. Needs the master switch: with Anti-Crash OFF this guard is off too.");
+			BundleGuardKeepValidation = cfg.Bind("AntiCrash", "BundleKeepValidation", true,
+				"Keep Unity's CRC integrity check on every bundle. VRChat passes a CRC so a truncated or altered download is rejected instead of parsed; leaving this on is what makes a genuinely CORRUPTED bundle fail safely rather than crash the loader.");
+			BundleGuardMaxMb = cfg.Bind("AntiCrash", "BundleMaxMb", 600,
+				"Refuse to serve a locally cached bundle larger than this many megabytes. A real avatar is a few dozen MB; a file far past that is a decompression bomb or a broken cache entry. 0 disables the size check.");
+
+			// Every clamp below is reversible: the component is switched off (never destroyed) and the
+			// original state is journaled, so turning the toggle or the master off puts it back.
 			ClampParticles = cfg.Bind("AntiCrash", "ClampParticles", true,
-				"Neutralize particle-bomb avatars (excessive particle systems).");
+				"Neutralize particle-bomb avatars: particle systems past MaxParticleSystems are stopped and their emission switched off (nothing is destroyed). They come back when this toggle or the master goes off.");
 			ClampLights = cfg.Bind("AntiCrash", "ClampLights", true,
-				"Strip excessive real-time Lights from loaded avatars.");
+				"Switch off real-time Lights past MaxLights (light-spam crashers). Nothing is destroyed; they come back when this toggle or the master goes off.");
 			ClampAudioSources = cfg.Bind("AntiCrash", "ClampAudioSources", true,
-				"Strip excessive AudioSources (audio-spam crashers).");
+				"Switch off AudioSources past MaxAudioSources (audio-spam crashers). Nothing is destroyed; they come back when this toggle or the master goes off.");
 			ClampCloth = cfg.Bind("AntiCrash", "ClampCloth", true,
-				"Strip excessive Cloth components.");
+				"Switch off Cloth components past MaxCloth. Nothing is destroyed; they come back when this toggle or the master goes off.");
 			ClampPhysBones = cfg.Bind("AntiCrash", "ClampPhysBones", true,
-				"Strip excessive VRCPhysBone components (CPU-spike crashers).");
+				"Switch off VRCPhysBone components past MaxPhysBones (CPU-spike crashers). Nothing is destroyed; they come back when this toggle or the master goes off.");
 			ClampContacts = cfg.Bind("AntiCrash", "ClampContacts", true,
-				"Strip excessive VRCContact senders/receivers (contact-flood crashers).");
+				"Switch off VRCContact senders/receivers past MaxContacts (contact-flood crashers). Nothing is destroyed; they come back when this toggle or the master goes off.");
+			// The count clamps above miss the other half of a particle bomb: a handful of systems,
+			// each told to emit a million particles. These clamp what each system is ALLOWED to do.
+			ClampParticleCounts = cfg.Bind("AntiCrash", "ClampParticleCounts", true,
+				"Cap maxParticles and emission rate on every particle system, and stop systems past the total particle budget. The original values are remembered and restored when this toggle or the master goes off.");
+			ClampMeshes = cfg.Bind("AntiCrash", "ClampMeshes", true,
+				"Disable renderers whose mesh exceeds the triangle cap, and renderers past the total triangle budget (polygon crashers). They are re-enabled when this toggle or the master goes off.");
+			ClampMaterials = cfg.Bind("AntiCrash", "ClampMaterials", true,
+				"Shader / material bombs, three rules: a renderer with MORE material slots than its mesh has sub-meshes is cut back to the sub-mesh count (Unity redraws the mesh once per extra slot - the 'Cloner' geometry-shader crasher is a 26-vertex plane with 29 slots); a tiny mesh (64 vertices or fewer, a quad or a plane) drawn with a shader outside the known families gets a plain grey fallback material instead (the shape of every shader crasher); and renderers past the material-slot budget are disabled. Everything is put back when this toggle or the master goes off.");
+			DisableAvatarCameras = cfg.Bind("AntiCrash", "DisableAvatarCameras", true,
+				"Disable Camera and Projector components on avatars (screen hijack / render crashers). They are re-enabled when this toggle or the master goes off.");
+			ClampTrails = cfg.Bind("AntiCrash", "ClampTrails", true,
+				"Switch off Trail and Line renderers past the trail budget (trail-spam crashers that fill the screen with overdraw). They come back when this toggle or the master goes off.");
+			ClampConstraints = cfg.Bind("AntiCrash", "ClampConstraints", true,
+				"Switch off constraints past the constraint budget (constraint chains that stall the animation thread every frame). They come back when this toggle or the master goes off.");
+			// OFF by default: hiding is a bigger hammer than trimming, and a heavy-but-legit avatar
+			// that trips two categories should still be seen. Only a many-category crasher is hidden.
+			NsfwFilter = cfg.Bind("AntiCrash", "NsfwFilter", false,
+				"NSFW FILTER: on OTHER players' avatars, every renderer whose object (or a parent) is named after one of the NsfwKeywords is switched off on your screen. Nothing is destroyed or sent; OFF (or the master OFF) turns them back on. Needs the anti-crash master ON.");
+			NsfwKeywords = cfg.Bind("AntiCrash", "NsfwKeywords", "nsfw, penis, dick, cock, vagina, pussy, vulva, genital, anus, nipple, areola, dph, sps, orifice, cum, condom, dildo, buttplug, plug_",
+				"NSFW FILTER: comma-separated words matched (case-insensitively) against object names on other avatars. Add or remove words freely; each must be 3+ characters.");
+			SelfHide = cfg.Bind("AntiCrash", "SelfHide", false,
+				"SELF HIDE: your own avatar is not drawn on YOUR screen (every renderer under it switched off - no mesh, no mirror reflection, no first-person hands). IK, camera, animator and what everyone else sees are untouched. Follows avatar changes and is re-asserted twice a second; OFF puts everything back.");
+			HideAvatarOverBudget = cfg.Bind("AntiCrash", "HideAvatarOverBudget", false,
+				"When an avatar trips more than HideAvatarTrips categories at once, hide the whole avatar instead of trimming it. The avatar is shown again when this toggle or the master goes off.");
 
 			MaxParticleSystems = cfg.Bind("AntiCrash.Thresholds", "MaxParticleSystems", 256,
 				"Maximum ParticleSystem components allowed on one avatar.");
@@ -246,9 +323,33 @@ namespace VRChatArchiveMod.Core
 				"Maximum VRCPhysBone components allowed on one avatar.");
 			MaxContacts = cfg.Bind("AntiCrash.Thresholds", "MaxContacts", 256,
 				"Maximum VRCContact sender+receiver components allowed on one avatar.");
+			MaxParticlesPerSystem = cfg.Bind("AntiCrash.Thresholds", "MaxParticlesPerSystem", 5000,
+				"Maximum maxParticles allowed on ONE ParticleSystem; a system asking for more is clamped down to this value.");
+			MaxEmissionRate = cfg.Bind("AntiCrash.Thresholds", "MaxEmissionRate", 1000,
+				"Maximum emission rate (particles per second) allowed on ONE ParticleSystem; higher rates are clamped down to this value.");
+			MaxTotalParticles = cfg.Bind("AntiCrash.Thresholds", "MaxTotalParticles", 60000,
+				"Total particle budget across every ParticleSystem on one avatar; systems past the budget are disabled.");
+			MaxTrianglesPerMesh = cfg.Bind("AntiCrash.Thresholds", "MaxTrianglesPerMesh", 250000,
+				"Maximum triangles in ONE mesh; a renderer whose mesh exceeds this is disabled.");
+			MaxTotalTriangles = cfg.Bind("AntiCrash.Thresholds", "MaxTotalTriangles", 2500000,
+				"Total triangle budget across every renderer on one avatar; renderers past the budget are disabled.");
+			MaxTrianglesPerVertex = cfg.Bind("AntiCrash.Thresholds", "MaxTrianglesPerVertex", 32,
+				"Triangles per VERTEX a mesh may have before its renderer is disabled. Indices point at vertices, so a real "
+				+ "mesh sits near 2:1 and even a bad triangle fan stays in single digits; a measured crasher drew 10142 "
+				+ "triangles from 26 vertices (390:1) — the same points redrawn thousands of times on one plane, which is "
+				+ "pure overdraw and slips under every triangle and material budget. Only applies past 5000 triangles. "
+				+ "0 disables the check.");
+			MaxMaterialSlots = cfg.Bind("AntiCrash.Thresholds", "MaxMaterialSlots", 120,
+				"Total material-slot budget across every renderer on one avatar; renderers past the budget are disabled.");
+			MaxTrailRenderers = cfg.Bind("AntiCrash.Thresholds", "MaxTrailRenderers", 8,
+				"Maximum TrailRenderer and LineRenderer components allowed on one avatar. Trail + Line renderers combined.");
+			MaxConstraints = cfg.Bind("AntiCrash.Thresholds", "MaxConstraints", 100,
+				"Maximum constraints allowed on one avatar. Unity constraints (Parent/Position/Rotation/Scale/Aim/LookAt) and VRC constraints combined.");
+			HideAvatarTrips = cfg.Bind("AntiCrash.Thresholds", "HideAvatarTrips", 3,
+				"How many categories an avatar must trip at once before HideAvatarOverBudget hides the whole avatar instead of trimming it.");
 
-			ScanIntervalFrames = cfg.Bind("AntiCrash", "ScanIntervalFrames", 30,
-				"How often (in frames) to scan for newly-loaded avatars. Lower = faster reaction, higher cost.");
+			ScanIntervalFrames = cfg.Bind("AntiCrash", "ScanIntervalFrames", 3,
+				"How often (in frames) the poll looks for newly-loaded avatars and clamps them. 3 = within ~50 ms of an avatar appearing; the pass is bounded by the player count, so it stays cheap. Lower = faster reaction, higher cost.");
 
 			ArchiveFolder = cfg.Bind("BundleArchive", "Folder", "",
 				"Destination folder for archived bundles. Leave blank for <BepInEx>/VRChatArchiveMod/Bundles.");
@@ -260,7 +361,7 @@ namespace VRChatArchiveMod.Core
 			FewTagsUpdateMinutes = cfg.Bind("FewTags", "UpdateMinutes", 10,
 				"How often (minutes) to re-download the tag database.");
 			FewTagsMaxTagsPerUser = cfg.Bind("FewTags", "MaxTagsPerUser", 5,
-				"Maximum tag lines shown above one player's nameplate.");
+				new ConfigDescription("Maximum tag lines shown above one player's nameplate. No hard ceiling in the mod any more - set it as high as you like.", new AcceptableValueRange<int>(1, 500)));
 			FewTagsShowHeader = cfg.Bind("FewTags", "ShowHeader", true,
 				"Show the rainbow '- FewTags -' header plate (red 'Malicious User' for flagged accounts).");
 			FewTagsShowBigPlates = cfg.Bind("FewTags", "ShowBigPlates", true,
@@ -269,18 +370,18 @@ namespace VRChatArchiveMod.Core
 				"Hide FewTags entries containing slurs. The FewTags database is third-party and anyone can "
 				+ "write to it, so this filters what YOUR client displays; it does not change the database.");
 			FewTagsBaseY = cfg.Bind("FewTags", "BaseY", 119.05f,
-				"Height of the first tag plate above the nameplate. Raise if tags overlap the name.");
-			FewTagsSpacing = cfg.Bind("FewTags", "Spacing", 28f,
-				"Vertical gap between stacked tag plates on the LEGACY nameplate layout (Quick Stats).");
+				new ConfigDescription("Height of the first tag plate above the nameplate. Raise if tags overlap the name.", new AcceptableValueRange<float>(0f, 5000f)));
+			FewTagsSpacing = cfg.Bind("FewTags", "Spacing", 0f,
+				new ConfigDescription("Vertical gap between stacked tag plates on the LEGACY nameplate layout (Quick Stats). 0 = TIGHT (auto: lines stacked like text, measured from the label on screen). A number forces a bigger gap.", new AcceptableValueRange<float>(0f, 2000f)));
 			FewTagsBaseYExpanded = cfg.Bind("FewTags", "BaseYExpanded", 205f,
-				"Height of the FIRST tag plate on the CURRENT nameplate layout "
+				new ConfigDescription("Height of the FIRST tag plate on the CURRENT nameplate layout "
 				+ "(NameplateFragment/ExpandedInfo). That plate is much taller than on the old "
 				+ "layout, so the legacy 119 started the stack INSIDE the nameplate instead of "
-				+ "above it. Raise to push the whole stack further up.");
-			FewTagsSpacingExpanded = cfg.Bind("FewTags", "SpacingExpanded", 78f,
-				"Vertical gap between stacked tag plates on the CURRENT nameplate layout "
-				+ "(NameplateFragment/ExpandedInfo). The plates are taller there, so the legacy gap of "
-				+ "28 makes them overlap each other and the player's name.");
+				+ "above it. Raise to push the whole stack further up.", new AcceptableValueRange<float>(0f, 5000f)));
+			FewTagsSpacingExpanded = cfg.Bind("FewTags", "SpacingExpanded", 0f,
+				new ConfigDescription("Vertical gap between stacked tag plates on the CURRENT nameplate layout "
+				+ "(NameplateFragment/ExpandedInfo). 0 = TIGHT (auto: lines stacked like text, measured from the label on screen, never overlapping). "
+				+ "A number forces a bigger gap.", new AcceptableValueRange<float>(0f, 2000f)));
 
 			VaTagsEnabled = cfg.Bind("VaTags", "Enabled", true,
 				"VRChatArchive community player tags: PLAYERS tab, nameplate plates, tag DB sync. "
@@ -311,9 +412,8 @@ namespace VRChatArchiveMod.Core
 
 			InstancePanelsEnabled = cfg.Bind("InstancePanels", "Enabled", true,
 				"Show the instance player list (left) and join/leave log (right). Right-Shift+L toggles.");
-			InstancePanelsScale = cfg.Bind("InstancePanels", "Scale", 1.4f,
-				"Size of the two overlay panels and their text (1.0 = original, 2.0 = double). "
-				+ "Raise this if the panels are hard to read.");
+			// InstancePanels/Scale is GONE (2026-09-01): the panels size themselves from the screen
+			// (Hud.Scale) on purpose, and nothing ever read this value.
 
 			JoinNotifierEnabled = cfg.Bind("JoinNotifier", "Enabled", false,
 				"Transient join/leave toast in the middle of the screen. OFF by default: the INSTANCE LOG "
@@ -347,19 +447,48 @@ namespace VRChatArchiveMod.Core
 				"PANIC: stop running world Udon events entirely. OFF by default because Udon IS the world — "
 				+ "doors, pens, video players and seats stop working for you and you desync from what everyone "
 				+ "else runs. Join/leave and start/enable events are still allowed so worlds do not wedge.");
+			// The rate guards react AFTER a burst; this is the list for events you already know are
+			// hostile. Lifecycle events are exempt so a typo here cannot wedge every world.
+			UdonBlockNames = cfg.Bind("AntiUdon", "BlockNames", "",
+				"Udon event names to always block, comma separated (case-insensitive). Lifecycle events "
+				+ "(_start, _update, _onPlayerJoined...) are never blocked by name.");
+
+			// PHOTON GUARD. The Udon guards above only cover world scripts; a crasher that arrives as a
+			// raw Photon event (the network layer underneath) never runs Udon at all. This sits on the
+			// RECEIVE side: an event dropped here is never handed to VRChat, so the game cannot act on
+			// it. Nothing is sent, nothing is replayed, and other players are never affected.
+			VoiceMimicCode = cfg.Bind("VoiceMimic", "PhotonCode", 1,
+				"Photon event code that carries player voice. Confirmed as 1 on the 2026 build (voice is code 1, not the old 7).");
+			VoiceMimicMuteSelf = cfg.Bind("VoiceMimic", "MuteSelfWhileRelaying", false,
+				"Drop your own outgoing voice while voice mimic runs, so others hear ONLY the copied stream. Off = stay muted yourself for the same effect without touching your own send path.");
+			VoiceProbeEnabled = cfg.Bind("VoiceProbe", "Enabled", false,
+				"TEMPORARY. Logs which inbound Photon event code carries player voice (shout with a friend and read the log). Turn off once identified.");
+			PhotonGuardEnabled = cfg.Bind("PhotonGuard", "Enabled", true,
+				"Drop incoming Photon events by code, and mute any player (Photon actor) who floods one "
+				+ "event code. VRChat never sees a dropped event.");
+			PhotonGuardBlockCodes = cfg.Bind("PhotonGuard", "BlockCodes", "",
+				"Event codes to drop unconditionally, comma separated (e.g. 1,9). VRChat publishes no event "
+				+ "names, so the EVENTS console (LOGGING) is the way to see what each code carries before "
+				+ "blocking it.");
+			PhotonGuardRatePerSender = cfg.Bind("PhotonGuard", "RateLimitPerSender", 500,
+				"Per second, per actor, per event code: above this the (actor, code) pair is suspended. "
+				+ "A full instance sends normal voice/IK sync at ~120/s PER PLAYER, so a limit near that "
+				+ "muted innocents; a real flood is thousands/s, an order of magnitude above 500, still caught.");
+			PhotonGuardSuspendSeconds = cfg.Bind("PhotonGuard", "SuspendSeconds", 10,
+				"How long a flooding (actor, code) pair stays muted.");
+			PhotonGuardLogBlocked = cfg.Bind("PhotonGuard", "LogBlocked", true,
+				"Write one log line per suspension and one per 200 dropped events (never one per event).");
 			UdonLogEnabled = cfg.Bind("UdonLog", "Enabled", true,
 				"UDON tab: live console of the Udon events happening around you (who did what). Read-only — it observes events your client already runs and never sends or blocks any.");
 			UdonLogFrameEvents = cfg.Bind("UdonLog", "ShowFrameEvents", false,
 				"Also log per-frame events (_update, _lateUpdate, …). Very noisy and costly — off by default.");
-			UdonLogInterestingOnly = cfg.Bind("UdonLog", "InterestingOnly", true,
-				"Hide the polling noise (get_*/set_* property reads, internal numeric jumps) and keep only meaningful events: interactions, pickups, custom and network events.");
+			// UdonLog/InterestingOnly is GONE (2026-09-01): the get_*/set_* noise filter is
+			// unconditional in UdonLogModule by design, so the switch was shown and never read.
 
-			QMConsoleEnabled = cfg.Bind("QMConsole", "Enabled", true,
-				"Inject a native VRChat-Archive console into VRChat's own QuickMenu (KARMA-style), showing the Udon events. Local UI only.");
 			QMTabEnabled = cfg.Bind("QuickMenu", "NativeTab", true,
 				"Add a VRChat Archive tab to VRChat's own QuickMenu tab strip (clones a disabled built-in tab; never modifies the game's own objects).");
 			UserMenuEnabled = cfg.Bind("QuickMenu", "UserMenuCard", true,
-				"Add a MOD FEATURES card to VRChat's per-user menu, opening the mod's PLAYERS tab with that user selected.");
+				"Add Mod Features (orbit / sit / ring around them), Clone Avatar and Copy Avatar Id cards to the player's page in VRChat's QuickMenu.");
 			WingPlayersEnabled = cfg.Bind("QuickMenu", "WingPlayers", true,
 				"Show the instance roster inside VRChat's own left wing menu instead of a floating overlay window.");
 			NetworkLogEnabled = cfg.Bind("NetworkLog", "Enabled", true,
@@ -413,37 +542,16 @@ namespace VRChatArchiveMod.Core
 				+ "hidden while the mod runs and come back when it is off. Falls back to SDK Test Avatars, "
 				+ "then to the last category, if this name is not present. VRC+ slots are never borrowed.");
 
-			WorldFavListEnabled = cfg.Bind("Favorites", "WorldList", true,
-				"Add a VRCHAT ARCHIVE list to VRChat's WORLD favourites, beside Favorite Worlds 1-4. "
-				+ "Nothing of VRChat's is overwritten — one more list appears under the others. Needs "
-				+ "the desktop client, which is what holds the account key.");
-
-			ForceNewSection = cfg.Bind("Favorites", "ForceNewSection", false,
-				"Add a NEW row of our own instead of borrowing an empty one. The sidebar is a page "
-				+ "that builds itself on navigation, and a previous attempt made every world list "
-				+ "vanish — so this arms a watchdog: anything that throws in the next 8 seconds is "
-				+ "written to the log and the row is pulled straight back out. Use it to find the "
-				+ "reason, not as the normal mode.");
-
-			WorldListSlot = cfg.Bind("Favorites", "WorldListSlot", 3,
-				"WHICH world list to take over, by position, 0-based and in the order the sidebar "
-				+ "shows them: 0 = Favorite Worlds 1 … 3 = Favorite Worlds 4. Position rather than "
-				+ "name because VRChat only stores a name for lists you renamed yourself — the rest "
-				+ "are worlds2/worlds3/worlds4 internally and the menu derives the label.");
-
-			SocialListSlot = cfg.Bind("Favorites", "SocialListSlot", 2,
-				"WHICH friend group to take over, by position: 0 = Group 1, 1 = Group 2, "
-				+ "2 = Favorite Friends 3.");
-
-			UserFavListEnabled = cfg.Bind("Favorites", "SocialList", true,
-				"Add a VRCHAT ARCHIVE list to VRChat's SOCIAL favourites, beside your friend groups. "
-				+ "Nothing of VRChat's is overwritten. Needs the desktop client.");
-
-			AvatarFavListEnabled = cfg.Bind("Favorites", "AvatarList", false,
-				"Add a VRCHAT ARCHIVE list to the AVATAR favourites, the same way as worlds and social. "
-				+ "The avatar sidebar is composed differently from the worlds one, so this may inject "
-				+ "cleanly and still not appear — the AVATARS tab's borrowed category is what covers "
-				+ "that case. If BOTH show up you will see the name twice: turn one of them off.");
+			// THE WORLD / SOCIAL / AVATAR LIST SWITCHES ARE GONE (2026-09-01).
+			//
+			// Favorites/WorldList, SocialList, AvatarList, ForceNewSection, WorldListSlot and
+			// SocialListSlot all gated modules that are no longer registered (Plugin.cs: the grafted
+			// world/social grids were disarmed 2026-08-26/28, worlds and users are the desktop
+			// client's FAVORIS page now; AvatarFavList is off with them). The client's MOD SETTINGS
+			// page is built by reflection over these fields, so every one of them showed up as a
+			// working switch that switched nothing. The slot numbers and the ForceNewSection
+			// experiment survive as constants at the top of this class, for the day the injectors
+			// come back — the WHY next to them is the part worth keeping.
 
 			// AUTO-CLEAN IS ALWAYS ON, AND NOT A SETTING ANY MORE.
 			//
@@ -453,30 +561,31 @@ namespace VRChatArchiveMod.Core
 			// desktop client automatically (its MOD SETTINGS page is built by reflection over
 			// ModConfig's fields).
 
+			QmTextColor = cfg.Bind("QuickMenu", "TextColor", "#D3A4FF",
+				"Hex colour for VRChat's QuickMenu TEXT while the Archive theme is on (e.g. #D3A4FF). Needs ArchiveTheme on.");
+			QmGradientStart = cfg.Bind("QuickMenu", "GradientStart", "#FF6AD5",
+				"Hex colour at the TOP of the card sweep (e.g. #FF6AD5).");
+			QmGradientEnd = cfg.Bind("QuickMenu", "GradientEnd", "#8143E6",
+				"Hex colour at the BOTTOM of the card sweep (e.g. #8143E6).");
+			QmBackgroundSolid = cfg.Bind("QuickMenu", "BackgroundSolid", false,
+				"Use a SOLID colour for the QuickMenu background instead of the Archive wallpaper image. Needs SkinBackground on.");
+			QmBackgroundColor = cfg.Bind("QuickMenu", "BackgroundColor", "#0B0714",
+				"Hex colour of the solid background (used when BackgroundSolid is on), e.g. #0B0714.");
+			QmWallpaperDim = cfg.Bind("QuickMenu", "WallpaperDim", 0f,
+				"Darken the QuickMenu wallpaper, 0 = untouched, 1 = black. Applies to the image background.");
+			QmCustomBackgroundImage = cfg.Bind("QuickMenu", "CustomBackgroundImage", "",
+				"Absolute path to a PNG/JPG used as the QuickMenu wallpaper. Empty = the Archive image. The client sets this with its Choose-image button.");
 			MenuThemeEnabled = cfg.Bind("QuickMenu", "ArchiveTheme", true,
 				"Repaint VRChat's QuickMenu in the Archive's pink/violet instead of its stock teal, and "
 				+ "turn its text violet. Cards are tinted by where they sit on screen so a page sweeps "
 				+ "pink to violet — a single UI image cannot hold a gradient on its own. Reversible: "
 				+ "switching this off restores VRChat's own colours without a restart.");
-			MenuExclusive = cfg.Bind("QuickMenu", "OneMenuAtATime", true,
-				"Hide VRChat's QuickMenu while the mod menu is open, and put it back when it closes. The two draw through different systems (IMGUI vs uGUI) and share no ordering, so without this they stack on the same pixels and both take clicks.");
-			MenuRecorder = cfg.Bind("Debug", "MenuRecorder", false,
-				"TEMPORARY debugging aid: while on, every menu object you BROWSE is appended to one "
-				+ "capture file — path, components, rect, the TMP label and the sprite name. A one-shot "
-				+ "dump only ever holds the page that was open, and carried no text at all, which is "
-				+ "why objects could not be matched to what is on screen. Read-only, off by default.");
+			// QuickMenu/OneMenuAtATime is GONE (2026-09-01): it hid VRChat's QuickMenu while the
+			// mod's TAB menu was open, and that menu is sealed — the switch could never do anything.
 			// OFF by default. This walks a menu page and writes a dump file, on the main thread —
 			// a visible hitch every time you open a page you have not opened before. It is a tool
 			// for working out what VRChat's menus contain, not something a normal session should
 			// be paying for, and it shipped switched on.
-			MenuCaptureEnabled = cfg.Bind("Debug", "MenuCapture", false,
-				"Records every VRChat menu PAGE you open to its own file under captures/pages — the "
-				+ "full hierarchy with REAL component type names, plus a template section describing "
-				+ "each distinct cell and what drives it. Rebuilding VRChat's own sections means "
-				+ "cloning VRChat's own cells, and a one-shot dump only ever holds the pages that "
-				+ "happened to be open: the social grid cloned a WORLD card because the friends list "
-				+ "was closed when the dump ran. Read-only, bounded, and on by default so a normal "
-				+ "session produces the captures without anyone remembering to press anything.");
 			ModControlEnabled = cfg.Bind("Client", "ModControl", true,
 				"Let the VRChat Archive desktop client read and change these settings while the game "
 				+ "runs. The mod polls the client's loopback bridge once a second and applies whatever you "
@@ -492,22 +601,11 @@ namespace VRChatArchiveMod.Core
 				"Float: sets YOUR gravity to zero through the SDK's own SetGravityStrength. Local — gravity is simulated per client, so nobody else is affected and there is no API to change theirs.");
 			GravityWorldOff = cfg.Bind("Gravity", "WorldOff", false,
 				"Also zero Physics.gravity, so loose objects float. Local only, and it can genuinely break a world FOR YOU — lifts, physics puzzles and anything that relies on falling stop working.");
-			AudioWatchEnabled = cfg.Bind("Debug", "AudioWatch", false,
-				"Record which AudioClips actually play, with the object that played them. Observational "
-				+ "only. Always on in debug mode; this is how we found VRChat's real UI sounds.");
-			ShowDevTab = cfg.Bind("Debug", "ShowDevTab", true,
-				"Show the DEV tab in the mod menu: the capture/dump tools, the live profiler, the "
-				+ "config editor and the object browser. Separate from Debug/Enabled on purpose — "
-				+ "that one also turns on the profiler and verbose logging, which cost frame time.");
 
 			DebugMode = cfg.Bind("Debug", "Enabled", false,
 				"Debug build behaviour: per-module profiler on, health snapshot every 5s instead of 30s, verbose "
 				+ "module logging, and Unity warnings captured too. Also switches on automatically when a file "
 				+ "named DEBUG exists in BepInEx/VRChatArchiveMod/.");
-			QMConsolePink = cfg.Bind("QMConsole", "Pink", "#FF6AD5",
-				"Primary theme colour (client pink). Hex.");
-			QMConsoleViolet = cfg.Bind("QMConsole", "Violet", "#8143E6",
-				"Secondary theme colour (client violet). Hex.");
 			UdonLogOverlay = cfg.Bind("UdonLog", "Overlay", true,
 				"Draw the Udon console in-world (top-left) as well as in the menu. Local overlay only — nobody else sees it.");
 			UdonLogOverlayLines = cfg.Bind("UdonLog", "OverlayLines", 12,
@@ -525,8 +623,8 @@ namespace VRChatArchiveMod.Core
 				"Draw the WORLD under the radar blips, from a camera parked above you. OFF by default: this is the one option here that genuinely costs frames, since it renders the scene a second time.");
 			RadarMapResolution = cfg.Bind("Radar", "MapResolution", 256,
 				"Size of the map render, in pixels. It is shown inside a small radar, so bigger mostly buys cost rather than detail.");
-			RadarMapEveryFrames = cfg.Bind("Radar", "MapEveryFrames", 4,
-				"Render the map every N frames instead of every frame. The world does not move much between frames; you do, and your position comes from the blips.");
+			RadarMapEveryFrames = cfg.Bind("Radar", "MapEveryFrames", 1,
+				"Render the map picture every N map ticks (the map is rendered every frame by default (1); 2 = every other frame, and so on). Between renders the picture slides with you, so it stays continuous either way; raise this only to save GPU in a heavy world.");
 			RadarMapHeight = cfg.Bind("Radar", "MapCameraHeight", 60f,
 				"How high above you the map camera sits, in metres. Too low and a ceiling is all you see.");
 			RadarMapOpacity = cfg.Bind("Radar", "MapOpacity", 0.75f,
@@ -541,10 +639,10 @@ namespace VRChatArchiveMod.Core
 				"Height above the player's feet while orbiting, in metres.");
 			SitHeight = cfg.Bind("Orbit", "SitHeightOffset", 0.1f,
 				"Clearance above the top of the target's avatar mesh when sitting on them.");
-			ObjOrbitCount = cfg.Bind("ObjectOrbit", "Count", 24,
-				"How many of the world's props to pull into the ring.");
-			ObjOrbitRange = cfg.Bind("ObjectOrbit", "SearchRange", 25f,
-				"How far around the centre to look for props, in metres. Nearest are taken first.");
+			ObjOrbitCount = cfg.Bind("ObjectOrbit", "Count", 0,
+				new ConfigDescription("Object Orbit: MAX objects in the ring. 0 = ALL of them (default). Local rings can take up to 5000; synced (networked) rings are always capped at 40 - every owned object is its own ObjectSync stream and 24 of them once disconnected you.", new AcceptableValueRange<int>(0, 5000)));
+			ObjOrbitRange = cfg.Bind("ObjectOrbit", "SearchRange", 0f,
+				new ConfigDescription("Object Orbit: how far around the centre the props are collected, in metres. 0 = UNLIMITED (the whole world, default); set a number to cap it.", new AcceptableValueRange<float>(0f, 5000f)));
 			ObjOrbitRadius = cfg.Bind("ObjectOrbit", "RingRadius", 3f,
 				"Radius of the ring the objects fly in, in metres.");
 			ObjOrbitSpeed = cfg.Bind("ObjectOrbit", "DegreesPerSecond", 70f,
@@ -556,6 +654,15 @@ namespace VRChatArchiveMod.Core
 				+ "floor, the walls and the skybox being torn out of the world along with the furniture.");
 			ObjOrbitSpin = cfg.Bind("ObjectOrbit", "Tumble", true,
 				"Also tumble each object on its own axis while it orbits.");
+			BadAppleMusic = cfg.Bind("Mark", "BadAppleMusic", true,
+				"Play the Bad Apple!! soundtrack (embedded in the mod) with the object show, and drive the "
+				+ "picture off the music's own playback position so the two cannot drift — the networked mode "
+				+ "holds frame 0 while it takes ownership of the objects, and starting the song at the button "
+				+ "press instead left it that far ahead. Off = the show runs silently on a wall clock.");
+			BadAppleMusicVolume = cfg.Bind("Mark", "BadAppleMusicVolume", 0.7f,
+				new ConfigDescription("Volume of the Bad Apple soundtrack, 0..1. It plays locally, in your own "
+					+ "ears only — nobody else in the instance hears it.", new AcceptableValueRange<float>(0f, 1f)));
+
 			ObjOrbitSynced = cfg.Bind("ObjectOrbit", "Synced", false,
 				"EVERYONE SEES IT. Takes ownership of real pickups through the SDK's Networking.SetOwner and lets VRChat broadcast their position, the way it already does when a player carries "
 				+ "something. Restricted to VRC_Pickup objects that nobody is holding — world geometry, doors and seats are never touched — and every position is restored on stop. OFF by default, because unlike the local mode this one is other people's business too.");
@@ -566,11 +673,6 @@ namespace VRChatArchiveMod.Core
 				+ "to catch. Turning it on costs full log capture, the diagnostics Unity feed, video-URL "
 				+ "detection and avatar-card clicks -- but only turn it on if the crash is fixed.");
 
-			LogCaptureEnabled = cfg.Bind("LogCapture", "Enabled", true,
-				"Capture ALL of the game's Unity log output to a file (BepInEx/VRChatArchiveMod/logs). "
-				+ "Passive Unity log listener only — never touches Photon or any networking.");
-			LogCaptureStackTraces = cfg.Bind("LogCapture", "IncludeStackTraces", true,
-				"Also write stack traces for errors/exceptions/asserts.");
 
 			BadAppleLoop = cfg.Bind("BadApple", "Loop", true,
 				"Restart Bad Apple from the top when it finishes instead of clearing the chatbox.");
@@ -587,24 +689,13 @@ namespace VRChatArchiveMod.Core
 				"Glyph ramp used as pixels, lightest to darkest, any length (levels are rescaled). "
 				+ "Empty = the baked 32-hanzi ramp measured by tools/pick_charset.py.");
 
-			MenuCaptureInput = cfg.Bind("UI", "CaptureInput", true,
-				"While the mod menu is open, keep keyboard/mouse for the mod: frees the cursor, "
-				+ "stops VRChat's UI from receiving clicks (so its own menu can't open), and "
-				+ "neutralises movement input. Everything is restored when the menu closes. "
-				+ "Turn off if it ever conflicts with another mod. NOTE: the Alt free-cursor "
-				+ "(AltFreeCursor) overrides this while it is on, so you can walk with the menu up.");
-
+			// UI/CaptureInput, UI/AccentPreset and UI/Scale are GONE (2026-09-01). All three only
+			// ever acted on the sealed TAB menu — nothing sets Menu.Visible any more — so the
+			// desktop client was showing switches that did nothing at all. A ConfigEntry with no
+			// reader is a lie in the settings page; removing the entry removes the row.
 			AltFreeCursor = cfg.Bind("UI", "AltFreeCursor", true,
-				"Left Alt detaches the mouse from VRChat so you can move the cursor — and walk — "
-				+ "freely, without opening the menu. Tap again to hand control back to the game. "
-				+ "While it is on, the menu no longer freezes you in place.");
-
-			UiAccent = cfg.Bind("UI", "AccentPreset", 3,
-				"Menu accent color for the CONTROLS (buttons, toggles, sliders): 0=Cyan, 1=Crimson, "
-				+ "2=Green, 3=Violet, 4=Amber. Defaults to Violet so the controls match the Archive "
-				+ "chrome; the window frame itself is always Archive violet whatever you pick here.");
-			UiScale = cfg.Bind("UI", "Scale", 1.0f,
-				"Overall menu scale (0.7 - 1.4).");
+				"Hold Left Alt (or Right Alt) to detach the mouse from VRChat and move the cursor — and "
+				+ "walk — freely; release it and the game takes control back.");
 
 			SpeedEnabled = cfg.Bind("Movement", "CustomSpeed", false,
 				"Override your own walk / run / strafe / jump through VRChat's own per-player setters "
@@ -645,67 +736,73 @@ namespace VRChatArchiveMod.Core
 				"Left/Right arrow keys turn your player (works on the ground, not just while flying). "
 				+ "Speed follows RotateSpeed.");
 
-			LoadingScreenEnabled = cfg.Bind("LoadingScreen", "Enabled", true,
-				"Draw the classic 2017 VRChat loading screen over the game's own while a world loads.");
-			LoadingMusic = cfg.Bind("LoadingScreen", "Music", true,
-				"Play the 2017 loading music ('PartiallyOffline', from the real build's loading scene).");
-			LoadingMusicVolume = cfg.Bind("LoadingScreen", "MusicVolume", 0.55f,
-				"Volume of the loading music, 0 to 1.");
 
 			SpawnSoundEnabled = cfg.Bind("SpawnSound", "Enabled", true,
 				"Play a short stinger ('The Spawn Dark Squad') once each time you finish loading into an instance.");
 			SpawnSoundVolume = cfg.Bind("SpawnSound", "Volume", 0.6f,
 				"Volume of the spawn stinger, 0 to 1.");
 
-			EspEnabled = cfg.Bind("ESP", "Enabled", false,
-				"Draw a box around remote players, colored by trust rank. Visualization only — no targeting/tracking.");
-
-			// Its state has disagreed with what the client shows; make every change say where it came from.
-			Core.ConfigWatch.Watch(EspEnabled);
-			EspBox = cfg.Bind("ESP", "Box", true, "Draw the player box.");
-			EspSkeleton = cfg.Bind("ESP", "Skeleton", false,
-				"Draw a bone-to-bone skeleton over players (humanoid avatars only) instead of just the flat box.");
-			// The box is drawn from head and feet, so it is a guess at the avatar's shape: a giant
 			// Bounded on purpose: the point is to save the walk across a room, not to let one key
 			// collect every loose object in a world from the spawn point.
 			ForceGrabRange = cfg.Bind("Fun", "ForceGrabRange", 30f,
-				"How far Force Grab (RightShift+G) will reach for a pickup, in metres. Objects held "
-				+ "by another player are never taken.");
+				"How far Force Grab (the client's FUN → Force Grab button) will reach for a pickup, in "
+				+ "metres. Objects held by another player are never taken.");
 			ForceJumpForce = cfg.Bind("Fun", "ForceJumpForce", 8f,
 				"Force Jump (RightShift+J, or the client's FUN button): upward launch speed in metres/second. "
 				+ "A normal VRChat jump is about 3. Ordinary movement \u2014 others see you jump, nobody else's "
 				+ "client is touched. Clamped 1\u201350.");
+			ForcePickupRange = cfg.Bind("Fun", "ForcePickupRange", 100f,
+				"Force Pickup: the grab range, in metres, forced onto a world's locked pickups. A world that sets a tiny proximity is what stops you grabbing something you are standing next to; this raises it so VRChat offers the grab normally.");
+			PlayerGrabFollow = cfg.Bind("Fun", "PlayerGrabFollow", 1f,
+				new ConfigDescription("Player Grab: how tightly a held player follows the grabber's hand (1 = exactly, lower = laggier, higher = snappier).", new AcceptableValueRange<float>(0.2f, 3f)));
+			PlayerGrabThrowForce = cfg.Bind("Fun", "PlayerGrabThrowForce", 3f,
+				new ConfigDescription("Player Grab: throw strength - multiplies the hand's velocity when the grabber lets go (0 = just drop them).", new AcceptableValueRange<float>(0f, 8f)));
+			PlayerGrabInertia = cfg.Bind("Fun", "PlayerGrabInertia", 0.8f,
+				new ConfigDescription("Player Grab: seconds a thrown player keeps their horizontal momentum before ground friction takes over (0 = none).", new AcceptableValueRange<float>(0f, 4f)));
+			PlayerGrabReach = cfg.Bind("Fun", "PlayerGrabReach", 0.35f,
+				new ConfigDescription("Player Grab (VR): how close your hand must be to any bone of the other player for a grip to grab them, in metres.", new AcceptableValueRange<float>(0.1f, 1.5f)));
+			PlayerGrabAimRange = cfg.Bind("Fun", "PlayerGrabAimRange", 12f,
+				new ConfigDescription("Player Grab (desktop): how far GRAB PLAYER YOU AIM AT reaches, in metres.", new AcceptableValueRange<float>(2f, 40f)));
+			PlayerGrabAllowEscape = cfg.Bind("Fun", "PlayerGrabAllowEscape", true,
+				"Player Grab: a held player breaks free by moving (WASD / stick). Keep ON - it is the held player's way out.");
+			MarkArtSize = cfg.Bind("Mark", "MarkArtSize", 0f,
+				new ConfigDescription("MARK & ART: width of the object Bad Apple picture / the shapes, in metres. 0 = AUTO (objects at their natural size, edge to edge). Bigger = more space between the objects; the objects themselves are never resized. This is the only setting - object count and range are always unlimited, and the two Bad Apple buttons choose who sees it: LOCAL (only you, everything unlimited) or VRCHAT NETWORK (everyone; the grid and the move rate are chosen automatically to stay under VRChat's network limit).", new AcceptableValueRange<float>(0f, 200f)));
+			ForcePickupAllowTheft = cfg.Bind("Fun", "ForcePickupAllowTheft", false,
+				"Also clear DisallowTheft, which lets you take a pickup somebody else is holding. OFF by default: pulling an object out of another player's hands is the one part of this that affects them rather than you.");
 			ForceGrabAnyObject = cfg.Bind("Fun", "ForceGrabAnyObject", true,
 				"Force Grab also takes objects a world locked or never made pickups \u2014 a prop bolted in place, "
 				+ "a mesh with no VRC_Pickup. That path is a LOCAL carry: it moves the object on your own screen "
 				+ "only, takes no ownership and sends nothing, so it cannot be taken from anyone or change world "
 				+ "state. Off restores the old behaviour (real pickups only).");
 
-			// The capsule is a real GameObject cloned from the player's own SelectRegion and lit by
-			// HighlightsFX, so it turns and occludes like the avatar. Screen-space shapes cannot.
-			EspThroughWalls = cfg.Bind("ESP", "ThroughWalls", true,
-				"Draw capsules over the world instead of letting geometry hide them. ON is what makes "
-				+ "ESP useful — the player you cannot see is the point. The cost is that capsules no "
-				+ "longer hide each other either, so a crowd becomes overlapping glows in mixed "
-				+ "colours. Turn it OFF in busy worlds: capsules then sit in the scene properly, "
-				+ "occlude one another, and each keeps its own colour.");
-
+			// ESP — FOUR INDEPENDENT GLOWS AND TWO KNOBS. Each switch turns one thing on or off and
+			// nothing else; there is no master switch. All of them use VRChat's own highlight effect
+			// (HighlightsFX, the glow the game puts on a grabbable), so nothing is painted over the
+			// screen: the glow is real geometry that turns and occludes like the thing it marks.
+			// The 2D screen ESP (box / name / distance / skeleton drawn on screen). Back by the owner's
+			// request 2026-09-04 - "la box est vraiment utile" - as an independent switch beside the glows.
+			EspEnabled = cfg.Bind("ESP", "Enabled", false,
+				"2D screen ESP: a box around each remote player, coloured by trust rank, with the name and distance below. Independent toggle (the glows below have their own).");
+			Core.ConfigWatch.Watch(EspEnabled);
+			EspBox = cfg.Bind("ESP", "Box", true, "2D screen ESP: draw the player box.");
+			EspSkeleton = cfg.Bind("ESP", "Skeleton", false,
+				"2D screen ESP: draw a bone-to-bone skeleton over players (humanoid avatars only) instead of just the flat box.");
+			EspName = cfg.Bind("ESP", "Name", true, "2D screen ESP: show the player's display name under the box.");
+			EspDistance = cfg.Bind("ESP", "Distance", true, "2D screen ESP: show the distance in metres under the box.");
 			EspCapsule = cfg.Bind("ESP", "Capsule", false,
-				"Glowing 3D capsule around each player, in their trust colour, using VRChat's own "
-				+ "highlight effect - the one it uses for grabbable objects.");
-
-			EspPortals = cfg.Bind("ESP", "Portals", false,
-				"Mark world portals through walls, with their distance.");
-			EspItems = cfg.Bind("ESP", "Items", false,
-				"Mark grabbable pickups through walls, with their distance.");
-
-			EspName = cfg.Bind("ESP", "Name", true, "Show the player's display name.");
-			EspDistance = cfg.Bind("ESP", "Distance", true, "Show distance in meters.");
-			EspMaxDistance = cfg.Bind("ESP", "MaxDistance", 0f, "Max draw distance in meters. 0 = unlimited (all ESP types).");
+				"Glowing 3D capsule around each player, in their trust colour. Independent toggle.");
 			EspHighlight = cfg.Bind("ESP", "Highlight", false,
-				"Glow the outline of each remote player's actual avatar mesh, using VRChat's own "
-				+ "highlight effect. Follows their real shape and rotation instead of a flat box. "
-				+ "Experimental — off by default.");
+				"Glow along the outline of each player's actual avatar mesh, in their trust colour. Independent toggle.");
+			EspPortals = cfg.Bind("ESP", "Portals", false,
+				"Glow on every open portal in the world. Independent toggle; no label is drawn.");
+			EspItems = cfg.Bind("ESP", "Items", false,
+				"Glow on every grabbable pickup in the world. Independent toggle; no label is drawn.");
+			EspThroughWalls = cfg.Bind("ESP", "ThroughWalls", true,
+				"Player capsules are drawn over the world so walls never hide them. Off: capsules sit in the scene and occlude each other, which keeps colours separate in a crowd. Only affects the capsule.");
+			EspHideFromCamera = cfg.Bind("ESP", "HideFromCamera", true,
+				"Keep the ESP out of your own camera, stream and mirrors: the player capsules are drawn by your view only, and the glow effect is switched off on every other camera (photo camera, stream camera, mirror cameras). The 2D screen box never enters a camera anyway.");
+			EspMaxDistance = cfg.Bind("ESP", "MaxDistance", 0f,
+				"How far away a player still gets a capsule, in metres. 0 = unlimited. Only affects the capsule.");
 		}
 	}
 }

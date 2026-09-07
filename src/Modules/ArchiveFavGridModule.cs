@@ -59,7 +59,7 @@ namespace VRChatArchiveMod.Modules
 				Title = "ARCHIVE FAVORITES",
 				IdSource = () => WorldFavoritesModule.Snapshot(),
 				RevSource = () => WorldFavoritesModule.Revision,
-				Enabled = () => ModConfig.WorldFavListEnabled.Value,
+				Enabled = () => true,   // Favorites/WorldList went 2026-09-01; Plugin.cs decides
 				CellSize = new Vector2(288f, 250f),   // matches the native Cell_MM_World
 				ThumbAspect = 0.62f,   // 16:10-ish world card (from-scratch fallback only)
 				Columns = 4,
@@ -73,7 +73,7 @@ namespace VRChatArchiveMod.Modules
 				Title = "ARCHIVE FAVORITES",
 				IdSource = () => UserFavoritesModule.Snapshot(),
 				RevSource = () => UserFavoritesModule.Revision,
-				Enabled = () => ModConfig.UserFavListEnabled.Value,
+				Enabled = () => true,   // Favorites/SocialList went 2026-09-01; Plugin.cs decides
 				CellSize = new Vector2(288f, 250f),
 				ThumbAspect = 0.72f,   // friend-card proportions: portrait over a name + status line
 				Columns = 4,

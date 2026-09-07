@@ -1,10 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>VRChatArchiveMod</AssemblyName>
     <Product>VRCHAT ARCHIVE MOD</Product>
-    <Version>3.5.0</Version>
+    <Version>3.9.20</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
@@ -40,20 +40,29 @@
     <EmbeddedResource Include="ressources\sb_gay.wav"><LogicalName>sb_gay.wav</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\sb_mambo.wav"><LogicalName>sb_mambo.wav</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\sb_mambo.png"><LogicalName>sb_mambo.png</LogicalName></EmbeddedResource>
+    <!-- The Bad Apple soundtrack for the object show, as mono 22.05 kHz 16-bit PCM: this IL2CPP
+         build has no MP3 decoder at all (see Core/WavAudio), so a WAV is the only thing that can
+         be played. 9.7 MB for 3:39 — the single biggest thing in this DLL, and deliberate: the
+         picture is driven off this clip's playback position, so it has to travel with the mod. -->
+    <EmbeddedResource Include="ressources\badapple.wav"><LogicalName>badapple.wav</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\5560-heart-rem.png"><LogicalName>5560-heart-rem.png</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\logo_archive.jpg"><LogicalName>logo_archive.jpg</LogicalName></EmbeddedResource>
-    <!-- Era artwork actually drawn by the 2017 loading screen (see EraLoadingModule). -->
-    <EmbeddedResource Include="ressources\era\l17_dashring.png"><LogicalName>era_l17_dashring.png</LogicalName></EmbeddedResource>
-    <EmbeddedResource Include="ressources\era\l17_midring.png"><LogicalName>era_l17_midring.png</LogicalName></EmbeddedResource>
-    <EmbeddedResource Include="ressources\era\l17_ringglow.png"><LogicalName>era_l17_ringglow.png</LogicalName></EmbeddedResource>
-    <EmbeddedResource Include="ressources\era\l17_wave.png"><LogicalName>era_l17_wave.png</LogicalName></EmbeddedResource>
-    <EmbeddedResource Include="ressources\era\l17_diamond.png"><LogicalName>era_l17_diamond.png</LogicalName></EmbeddedResource>
-    <EmbeddedResource Include="ressources\era\logo.png"><LogicalName>era_logo.png</LogicalName></EmbeddedResource>
-    <EmbeddedResource Include="ressources\era\music2017.wav"><LogicalName>era_music2017.wav</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\spawn_darksquad.wav"><LogicalName>spawn_darksquad.wav</LogicalName></EmbeddedResource>
+    <!-- Wallpapers behind the two QuickMenu side panels (Core/PanelSkin.cs). Cropped to the panel's
+         own aspect (420x900, rendered 630x1350 for VR sharpness) and kept as JPEG deliberately: the
+         same art as PNG costs 2.3 MB of DLL against 351 KB here, and the panel paints its own dark
+         veil over them, so an alpha channel would buy nothing. -->
+    <EmbeddedResource Include="ressources\va_panel_players.jpg"><LogicalName>va_panel_players.jpg</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\va_panel_log.jpg"><LogicalName>va_panel_log.jpg</LogicalName></EmbeddedResource>
+    <!-- Kawaii Studio mark, shown in the Launch Pad console header. -->
+    <EmbeddedResource Include="ressources\kawaii_logo.png"><LogicalName>kawaii_logo.png</LogicalName></EmbeddedResource>
+    <!-- Alert played when a watchlist user (the super-RGB ESP ones) joins your instance. -->
+    <EmbeddedResource Include="ressources\watch_join.wav"><LogicalName>watch_join.wav</LogicalName></EmbeddedResource>
     <!-- Pre-baked Bad Apple!! chatbox frames + hanzi grey ramp (tools/bake_badapple.py, tools/pick_charset.py). -->
     <EmbeddedResource Include="ressources\badapple.frames"><LogicalName>badapple.frames</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\badapple.charset"><LogicalName>badapple.charset</LogicalName></EmbeddedResource>
+    <!-- Object-art Bad Apple: 64x48 at 100 ms, gzipped (tools/bake_badapple.py with width 64, height 48, interval 100 ms, fit stretch, sep none, max-chars 1000000). -->
+    <EmbeddedResource Include="ressources\badapple_hd.frames.gz"><LogicalName>badapple_hd.frames.gz</LogicalName></EmbeddedResource>
   </ItemGroup>
 
 </Project>

@@ -35,6 +35,15 @@ namespace VRChatArchiveMod.Modules
 
 		public static bool Playing => _playing;
 
+		/// <summary>The baked frames, for other renderers (the Mark module's object Bad Apple).</summary>
+		internal static bool TryGetFrames(out string[] frames, out int w, out int h, out int intervalMs)
+		{
+			frames = null; w = h = intervalMs = 0;
+			if (!EnsureFramesLoaded()) return false;
+			frames = _frames; w = _w; h = _h; intervalMs = _bakedIntervalMs;
+			return frames != null && frames.Length > 0;
+		}
+
 		private static volatile bool _playing;
 		private static Thread _thread;
 		private static ManualResetEventSlim _stopSignal;

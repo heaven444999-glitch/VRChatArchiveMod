@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using VRChatArchiveMod.Core;
 
@@ -22,6 +22,9 @@ namespace VRChatArchiveMod.Modules
 		public override string Name => "ForceGrab";
 
 		public static string Status = "";
+		// Read by ModControlModule.BuildSync (main thread) and sent to the client as
+		// "forceGrab" / "forceGrabName", which is how the client's button knows to say DROP <name>.
+		// Both are Unity-null aware: a held object destroyed by the world reads as not held.
 		public static bool Holding => _held != null || _heldRaw != null;
 		public static string HeldName = "";
 
@@ -54,15 +57,23 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				bool combo = Input.GetKey(KeyCode.RightShift) && Input.GetKey(KeyCode.G);
+				// RightShift+G now belongs to FORCE PICKUP, which is what people actually want from a
+				// 'grab' key: it unlocks the world's pickups so you hold them for real. This older
+				// teleport-it-in-front-of-you carry has NO hotkey: the client's FUN → Force Grab
+				// button sends "forceGrab" (ModControlModule → Toggle()) and reads Holding/HeldName
+				// back from the sync to label itself GRAB or DROP. The combo below is kept false on
+				// purpose so nobody re-binds it onto a key another module already owns.
+				bool combo = false;
 				if (combo && !_wasDown) Toggle();
 				_wasDown = combo;
 
 				if (_held == null) return;
 
-				// USE. Left click while holding, the same button that uses a pickup normally.
-				// Skipped while the mod menu is open, where the mouse belongs to the menu.
-				bool use = !Menu.Visible && Input.GetMouseButton(0);
+				// USE. Left click while holding, the same button that uses a pickup normally. The
+				// old `!Menu.Visible` guard is gone: that IMGUI menu is sealed and can never be
+				// visible, so the check was always true and only read as if a menu could still
+				// claim the mouse. The grab/drop button itself lives in the desktop client (FUN tab).
+				bool use = Input.GetMouseButton(0);
 				if (use && !_useWasDown) Fire(EvUseDown);
 				else if (!use && _useWasDown) Fire(EvUseUp);
 				_useWasDown = use;
@@ -165,8 +176,12 @@ namespace VRChatArchiveMod.Modules
 					float bestAngle = maxAngle;
 					try
 					{
-						foreach (var p in UnityEngine.Object.FindObjectsOfType<VRC.SDKBase.VRC_Pickup>())
+						// Non-generic enumeration: FindObjectsOfType<VRC_Pickup>() is empty on this build (see ForcePickup).
+						var il2g = Il2CppInterop.Runtime.Il2CppType.Of<VRC.SDKBase.VRC_Pickup>();
+						var foundG = UnityEngine.Object.FindObjectsOfType(il2g);
+						for (int gi = 0; foundG != null && gi < foundG.Length; gi++)
 						{
+							var p = foundG[gi] != null ? foundG[gi].TryCast<VRC.SDKBase.VRC_Pickup>() : null;
 							if (p == null || p.transform == null) continue;
 							bool held = false;
 							try { held = p.IsHeld; } catch { }
@@ -221,7 +236,7 @@ namespace VRChatArchiveMod.Modules
 				catch { }
 
 				Fire(EvPickup);
-				Status = "holding " + Trunc(HeldName, 30) + "  ·  click to use, RShift+G to drop";
+				Status = "holding " + Trunc(HeldName, 30) + "  ·  click to use, press the client button to drop";
 				VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] grabbed {HeldName} at {bestD:F1}m");
 			}
 			catch (Exception e)
@@ -271,7 +286,7 @@ namespace VRChatArchiveMod.Modules
 				HeldName = t.name ?? "?";
 				_rawBody = chosen.collider.attachedRigidbody;
 				if (_rawBody != null) { _rawWasKinematic = _rawBody.isKinematic; _rawBody.isKinematic = true; }
-				Status = "holding " + Trunc(HeldName, 30) + " (locked \u2014 local carry)  \u00b7  RShift+G to drop";
+				Status = "holding " + Trunc(HeldName, 30) + " (locked \u2014 local carry)  \u00b7  press the client button to drop";
 				VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] raw-grabbed {HeldName} at {bestD:F1}m (local carry, no networking).");
 				return true;
 			}

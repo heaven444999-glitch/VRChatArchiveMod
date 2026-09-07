@@ -25,6 +25,11 @@ namespace VRChatArchiveMod.Core
 
 		public static Mode Current { get; private set; } = Mode.None;
 		public static string AccountName = "";       // display name of the connected VA account
+		/// <summary>Archive access level of the connected account (5+ Legendary, 4 VIP, 3 Premium,
+		/// 2 Supporter, 1 Free, 0 none). -1 = not known: no bridge, or a client too old to send it —
+		/// the rank badge leaves everything alone on -1 rather than guessing.</summary>
+		public static int AccountLevel = -1;
+		public static bool AccountAdmin;             // the account carries the admin flag
 		public static string LastError = "";
 		public static bool Busy { get; private set; } // a login is in flight
 
@@ -85,12 +90,23 @@ namespace VRChatArchiveMod.Core
 						{
 							AccountName = (r.TryGetProperty("archiveUser", out var au) && au.ValueKind == JsonValueKind.String)
 								? (au.GetString() ?? "client") : "client";
+							// The tier the account holds, straight from the client — the only side that
+							// knows it. -1 means "an older client that does not send the field", which
+							// the rank badge reads as "don't touch anything": updating the mod alone can
+							// never strip somebody's badge.
+							AccountLevel = (r.TryGetProperty("archiveLevel", out var al) && al.ValueKind == JsonValueKind.Number && al.TryGetInt32(out int lv)) ? lv : -1;
+							AccountAdmin = r.TryGetProperty("archiveAdmin", out var ad) && ad.ValueKind == JsonValueKind.True;
 							_probeFailures = 0;
 							Current = Mode.ClientBridge;
 							return;
 						}
 						// DEFINITIVE negative: the bridge answered but isn't logged in / can't proxy.
 						// Demote immediately (this is real state, not a blip).
+						// Level 0 only when nothing else is holding an account: signed out IS the
+						// answer, and it is what takes the rank badge off. A mod-side login stays at
+						// -1 because that path never learns the tier.
+						AccountLevel = string.IsNullOrEmpty(_cookie) ? 0 : -1;
+						AccountAdmin = false;
 						_probeFailures = 0;
 						Current = !string.IsNullOrEmpty(_cookie) ? Mode.ModLogin : Mode.None;
 						return;

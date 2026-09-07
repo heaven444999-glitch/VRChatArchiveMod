@@ -70,6 +70,30 @@ namespace VRChatArchiveMod.Core
 			return t;
 		}
 
+		// The RAW bytes of an embedded image, for handing a picture to something that is not Unity \u2014
+		// the desktop client, which draws the soundboard icons itself and cannot read a Texture2D.
+		// Cached: the same few icons are asked for on a timer.
+		private static readonly System.Collections.Generic.Dictionary<string, byte[]> RawCache =
+			new System.Collections.Generic.Dictionary<string, byte[]>();
+
+		public static byte[] RawBytes(string resourceName)
+		{
+			if (string.IsNullOrEmpty(resourceName)) return null;
+			if (RawCache.TryGetValue(resourceName, out var cached)) return cached;
+			byte[] data = null;
+			try
+			{
+				using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
+				{
+					if (s != null)
+						using (var ms = new MemoryStream()) { s.CopyTo(ms); data = ms.ToArray(); }
+				}
+			}
+			catch { }
+			RawCache[resourceName] = data;
+			return data;
+		}
+
 		private static Texture2D Load(string resourceName)
 		{
 			try

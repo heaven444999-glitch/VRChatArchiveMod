@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using HarmonyLib;
@@ -139,6 +139,28 @@ namespace VRChatArchiveMod.Modules
 		// Runs on the game thread for every bundle request, so it stays cheap and it NEVER throws:
 		// an exception here would propagate through the Il2Cpp trampoline and abandon the whole
 		// call, which would look like avatars silently failing to load.
+		private static string Trunc(string s, int n)
+			=> string.IsNullOrEmpty(s) ? "" : (s.Length <= n ? s : s.Substring(0, n - 1) + "\u2026");
+
+		// BUNDLE GUARD counters, surfaced in the Protection page so the switch can prove it works.
+		public static int Blocked;
+		public static string LastBlocked = "";
+
+		// VRChat serves its content from its own CDN. A bundle arriving from anywhere else was not
+		// put there by VRChat, and a file:// uri we did not write ourselves is somebody handing the
+		// loader a local path. Neither is normal traffic, so the guard refuses them.
+		private static bool SourceLooksSane(string uri)
+		{
+			if (string.IsNullOrEmpty(uri)) return false;
+			if (uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return true;   // our own cache redirect
+			if (!uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return false;
+			return uri.IndexOf("vrchat.com", StringComparison.OrdinalIgnoreCase) >= 0
+			    || uri.IndexOf("vrchat.cloud", StringComparison.OrdinalIgnoreCase) >= 0
+			    || uri.IndexOf("vrchat.net", StringComparison.OrdinalIgnoreCase) >= 0
+			    || uri.IndexOf("amazonaws.com", StringComparison.OrdinalIgnoreCase) >= 0    // VRChat's S3 buckets
+			    || uri.IndexOf("cloudfront.net", StringComparison.OrdinalIgnoreCase) >= 0;  // and its CDN
+		}
+
 		private static void GetAssetBundlePrefix(
 			ref string uri,
 			ref CachedAssetBundle cachedAssetBundle,
@@ -171,6 +193,39 @@ namespace VRChatArchiveMod.Modules
 						"[AssetBundlePatch] " + Cleared + " bundles passed through, " + Redirected + " served locally.");
 				}
 
+				// ---- BUNDLE GUARD ----------------------------------------------------------
+				//
+				// What this can and cannot do, honestly: at this point the bundle has not been
+				// downloaded yet, so there is nothing to inspect INSIDE it. What is knowable is where
+				// it comes from and whether the integrity check is on \u2014 and those are exactly the two
+				// things that make a corrupted or planted bundle fail safely instead of being parsed.
+				// What a bundle DOES once loaded is AntiCrashModule's job, and it already does it.
+				// The guard is one vector of ANTI-CRASH, so the master switch gates it too: with the
+				// master off, "off" has to mean off everywhere, not "off except for downloads".
+				bool guard = true;
+				try { guard = ModConfig.AntiCrashEnabled.Value && ModConfig.BundleGuardEnabled.Value; } catch { }
+				if (guard)
+				{
+					// KEEP THE CRC CHECK. Unity verifies the download against the CRC VRChat passes;
+					// with it on, a truncated or tampered bundle is rejected by the loader rather than
+					// handed to the asset parser. We never turn it off, and we turn it back ON if
+					// anything upstream cleared it.
+					try { if (ModConfig.BundleGuardKeepValidation.Value && crc != 0) enableValidation = true; }
+					catch { }
+
+					if (!SourceLooksSane(uri))
+					{
+						Blocked++;
+						LastBlocked = Trunc(uri, 90);
+						VRChatArchiveModPlugin.Logger.LogWarning(
+							"[BundleGuard] refused a bundle from an unexpected source: " + LastBlocked);
+						// Point it at nothing rather than throwing: the loader reports a failed download,
+						// which is a path VRChat already handles, instead of us raising inside its stack.
+						uri = "";
+						return;
+					}
+				}
+
 				if (_cacheRoot == null || cachedAssetBundle == null) return;
 
 				Hash128 hash = cachedAssetBundle.hash;
@@ -181,6 +236,27 @@ namespace VRChatArchiveMod.Modules
 
 				string[] files = Directory.GetFiles(folder);
 				if (files.Length == 0) return;
+
+				// A cache entry we are about to hand the loader as truth: an empty file is a failed
+				// write, and one far past any real avatar is a broken entry or a decompression bomb.
+				// Either way, better to let VRChat download it again than to feed the parser garbage.
+				try
+				{
+					if (ModConfig.AntiCrashEnabled.Value && ModConfig.BundleGuardEnabled.Value)
+					{
+						var fi = new FileInfo(files[0]);
+						int maxMb = ModConfig.BundleGuardMaxMb.Value;
+						if (fi.Length == 0 || (maxMb > 0 && fi.Length > (long)maxMb * 1024L * 1024L))
+						{
+							Blocked++;
+							LastBlocked = "cached file " + (fi.Length / 1048576L) + " MB";
+							VRChatArchiveModPlugin.Logger.LogWarning(
+								"[BundleGuard] ignoring a bad cache entry (" + LastBlocked + "), letting VRChat re-download: " + folder);
+							return;
+						}
+					}
+				}
+				catch { }
 
 				uri = "file://" + files[0];
 				Redirected++;

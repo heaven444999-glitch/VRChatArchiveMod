@@ -33,8 +33,8 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				if (!ModConfig.UserFavListEnabled.Value) return;
-
+				// No config gate: Favorites/SocialList went 2026-09-01. Whether this runs at all is
+				// decided by its Register line in Plugin.cs (currently disarmed).
 				float now = Time.realtimeSinceStartup;
 				if (now < _next) return;
 

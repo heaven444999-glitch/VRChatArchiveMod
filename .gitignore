@@ -41,3 +41,6 @@ captures/
 # ---------------------------------------------------------------------------
 __pycache__/
 *.pyc
+
+# Editor/perf scratch copies kept beside a file while tuning it — never part of a build.
+*.bak-*

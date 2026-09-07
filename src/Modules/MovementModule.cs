@@ -142,15 +142,26 @@ namespace VRChatArchiveMod.Modules
 			}
 		}
 
-		// Arrow-key turning. Three ways to rotate a player, tried in order, because
+		// Arrow-key turning. Four ways to rotate a player, tried in order, because
 		// transform.rotation alone only spins the avatar MESH — the player and the desktop
 		// view keep facing the old way, which is exactly why turning did nothing:
-		//   1. VRCPlayerApi.TeleportTo(pos, rot)  — the SDK's sanctioned orientation setter
-		//   2. VRCPlayer's own (Vector3, Quaternion) teleport
-		//   3. transform rotation on the whole rig (last resort)
+		//   0. TeleportTo(pos, rot, AlignPlayerWithSpawnPoint, lerpOnRemote: true) — the call
+		//      OrbitModule turns the player with every frame, and the one that visibly works: the
+		//      spawn-point orientation makes VRChat align the VIEW (desktop camera yaw) with the
+		//      rotation, and lerpOnRemote keeps other clients from snapping. The plain 2-argument
+		//      overload below is a SNAP by contract and stopped turning the desktop view on this
+		//      build (it changed GetRotation() for one frame and the camera took it straight back).
+		//   1. NeckMouseRotator, the desktop MOUSE-LOOK component itself (found on the local
+		//      VRCPlayer through GamelikeInputController, the way EvilEye's HeadFlipper reaches it).
+		//      It keeps its own yaw and re-applies it every frame, which is why an outside rotation
+		//      can be "taken back"; its public (Vector3) method is fed the yaw delta like a mouse move.
+		//   2. VRCPlayerApi.TeleportTo(pos, rot)  — the old sanctioned setter, kept as fallback
+		//   3. VRCPlayer's own (Vector3, Quaternion) teleport
+		//   4. transform rotation on the whole rig (last resort)
 		// Whichever moves GetRotation() is remembered and used from then on. Pitch is not
 		// offered: VRChat keeps players upright, so tilting leaves the rig crooked.
 		private int _rotMethod = -1;      // -1 = not chosen yet
+		private float _nextRotProbe;
 		private bool _rotLogged;
 
 		private void UpdateRotate()
@@ -182,7 +193,7 @@ namespace VRChatArchiveMod.Modules
 			Quaternion target = Quaternion.AngleAxis(yaw, Vector3.up) * Quaternion.LookRotation(fwd.normalized, Vector3.up);
 
 			int first = _rotMethod >= 0 ? _rotMethod : 0;
-			int last = _rotMethod >= 0 ? _rotMethod : 2;
+			int last = _rotMethod >= 0 ? _rotMethod : 4;
 			for (int m = first; m <= last; m++)
 			{
 				if (!TryRotate(m, api, pos, target)) continue;
@@ -191,6 +202,12 @@ namespace VRChatArchiveMod.Modules
 				Quaternion after;
 				try { after = api.GetRotation(); } catch { after = before; }
 				bool moved = Quaternion.Angle(after, before) > 0.01f;
+				float nowP = Time.realtimeSinceStartup;
+				if (nowP >= _nextRotProbe)
+				{
+					_nextRotProbe = nowP + 1f;
+					VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate probe: method #" + m + " asked " + yaw.ToString("F2") + " deg, heading " + before.eulerAngles.y.ToString("F1") + " -> " + after.eulerAngles.y.ToString("F1") + (moved ? "" : " (NO CHANGE)"));
+				}
 				if (moved || _rotMethod >= 0)
 				{
 					if (_rotMethod < 0)
@@ -206,7 +223,7 @@ namespace VRChatArchiveMod.Modules
 			if (_rotMethod < 0 && !_rotLogged)
 			{
 				_rotLogged = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[Movement] rotate: none of the 3 methods changed GetRotation() — turning unavailable on this build.");
+				VRChatArchiveModPlugin.Logger.LogWarning("[Movement] rotate: none of the 5 methods changed GetRotation() — turning unavailable on this build.");
 			}
 		}
 
@@ -217,9 +234,20 @@ namespace VRChatArchiveMod.Modules
 				switch (method)
 				{
 					case 0:
-						api.TeleportTo(pos, target);
+						api.TeleportTo(pos, target, VRC.SDKBase.VRC_SceneDescriptor.SpawnOrientation.AlignPlayerWithSpawnPoint, true);
 						return true;
 					case 1:
+					{
+						// Signed yaw delta from the current heading to the target heading, fed like a mouse move.
+						Quaternion cur = api.GetRotation();
+						Vector3 a = cur * Vector3.forward, b = target * Vector3.forward; a.y = 0f; b.y = 0f;
+						float delta = Vector3.SignedAngle(a.normalized, b.normalized, Vector3.up);
+						return NeckRotate(delta);
+					}
+					case 2:
+						api.TeleportTo(pos, target);
+						return true;
+					case 3:
 					{
 						var local = PlayerRef.LocalPlayer();
 						object vp = local == null ? null : FewTagsModule.GetMemberByTypeName(local, "VRCPlayer", "_vrcplayer", "prop_VRCPlayer_0", "field_Private_VRCPlayer_0");
@@ -249,6 +277,73 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				VRChatArchiveModPlugin.Logger.LogWarning($"[Movement] rotate method #{method} threw: {e.Message}");
+				return false;
+			}
+		}
+
+		// THE MOUSE-LOOK PATH. GamelikeInputController (desktop locomotion) holds a NeckMouseRotator,
+		// the component the mouse drives. Everything is resolved by TYPE NAME, never by the generated
+		// member names, which change per build: the controller is found among the local player's
+		// Behaviours by il2cpp class name, the rotator is the controller's member whose type is
+		// NeckMouseRotator, and the call is its public method with exactly one Vector3 parameter
+		// (yaw goes in .y, the axis the mouse X moves). Semantics are probed, not assumed: the
+		// caller checks GetRotation() moved, and the once-a-second probe logs the headings.
+		private static object _neck;                      // the NeckMouseRotator proxy
+		private static System.Reflection.MethodInfo _neckTurn;
+		private static bool _neckResolved;
+		private static bool NeckRotate(float yawDegrees)
+		{
+			try
+			{
+				if (!_neckResolved)
+				{
+					_neckResolved = true;
+					var local = PlayerRef.LocalPlayer();
+					if (local == null) return false;
+					Transform root = local.transform; int guard = 0;
+					while (root.parent != null && guard++ < 32) root = root.parent;
+					object ctl = null;
+					foreach (var b in root.GetComponentsInChildren<Behaviour>(true))
+					{
+						if (b == null) continue;
+						string n; try { n = MenuCard.Il2CppNameOf(b); } catch { continue; }
+						if (n != "GamelikeInputController") continue;
+						Type ct = null;
+						foreach (var asm in AppDomain.CurrentDomain.GetAssemblies()) { try { ct = asm.GetType("GamelikeInputController", false); } catch { } if (ct != null) break; }
+						if (ct == null) break;
+						var tryCast = typeof(Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase).GetMethod("TryCast").MakeGenericMethod(ct);
+						ctl = tryCast.Invoke(b, null);
+						break;
+					}
+					if (ctl == null) { VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate: no GamelikeInputController on the local player (VR, or renamed)."); return false; }
+					foreach (var pi in ctl.GetType().GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
+					{
+						if (pi.PropertyType.Name != "NeckMouseRotator") continue;
+						try { _neck = pi.GetValue(ctl); } catch { }
+						if (_neck != null) break;
+					}
+					if (_neck == null) { VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate: GamelikeInputController has no NeckMouseRotator member."); return false; }
+					foreach (var mi in _neck.GetType().GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+					{
+						var ps = mi.GetParameters();
+						if (ps.Length == 1 && ps[0].ParameterType == typeof(Vector3) && mi.ReturnType == typeof(void) && !mi.Name.Contains("PDM")) { _neckTurn = mi; break; }
+					}
+					if (_neckTurn == null)
+						foreach (var mi in _neck.GetType().GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+						{
+							var ps = mi.GetParameters();
+							if (ps.Length == 1 && ps[0].ParameterType == typeof(Vector3) && mi.ReturnType == typeof(void)) { _neckTurn = mi; break; }
+						}
+					VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate: NeckMouseRotator " + (_neckTurn != null ? "reached via " + _neckTurn.Name : "has no (Vector3) method"));
+				}
+				if (_neck == null || _neckTurn == null) return false;
+				_neckTurn.Invoke(_neck, new object[] { new Vector3(0f, yawDegrees, 0f) });
+				return true;
+			}
+			catch (Exception e)
+			{
+				VRChatArchiveModPlugin.Logger.LogWarning("[Movement] rotate: neck path threw: " + e.Message);
+				_neckTurn = null;
 				return false;
 			}
 		}

@@ -38,6 +38,15 @@ namespace VRChatArchiveMod.Modules
 		private GUIStyle _label;
 		private static int _lastFrame = -1;
 
+		// NEAREST-N CAP. ESP draws in OnGui every frame, so it cannot be time-throttled without the
+		// boxes flickering. Instead only the EspCap closest players are drawn each frame: the per-
+		// player projection + skeleton work is what froze the main thread (profiler: 467 ms/s at 30
+		// players), and a freeze that deep drops you from the instance to your home. Anyone past the
+		// cap is distant clutter; nearest-first means the readable ones are always the ones drawn.
+		private const int EspCap = 24;
+		private static int[] _order;
+		private static float[] _distBuf;
+
 		public override void OnGui()
 		{
 			try
@@ -76,18 +85,36 @@ namespace VRChatArchiveMod.Modules
 				// that. Computed one time per frame, not per player.
 				var frustum = GeometryUtility.CalculateFrustumPlanes(cam);
 
+				// PRE-PASS: collect every non-local player inside the distance cap, then keep only the
+				// EspCap nearest. GetPosition is cheap; the projection, bone fetches and line drawing
+				// below are not, so bounding how many players reach them is what keeps a full instance
+				// from freezing the frame. Sorting a few dozen floats per frame is nothing next to that.
+				if (_order == null || _order.Length < count) { _order = new int[count]; _distBuf = new float[count]; }
+				int m = 0;
 				for (int i = 0; i < count; i++)
+				{
+					VRCPlayerApi a;
+					try { a = players[i]; } catch { continue; }
+					if (a == null || a.isLocal) continue;
+					Vector3 fp;
+					try { fp = a.GetPosition(); } catch { continue; }
+					float d = Vector3.Distance(camPos, fp);
+					if (maxDist > 0f && d > maxDist) continue;   // 0 = unlimited
+					_order[m] = i; _distBuf[m] = d; m++;
+				}
+				if (m > 1) Array.Sort(_distBuf, _order, 0, m);   // nearest first; _order follows _distBuf
+				int drawCount = Mathf.Min(m, EspCap);
+
+				for (int k = 0; k < drawCount; k++)
 				{
 					try
 					{
-						VRCPlayerApi api = players[i];
+						VRCPlayerApi api = players[_order[k]];
 						if (api == null || api.isLocal) continue;
 
-						Vector3 feet = api.GetPosition();
-						float dist = Vector3.Distance(camPos, feet);
-						// 0 (or less) = UNLIMITED. The frustum cull below still rejects anyone off
-						// screen, so uncapped distance costs nothing for players you cannot see.
-						if (maxDist > 0f && dist > maxDist) continue;
+						Vector3 feet;
+						try { feet = api.GetPosition(); } catch { continue; }
+						float dist = _distBuf[k];
 
 						// Roughly a person-sized box at the feet; if none of it is in view, skip the
 						// whole player before touching the avatar.
@@ -170,7 +197,37 @@ namespace VRChatArchiveMod.Modules
 
 		// --- trust rank ---
 
+		// CACHED PER APIUser. Every has*TrustLevel, hasSuperPowers and developerType read below is
+		// a native getter (il2cpp_runtime_invoke plus a boxed return) — three to ten crossings per
+		// player per frame, plus the string marshal IsRainbow pays for u.id when the rainbow list
+		// is set — for a rank that changes essentially never. Keyed by the il2cpp pointer of the
+		// APIUser that ApiUsers already hands back for a second (Boehm GC does not move objects);
+		// the pointer is only a key, never dereferenced. The rainbow VERDICT is cached, the colour
+		// itself is not, so the spectrum still cycles every frame.
+		private sealed class TrustEntry { public Color C; public bool Rainbow; public float At; }
+		private static readonly Dictionary<IntPtr, TrustEntry> _trust = new Dictionary<IntPtr, TrustEntry>();
+		private const float TrustTtl = 1f;
+
 		private static Color TrustColor(APIUser u)
+		{
+			try
+			{
+				if (u == null) return CVisitor;
+				IntPtr key;
+				try { key = u.Pointer; } catch { return TrustColorUncached(u); }
+				float now = Time.realtimeSinceStartup;
+				if (_trust.TryGetValue(key, out var e) && e != null && now - e.At < TrustTtl)
+					return e.Rainbow ? Core.TrustKit.Spectrum() : e.C;
+				bool rainbow = Core.TrustKit.IsRainbow(u);
+				Color c = rainbow ? Core.TrustKit.Spectrum() : TrustColorUncached(u);
+				if (_trust.Count > 512) _trust.Clear();   // players come and go; never let it grow unbounded
+				_trust[key] = new TrustEntry { C = c, Rainbow = rainbow, At = now };
+				return c;
+			}
+			catch { return CVisitor; }
+		}
+
+		private static Color TrustColorUncached(APIUser u)
 		{
 			try
 			{
@@ -476,6 +533,12 @@ namespace VRChatArchiveMod.Modules
 				try { centre = api.GetPosition() + Vector3.up; } catch { centre = Vector3.zero; }
 				const float maxBoneDist = 3f;
 
+				// ONE Screen.height PER SKELETON. It is a native static getter (il2cpp_runtime_invoke
+				// plus a boxed int) and it was read once per bone and twice per segment — ~49 crossings
+				// per player per frame for a number that cannot change mid-frame.
+				float screenH = Screen.height;
+				float maxSegSq = (screenH * 0.33f) * (screenH * 0.33f);
+
 				for (int i = 0; i < BoneList.Length; i++)
 				{
 					ProjOk[i] = false;
@@ -486,21 +549,45 @@ namespace VRChatArchiveMod.Modules
 						continue;                                    // glitched bone flung off the body
 					Vector3 s = cam.WorldToScreenPoint(w);
 					if (s.z <= 0f) continue;                         // behind the camera
-					Proj[i] = new Vector2(s.x, Screen.height - s.y);
+					Proj[i] = new Vector2(s.x, screenH - s.y);
 					ProjOk[i] = true;
 				}
 
-				int n = Bones.GetLength(0);
-				for (int i = 0; i < n; i++)
+				// SHARED GUI STATE HOISTED OUT OF THE LINE LOOP. All 16 segments use one colour, one
+				// base matrix and one texture, but DrawLine paid a GUI.matrix get, two GUI.color sets
+				// and a GuiKit.Pixel (a UnityEngine.Object null-compare, itself a native call) per
+				// segment — five of its seven crossings for state that does not change between lines.
+				// Each segment is still the same 1×len quad rotated about the same pivot, drawn in the
+				// same order, so the pixels are identical; the finally restores the matrix even if a
+				// draw throws, which DrawLine did not.
+				Matrix4x4 saved = GUI.matrix;
+				Texture2D px = GuiKit.Pixel;
+				GUI.color = col;
+				try
 				{
-					if (!BoneIndex.TryGetValue(Bones[i, 0], out int ia)) continue;
-					if (!BoneIndex.TryGetValue(Bones[i, 1], out int ib)) continue;
-					if (!ProjOk[ia] || !ProjOk[ib]) continue;
-					// A real bone segment on screen is short. If two projected bones are more than a
-					// third of the screen apart, one of them is a bad projection — skip the segment
-					// rather than draw a streak across the view.
-					if ((Proj[ia] - Proj[ib]).sqrMagnitude > (Screen.height * 0.33f) * (Screen.height * 0.33f)) continue;
-					DrawLine(Proj[ia], Proj[ib], col, 1.6f);
+					int n = Bones.GetLength(0);
+					for (int i = 0; i < n; i++)
+					{
+						if (!BoneIndex.TryGetValue(Bones[i, 0], out int ia)) continue;
+						if (!BoneIndex.TryGetValue(Bones[i, 1], out int ib)) continue;
+						if (!ProjOk[ia] || !ProjOk[ib]) continue;
+						// A real bone segment on screen is short. If two projected bones are more than a
+						// third of the screen apart, one of them is a bad projection — skip the segment
+						// rather than draw a streak across the view.
+						Vector2 a = Proj[ia], d = Proj[ib] - a;
+						if (d.sqrMagnitude > maxSegSq) continue;
+						// Same quad DrawLine emits (width 1.6, centred on the segment), same guards.
+						float len = d.magnitude;
+						if (len < 0.5f || len > 6000f) continue;
+						GUIUtility.RotateAroundPivot(Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg, a);
+						GUI.DrawTexture(new Rect(a.x, a.y - 0.8f, len, 1.6f), px);
+						GUI.matrix = saved;
+					}
+				}
+				finally
+				{
+					GUI.matrix = saved;
+					GUI.color = Color.white;
 				}
 			}
 			catch { }

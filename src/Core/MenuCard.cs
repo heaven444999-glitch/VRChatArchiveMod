@@ -92,17 +92,16 @@ namespace VRChatArchiveMod.Core
 				btn.targetGraphic = bgImg != null ? (Graphic)bgImg : g;
 				btn.interactable = true;
 
-				// With StyleElement alive, VRChat drives the visuals; a ColorTint of ours on the same
-				// graphic would just fight it every time the game restyles the page.
-				if (keepStyle)
-				{
-					btn.transition = Selectable.Transition.None;
-				}
-				else
-				{
-					btn.transition = Selectable.Transition.ColorTint;
-					btn.colors = Tint(lit ? On : Bg);
-				}
+				// ALWAYS ColorTint. Transition.None under keepStyle left our cards with no hover and
+				// no press feedback at all — a tile you could click that never reacted, which reads
+				// as "the button does nothing" even when the click went through. StyleElement only
+				// paints the Background's base colour; a ColorTint on the same Button multiplies
+				// the hover/pressed shade on top of it, so the two never fight. Under keepStyle the
+				// block is a WHITE tint (normal = untouched, hover/press = brighter), so the colour
+				// VRChat (or MenuThemeModule) chose is what shows at rest. Never
+				// ColorBlock.defaultColorBlock here — see Tint() for why that static read throws.
+				btn.transition = Selectable.Transition.ColorTint;
+				btn.colors = keepStyle ? Tint(Color.white) : Tint(lit ? On : Bg);
 
 				try { btn.onClick.RemoveAllListeners(); } catch { }
 				if (onClick != null) UiClick.AddClick(btn, onClick);
@@ -111,6 +110,28 @@ namespace VRChatArchiveMod.Core
 			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] '{label}' click failed: {e.Message}"); }
 
 			try { CopySprite(donor, card, "Background"); CopySprite(donor, card, "Icons/Icon"); } catch { }
+
+			// OPAQUE BASE. A clone can come back with a transparent Background (or none at all, leaving
+			// only the root Image which Setup made 0,0,0,0) -- the tile was see-through while VRChat's
+			// own cards stayed solid, and the glassy theme had nothing to tint. Force the base opaque:
+			// the Background child if there is one, else the card root. The theme keeps this alpha and
+			// only tints the colour, so themed cards stay solid too.
+			try
+			{
+				var baseBg = card.Find("Background")?.GetComponent<Image>();
+				if (baseBg != null)
+				{
+					var c = baseBg.color;
+					if (c.r + c.g + c.b < 0.05f) c = new Color(0.20f, 0.10f, 0.32f, 1f);   // colourless copy -> a card-like violet
+					baseBg.color = new Color(c.r, c.g, c.b, 1f);
+				}
+				else
+				{
+					var root = card.GetComponent<Image>();
+					if (root != null) { var c = root.color; if (c.a < 0.9f || c.r + c.g + c.b < 0.05f) root.color = new Color(0.20f, 0.10f, 0.32f, 1f); }
+				}
+			}
+			catch { }
 
 			// A neutral violet aura to begin with. A tile that HAS a toggle state gets recoloured
 			// pink/blue a moment later by RefreshToggles; one that is a plain action keeps the
@@ -167,7 +188,7 @@ namespace VRChatArchiveMod.Core
 						// (LayoutElement.ignoreLayout), after which it stays where it is put.
 						// Centred in its own band, now that the band is exactly the label's height.
 						tmp.alignment = TMPro.TextAlignmentOptions.Center;
-						_labelHolder = tmp.transform.parent?.TryCast<RectTransform>();
+						_labelHolder = LabelRect(card, tmp);
 					}
 					catch { }
 				}
@@ -191,6 +212,35 @@ namespace VRChatArchiveMod.Core
 		//
 		// The block (icon + gap + label) is centred vertically, which is what VRChat's own cards do:
 		// on a 241x164 tile its 72x72 icon spans 27..99 and its text 109..142.
+		// THE RECT THAT CARRIES THE LABEL — AND NEVER THE CARD ITSELF.
+		//
+		// Most VRChat cards wrap their text in a TextLayoutParent, so "the text's parent" is a small
+		// band inside the button and everything below is written to that band. Two cards on the
+		// per-user page do NOT: Button_FavoriteFriend and Button_Boop hang Text_H4 straight off the
+		// button root. For those, "the text's parent" IS THE CARD, and LayoutCard then does to the
+		// whole card what it means to do to a text band:
+		//     ignoreLayout = true     -> the card leaves the GridLayoutGroup and stops taking a cell
+		//     anchors (0,1)-(1,1)     -> stretched to the container's full 920, i.e. FOUR columns
+		//     sizeDelta.y = textH     -> and textH was read from the card, so 184: one row tall
+		//     every child stretched   -> the 81x81 icon fills the whole plate
+		// which is exactly the giant translucent plate lying across two rows of the user page, with
+		// the five other cards stacked invisibly underneath it.
+		//
+		// It only started happening when the donor picker was fixed to choose a fully-enabled button:
+		// the old fallback, Button_FriendRequest, HAS a TextLayoutParent, so the trap stayed shut.
+		// Instance ids rather than ==, because these are il2cpp proxies.
+		private static RectTransform LabelRect(Transform card, TMPro.TMP_Text tmp)
+		{
+			try
+			{
+				if (tmp == null || card == null) return null;
+				var holder = tmp.transform.parent?.TryCast<RectTransform>();
+				if (holder == null || holder.GetInstanceID() == card.GetInstanceID()) return tmp.rectTransform;
+				return holder;
+			}
+			catch { return null; }
+		}
+
 		private static void LayoutCard(Transform card, RectTransform label)
 		{
 			try
@@ -198,6 +248,9 @@ namespace VRChatArchiveMod.Core
 				var cardRt = card?.TryCast<RectTransform>();
 				var icons = card.Find("Icons")?.TryCast<RectTransform>();
 				if (cardRt == null || icons == null) return;
+				// Belt and braces for any future caller: laying the card out as its own label is the
+				// bug above, and it is cheaper to refuse than to explain.
+				if (label != null && label.GetInstanceID() == cardRt.GetInstanceID()) label = null;
 
 				// The card's own rect is still zero on the frame it is built, which silently skipped
 				// this whole pass. The grid that owns the card knows the cell size before any layout
@@ -254,15 +307,22 @@ namespace VRChatArchiveMod.Core
 					// holder it overflowed from -72 to -172 and, being top-aligned, drew its glyphs
 					// at -72 — straight across the icon. Measured, not guessed: the holder was
 					// correctly at -106 the whole time while the text sat 34px above it.
-					for (int i = 0; i < label.childCount; i++)
+					// …unless the "holder" IS the text (the donor had no TextLayoutParent, so LabelRect
+					// fell back to the TMP's own rect). Its children are then TMP's sub-mesh objects,
+					// which TMP lays out itself and regenerates — stretching them achieves nothing and
+					// fights that regeneration.
+					if (label.GetComponent<TMPro.TMP_Text>() == null)
 					{
-						var ch = label.GetChild(i)?.TryCast<RectTransform>();
-						if (ch == null) continue;
-						ch.anchorMin = Vector2.zero;
-						ch.anchorMax = Vector2.one;
-						ch.offsetMin = Vector2.zero;
-						ch.offsetMax = Vector2.zero;
-						ch.pivot = new Vector2(0.5f, 0.5f);
+						for (int i = 0; i < label.childCount; i++)
+						{
+							var ch = label.GetChild(i)?.TryCast<RectTransform>();
+							if (ch == null) continue;
+							ch.anchorMin = Vector2.zero;
+							ch.anchorMax = Vector2.one;
+							ch.offsetMin = Vector2.zero;
+							ch.offsetMax = Vector2.zero;
+							ch.pivot = new Vector2(0.5f, 0.5f);
+						}
 					}
 				}
 
@@ -291,7 +351,9 @@ namespace VRChatArchiveMod.Core
 			{
 				if (card == null) return;
 				var tmp = card.GetComponentInChildren<TMPro.TMP_Text>(true);
-				LayoutCard(card, tmp != null ? tmp.transform.parent?.TryCast<RectTransform>() : null);
+				// Same rule as Setup — recomputing the holder naively here would re-arm the
+				// card-as-its-own-label bug on every page rebuild.
+				LayoutCard(card, LabelRect(card, tmp));
 			}
 			catch { }
 		}
@@ -457,7 +519,11 @@ namespace VRChatArchiveMod.Core
 			{
 				SetAura(card, lit ? GlowOn : GlowOff);   // always on; only the colour says which
 
-				if (keepStyle) return;      // the game owns Background; do not fight it
+				// Under keepStyle the game (or MenuThemeModule) owns the Background colour and Setup
+				// gave the Button a neutral WHITE tint for hover/press; overwriting that ColorBlock
+				// with On/Bg here would paint our own colour over the themed one. The aura above is
+				// the whole ON/OFF signal on such a card, so stop here.
+				if (keepStyle) return;
 
 				var btn = card.GetComponent<Button>();
 				if (btn != null) btn.colors = Tint(lit ? On : Bg);
@@ -604,6 +670,81 @@ namespace VRChatArchiveMod.Core
 		// VRChat assigns some card sprites through StyleElement at runtime. A clone built before
 		// the donor's page was ever shown gets nulls, and an Image with no sprite draws a flat
 		// rectangle — which is what produced blank teal squares instead of icons.
+		// A VRChat sprite, straight onto the tile. Used for the tiles that borrow one of the game's
+		// own icons: the same art the rest of the menu uses is what makes a tile look native.
+		public static void SetIcon(Transform card, Sprite sp)
+		{
+			try
+			{
+				if (card == null || sp == null) return;
+				var iconT = card.Find("Icons/Icon");
+				if (iconT == null) return;
+				var img = iconT.GetComponent<Image>();
+				if (img == null) return;
+				foreach (var c in iconT.GetComponents<Component>())
+				{
+					if (c == null || Il2CppName(c) != "StyleElement") continue;
+					UnityEngine.Object.Destroy(c);
+					break;
+				}
+				img.sprite = sp;
+				img.type = Image.Type.Simple;
+				img.preserveAspect = true;
+				img.color = IconTint;
+				if (!iconT.gameObject.activeSelf) iconT.gameObject.SetActive(true);
+			}
+			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] SetIcon(sprite) failed: {e.Message}"); }
+		}
+
+		// ICON COLOUR. The Launchpad icons the tiles are cloned from are tinted teal by VRChat's
+		// StyleElement -- teal glyphs on violet glass under violet labels is the "colours not
+		// integrated" look. Our tiles drop that StyleElement on the icon and take a near-white
+		// lavender that sits with the label, whatever sprite the icon ended up with.
+		public static readonly Color IconTint = new Color(0.94f, 0.90f, 1f, 1f);
+
+		public static void TintIcon(Transform card)
+		{
+			try
+			{
+				var iconT = card?.Find("Icons/Icon");
+				var img = iconT?.GetComponent<Image>();
+				if (img == null) return;
+				foreach (var c in iconT.GetComponents<Component>())
+				{
+					if (c == null || Il2CppName(c) != "StyleElement") continue;
+					UnityEngine.Object.Destroy(c);
+					break;
+				}
+				img.color = IconTint;
+			}
+			catch { }
+		}
+
+		// BADGES. A Launchpad card can carry a "NEW" pill; cloning the card clones the pill, so
+		// Radar and Player list were announcing themselves as new VRChat features. Hidden, not
+		// destroyed: the donor's StyleElement may still hold a reference to it.
+		public static void StripBadges(Transform card)
+		{
+			try
+			{
+				if (card == null) return;
+				for (int i = 0; i < card.childCount; i++)
+				{
+					var ch = card.GetChild(i);
+					string n = ch != null ? (ch.name ?? "") : "";
+					if (n.IndexOf("badge", StringComparison.OrdinalIgnoreCase) >= 0 || string.Equals(n, "New", StringComparison.OrdinalIgnoreCase))
+						ch.gameObject.SetActive(false);
+					for (int j = 0; j < ch.childCount; j++)
+					{
+						var g = ch.GetChild(j);
+						string gn = g != null ? (g.name ?? "") : "";
+						if (gn.IndexOf("badge", StringComparison.OrdinalIgnoreCase) >= 0) g.gameObject.SetActive(false);
+					}
+				}
+			}
+			catch { }
+		}
+
 		public static bool CopySprite(Transform donor, Transform card, string path)
 		{
 			try

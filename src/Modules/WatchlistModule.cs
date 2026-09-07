@@ -30,6 +30,52 @@ namespace VRChatArchiveMod.Modules
 
 		// A new world means every "who was already here" judgement is stale: without this the
 		// settle window never ran again and each world change announced everyone as a join.
+		// ONE SHARED, LOCAL SOUND. Its own AudioSource rather than the soundboard's: that one is driven
+		// by remote requests and carries the soundboard's volume, while this is a private alert nobody
+		// else hears. spatialBlend 0 so it plays flat in both ears instead of somewhere in the world.
+		private static AudioSource _alertSrc;
+		private static AudioClip _alertClip;
+		private static bool _alertTried;
+		private static float _alertNext;
+
+		private static void Alert()
+		{
+			try
+			{
+				// Several watched users can land in the same poll, and one bark per person would be a
+				// pile-up rather than a notification.
+				float now = Time.realtimeSinceStartup;
+				if (now < _alertNext) return;
+				_alertNext = now + 2.5f;
+
+				if (!_alertTried)
+				{
+					_alertTried = true;
+					byte[] wav = Core.AssetLoader.RawBytes("watch_join.wav");
+					if (wav != null) _alertClip = Core.WavAudio.Decode(wav, "watch_join");
+					if (_alertClip == null) VRChatArchiveModPlugin.Logger.LogWarning("[Watchlist] join sound could not be loaded.");
+				}
+				if (_alertClip == null) return;
+
+				if (_alertSrc == null)
+				{
+					var go = new GameObject("ArchiveWatchAlert");
+					UnityEngine.Object.DontDestroyOnLoad(go);
+					go.hideFlags = HideFlags.HideAndDontSave;
+					_alertSrc = go.AddComponent<AudioSource>();
+					_alertSrc.spatialBlend = 0f;
+					_alertSrc.loop = false;
+					_alertSrc.playOnAwake = false;
+					_alertSrc.bypassEffects = true;
+					_alertSrc.bypassListenerEffects = true;
+					_alertSrc.ignoreListenerPause = true;
+				}
+				_alertSrc.volume = 1f;
+				_alertSrc.PlayOneShot(_alertClip);
+			}
+			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[Watchlist] alert: " + e.Message); }
+		}
+
 		public override void OnSceneLoaded(int buildIndex)
 		{
 			_settle = 0;
@@ -145,6 +191,9 @@ namespace VRChatArchiveMod.Modules
 						_notifyName = nameByUid.TryGetValue(uid, out string n) ? n : uid;
 						_notifyUntil = Time.realtimeSinceStartup + 6f;
 						VRChatArchiveModPlugin.Logger.LogInfo($"[Watchlist] watched user joined: {_notifyName} ({uid}).");
+						// The banner is easy to miss when you are not looking at that corner of the
+						// screen — which is most of the time, and the whole point of watching someone.
+						Alert();
 					}
 			}
 			if (settled) _primed = true; else _settle++;

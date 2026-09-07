@@ -21,13 +21,16 @@ namespace VRChatArchiveMod.Modules
 		{
 			Build();
 			VRChatArchiveModPlugin.Logger.LogInfo(
-				"[Overlay] built: " + Overlay.PageCount + " page(s) — Right-Shift+M opens it.");
+				"[Overlay] built: " + Overlay.PageCount + " page(s) — Right-Shift+N opens it (Right-Shift+M is the radar's).");
 		}
 
 		public override void OnUpdate()
 		{
 			// One key check per frame. GetKeyDown is edge-triggered, so no debounce is needed.
-			if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.M))
+			// Right-Shift+N, not +M: +M is the radar's toggle (ModConfig.RadarEnabled, Menu.cs,
+			// OrbitModule all say so) and one press was flipping both — the overlay opened and
+			// the radar vanished at the same time.
+			if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.N))
 				Overlay.Visible = !Overlay.Visible;
 		}
 

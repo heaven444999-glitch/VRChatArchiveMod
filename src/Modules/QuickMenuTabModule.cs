@@ -91,7 +91,7 @@ namespace VRChatArchiveMod.Modules
 
 		public override void OnSceneLoaded(int buildIndex)
 		{
-			if (_tab == null || _page == null) { _tab = null; _page = null; _fails = 0; _nextTry = 0f; }
+			if (_tab == null || _page == null) { _tab = null; _page = null; _fails = 0; _nextTry = 0f; _wasActive = false; }
 		}
 
 		public override void OnShutdown() => Teardown();
@@ -303,7 +303,79 @@ namespace VRChatArchiveMod.Modules
 		// own two shapes is what makes the page look native instead of home-made.
 		// Icon: an optional texture of OURS to put on the tile instead of whatever the donor card
 		// happened to carry. Without it a soundboard tile inherits some unrelated VRChat glyph.
-		private struct Act { public string Label; public Action Do; public Func<bool> State; public Func<Texture2D> Icon; }
+		// IconName: hints, '|'-separated, matched case-insensitively against the names of the sprites
+		// VRChat itself has loaded (SpriteIndex). The first hint that names a real sprite wins, so a
+		// tile wears the game's own glyph for what it does instead of whatever the donor carried.
+		private struct Act { public string Label; public Action Do; public Func<bool> State; public Func<Texture2D> Icon; public string IconName; }
+
+		// SPRITE INDEX. Every Sprite the game has loaded, by name, built once per page fill and
+		// thrown away with the page. Lets a tile wear one of VRChat's own icons by asking for it
+		// by (part of) its name. The first fill also writes every candidate name to
+		// BepInEx/qm_sprites.txt, once, so the hints in ActsFor can be tuned against the real
+		// list instead of guessed.
+		private static class SpriteIndex
+		{
+			private static readonly Dictionary<string, Sprite> _byName = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+			private static readonly List<string> _names = new List<string>();
+			private static bool _built, _dumped;
+
+			public static void Invalidate() { _built = false; _byName.Clear(); _names.Clear(); }
+
+			private static void Build()
+			{
+				_built = true;
+				try
+				{
+					var all = Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.From(typeof(Sprite)));
+					if (all == null) return;
+					for (int i = 0; i < all.Length; i++)
+					{
+						var sp = all[i]?.TryCast<Sprite>();
+						if (sp == null) continue;
+						string n = sp.name ?? "";
+						if (n.Length == 0 || _byName.ContainsKey(n)) continue;
+						_byName[n] = sp; _names.Add(n);
+					}
+					VRChatArchiveModPlugin.Logger.LogInfo("[QMTab] sprite index: " + _names.Count + " name(s).");
+					if (!_dumped)
+					{
+						_dumped = true;
+						try
+						{
+							string path = System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "qm_sprites.txt");
+							var sorted = new List<string>(_names); sorted.Sort(StringComparer.OrdinalIgnoreCase);
+							System.IO.File.WriteAllLines(path, sorted);
+							VRChatArchiveModPlugin.Logger.LogInfo("[QMTab] sprite names written to " + path);
+						}
+						catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] sprite dump failed: " + e.Message); }
+					}
+				}
+				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] sprite index failed: " + e.Message); }
+			}
+
+			// First hint that is contained in a loaded sprite's name wins; an exact name beats a
+			// substring so a hint like "eye" cannot land on "keyeye_bg" when "Icon_Eye" exists.
+			public static Sprite Find(string hints)
+			{
+				if (string.IsNullOrEmpty(hints)) return null;
+				if (!_built) Build();
+				foreach (string raw in hints.Split('|'))
+				{
+					string h = raw.Trim();
+					if (h.Length == 0) continue;
+					if (_byName.TryGetValue(h, out var exact) && exact != null) return exact;
+					for (int i = 0; i < _names.Count; i++)
+					{
+						string n = _names[i];
+						if (n.IndexOf(h, StringComparison.OrdinalIgnoreCase) < 0) continue;
+						// icons only: skip obvious non-glyph art (backgrounds, gradients, wallpapers)
+						if (n.IndexOf("background", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("gradient", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("wallpaper", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+						if (_byName.TryGetValue(n, out var sp) && sp != null) return sp;
+					}
+				}
+				return null;
+			}
+		}
 
 		private sealed class ToggleTile { public Transform Card; public Func<bool> State; public bool Last; }
 		private readonly List<ToggleTile> _toggles = new List<ToggleTile>();
@@ -354,41 +426,41 @@ namespace VRChatArchiveMod.Modules
 
 		private List<Act> ActsFor(QmPage page)
 		{
-			// Every sub-page opens with the same Back tile, in the same slot, so leaving is never
-			// something you have to look for.
-			var back = new Act { Label = "◄ Back", Do = () => GoTo(QmPage.Root) };
+			// No Back tile. The header carries VRChat's own back arrow (SyncBackButton clones and
+			// wires it), so a tile that did the same thing only spent a slot and wore a borrowed
+			// lightning-bolt icon that meant nothing.
 
 			switch (page)
 			{
 				case QmPage.Protection:
 					return new List<Act>
 					{
-						back,
-						new Act { Label = "Crash protection", Do = () => { ModConfig.AntiCrashEnabled.Value = !ModConfig.AntiCrashEnabled.Value; }, State = () => ModConfig.AntiCrashEnabled.Value },
-						new Act { Label = "Block crasher scripts", Do = () => { ModConfig.UdonBlockCrashers.Value = !ModConfig.UdonBlockCrashers.Value; }, State = () => ModConfig.UdonBlockCrashers.Value },
+
+						new Act { IconName = "Icon_Shield|Icon_Shield_Custom|shield", Label = "Crash protection", Do = () => { ModConfig.AntiCrashEnabled.Value = !ModConfig.AntiCrashEnabled.Value; }, State = () => ModConfig.AntiCrashEnabled.Value },
+						new Act { IconName = "BlockUser|Blocked_White_Transparent|icon_listener_blocked|block", Label = "Block crasher scripts", Do = () => { ModConfig.UdonBlockCrashers.Value = !ModConfig.UdonBlockCrashers.Value; }, State = () => ModConfig.UdonBlockCrashers.Value },
 						// The destructive one, and it says what it costs. A user reported "mirrors
 						// don't work" and could not find this switch, because the tile that turns it
 						// on never mentioned that mirrors are world scripts too.
-						new Act { Label = "STOP all world scripts (breaks mirrors)", Do = () => { ModConfig.UdonBlockAll.Value = !ModConfig.UdonBlockAll.Value; }, State = () => ModConfig.UdonBlockAll.Value },
-						new Act { Label = "Anti-block", Do = () => { ModConfig.AntiBlockEnabled.Value = !ModConfig.AntiBlockEnabled.Value; }, State = () => ModConfig.AntiBlockEnabled.Value },
-						new Act { Label = "Re-check everyone", Do = () => { Core.Menu.RequestRescan(); } },
+						new Act { IconName = "StopIcon|stop|Icon_Close_X", Label = "STOP all world scripts (breaks mirrors)", Do = () => { ModConfig.UdonBlockAll.Value = !ModConfig.UdonBlockAll.Value; }, State = () => ModConfig.UdonBlockAll.Value },
+						new Act { IconName = "Unblock|Eye|visibility", Label = "Anti-block", Do = () => { ModConfig.AntiBlockEnabled.Value = !ModConfig.AntiBlockEnabled.Value; }, State = () => ModConfig.AntiBlockEnabled.Value },
+						new Act { IconName = "ReloadIcon|ic_reset|reset", Label = "Re-check everyone", Do = () => { Core.Menu.RequestRescan(); } },
 					};
 
 				case QmPage.Overlays:
 					return new List<Act>
 					{
-						back,
-						// LABELLED FOR WHAT THEY DO. This tile drove ModConfig.EspEnabled while calling
-						// itself "See through walls" — but that setting's own description is "Draw a
-						// box around remote players", and seeing through walls is EspThroughWalls, a
-						// different switch entirely. Two features shared one label and neither said so.
-						new Act { Label = "Box around players", Do = () => { ModConfig.EspEnabled.Value = !ModConfig.EspEnabled.Value; }, State = () => ModConfig.EspEnabled.Value },
-						new Act { Label = "See through walls", Do = () => { ModConfig.EspThroughWalls.Value = !ModConfig.EspThroughWalls.Value; }, State = () => ModConfig.EspThroughWalls.Value },
-						// Each of these is now sufficient on its own — see HighlightEspModule.
-						new Act { Label = "Glow around avatars", Do = () => { ModConfig.EspHighlight.Value = !ModConfig.EspHighlight.Value; }, State = () => ModConfig.EspHighlight.Value },
-						new Act { Label = "Glow on pickups", Do = () => { ModConfig.EspItems.Value = !ModConfig.EspItems.Value; }, State = () => ModConfig.EspItems.Value },
-						new Act { Label = "Radar", Do = () => { ModConfig.RadarEnabled.Value = !ModConfig.RadarEnabled.Value; }, State = () => ModConfig.RadarEnabled.Value },
-						new Act { Label = "Player list", Do = () => { ModConfig.InstancePanelsEnabled.Value = !ModConfig.InstancePanelsEnabled.Value; }, State = () => ModConfig.InstancePanelsEnabled.Value },
+
+						// ONE GLOW, ONE TILE. The screen-space "Box around players" is gone; the 3D
+						// capsule is what shows a player through a wall, and every glow below is a
+						// switch of its own — none of them needs another to be on (HighlightEspModule,
+						// CapsuleEspModule).
+						new Act { IconName = "Icon_Safety_Avatar_Shape|Hand_Avatar|icon_user", Label = "Player capsules", Do = () => { ModConfig.EspCapsule.Value = !ModConfig.EspCapsule.Value; }, State = () => ModConfig.EspCapsule.Value },
+						new Act { IconName = "Eye|visibility|Eye_Disabled", Label = "See through walls", Do = () => { ModConfig.EspThroughWalls.Value = !ModConfig.EspThroughWalls.Value; }, State = () => ModConfig.EspThroughWalls.Value },
+						new Act { IconName = "Icon_Spotlight|glow|DynamicLight", Label = "Glow around avatars", Do = () => { ModConfig.EspHighlight.Value = !ModConfig.EspHighlight.Value; }, State = () => ModConfig.EspHighlight.Value },
+						new Act { IconName = "Grab|hand|Handshake", Label = "Glow on pickups", Do = () => { ModConfig.EspItems.Value = !ModConfig.EspItems.Value; }, State = () => ModConfig.EspItems.Value },
+						new Act { IconName = "DropPortal|Portal|TeleportTo", Label = "Glow on portals", Do = () => { ModConfig.EspPortals.Value = !ModConfig.EspPortals.Value; }, State = () => ModConfig.EspPortals.Value },
+						new Act { IconName = "prints_location|LocationUnavailable|TeleportToMe", Label = "Radar", Do = () => { ModConfig.RadarEnabled.Value = !ModConfig.RadarEnabled.Value; }, State = () => ModConfig.RadarEnabled.Value },
+						new Act { IconName = "Social|Friends|icon_user", Label = "Player list", Do = () => { ModConfig.InstancePanelsEnabled.Value = !ModConfig.InstancePanelsEnabled.Value; }, State = () => ModConfig.InstancePanelsEnabled.Value },
 					};
 
 				case QmPage.Movement:
@@ -397,13 +469,13 @@ namespace VRChatArchiveMod.Modules
 					// "custom speed" a third switch that had to be on before the others did anything.
 					return new List<Act>
 					{
-						back,
-						new Act { Label = "Fly", Do = () => { ModConfig.FlyEnabled.Value = !ModConfig.FlyEnabled.Value; }, State = () => ModConfig.FlyEnabled.Value },
-						new Act { Label = "Click to teleport", Do = () => { ModConfig.ClickTpEnabled.Value = !ModConfig.ClickTpEnabled.Value; }, State = () => ModConfig.ClickTpEnabled.Value },
-						new Act { Label = "Walk mod", Do = () => { ModConfig.WalkMod.Value = !ModConfig.WalkMod.Value; }, State = () => ModConfig.WalkMod.Value },
-						new Act { Label = "Run mod", Do = () => { ModConfig.RunMod.Value = !ModConfig.RunMod.Value; }, State = () => ModConfig.RunMod.Value },
-						new Act { Label = "Jump mod", Do = () => { ModConfig.JumpMod.Value = !ModConfig.JumpMod.Value; }, State = () => ModConfig.JumpMod.Value },
-						new Act { Label = "Back to normal", Do = SpeedModule.ResetToWorld },
+
+						new Act { IconName = "ic_fly_mode|Drone_FlightModes|WingLeft", Label = "Fly", Do = () => { ModConfig.FlyEnabled.Value = !ModConfig.FlyEnabled.Value; }, State = () => ModConfig.FlyEnabled.Value },
+						new Act { IconName = "TeleportTo|TeleportToMe|DropPortal", Label = "Click to teleport", Do = () => { ModConfig.ClickTpEnabled.Value = !ModConfig.ClickTpEnabled.Value; }, State = () => ModConfig.ClickTpEnabled.Value },
+						new Act { IconName = "PlayerMove|BodyMode_Standing|Hand_Avatar", Label = "Walk mod", Do = () => { ModConfig.WalkMod.Value = !ModConfig.WalkMod.Value; }, State = () => ModConfig.WalkMod.Value },
+						new Act { IconName = "Arrow_Right|arrow|PlayerMove", Label = "Run mod", Do = () => { ModConfig.RunMod.Value = !ModConfig.RunMod.Value; }, State = () => ModConfig.RunMod.Value },
+						new Act { IconName = "arrow_up|Arrow_Right", Label = "Jump mod", Do = () => { ModConfig.JumpMod.Value = !ModConfig.JumpMod.Value; }, State = () => ModConfig.JumpMod.Value },
+						new Act { IconName = "ic_reset|reset|Home_Reset", Label = "Back to normal", Do = SpeedModule.ResetToWorld },
 					};
 
 				case QmPage.Sounds:
@@ -412,7 +484,7 @@ namespace VRChatArchiveMod.Modules
 					// SoundboardModule.Clips used to mean it silently never appeared here, and a
 					// removed one would have thrown. Each tile shows the clip's own image when it
 					// has one, so the board is readable instead of a column of identical hearts.
-					var sounds = new List<Act> { back };
+					var sounds = new List<Act>();
 					foreach (var clip in SoundboardModule.Clips)
 					{
 						var c = clip;   // captured per iteration, not by reference to the loop var
@@ -429,11 +501,11 @@ namespace VRChatArchiveMod.Modules
 				default:
 					return new List<Act>
 					{
-						new Act { Label = "Protection ›",  Do = () => GoTo(QmPage.Protection), State = () => ModConfig.UdonBlockAll.Value || ModConfig.AntiCrashEnabled.Value },
-						new Act { Label = "On screen ›",   Do = () => GoTo(QmPage.Overlays) },
-						new Act { Label = "Movement ›",    Do = () => GoTo(QmPage.Movement), State = () => ModConfig.FlyEnabled.Value || ModConfig.SpeedEnabled.Value },
-						new Act { Label = "Udon Console",  Do = () => { ModConfig.UdonLogEnabled.Value = !ModConfig.UdonLogEnabled.Value; }, State = () => ModConfig.UdonLogEnabled.Value },
-						new Act { Label = "Refresh Tags",  Do = VaTagsModule.RequestRefresh },
+						new Act { IconName = "Icon_Shield|Icon_Shield_Custom|shield", Label = "Protection ›",  Do = () => GoTo(QmPage.Protection), State = () => ModConfig.UdonBlockAll.Value || ModConfig.AntiCrashEnabled.Value },
+						new Act { IconName = "HUD|HUD_Verbose|Eye", Label = "On screen ›",   Do = () => GoTo(QmPage.Overlays) },
+						new Act { IconName = "PlayerMove|ic_fly_mode|BodyMode_Standing", Label = "Movement ›",    Do = () => GoTo(QmPage.Movement), State = () => ModConfig.FlyEnabled.Value || ModConfig.SpeedEnabled.Value },
+						new Act { IconName = "Icon_UdonSpotlight|Logging|debug", Label = "Udon Console",  Do = () => { ModConfig.UdonLogEnabled.Value = !ModConfig.UdonLogEnabled.Value; }, State = () => ModConfig.UdonLogEnabled.Value },
+						new Act { IconName = "Tag|Tag_Disabled|ReloadIcon", Label = "Refresh Tags",  Do = VaTagsModule.RequestRefresh },
 						new Act { Label = "Sounds ›",      Do = () => GoTo(QmPage.Sounds), Icon = () => AssetLoader.HeartIcon },
 					};
 			}
@@ -460,6 +532,11 @@ namespace VRChatArchiveMod.Modules
 				{
 					try { UnityEngine.Object.DestroyImmediate(content.GetChild(i).gameObject); } catch { }
 				}
+				// That loop just destroyed VA_Sliders along with the cards, but the slider list
+				// still held its rows, so SyncSliders saw "sliders exist" and never rebuilt them:
+				// Movement → Back → Movement lost the sliders for good. Forgetting them here lets
+				// SyncSliders rebuild the host on the next Pump tick.
+				_sliders.Clear(); _sliderHost = null;
 
 				var grid = UnityEngine.Object.Instantiate(donorGrid.gameObject, content);
 				grid.name = "Buttons_Archive";
@@ -496,6 +573,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] grid constraint failed: {e.Message}"); }
 
+				SpriteIndex.Invalidate();
 				var acts = ActsFor(_qmPage);
 
 				var cards = new List<Transform>();
@@ -517,6 +595,8 @@ namespace VRChatArchiveMod.Modules
 							extra.name = "Button_VAExtra" + k;
 							extra.SetActive(true);
 							extra.transform.SetAsLastSibling();
+							// Forget the template's icon so CopySprite pulls the ROTATED donor's one in.
+							try { var ei = extra.transform.Find("Icons/Icon")?.GetComponent<UnityEngine.UI.Image>(); if (ei != null) ei.sprite = null; } catch { }
 							cards.Add(extra.transform);
 						}
 						catch (Exception e)
@@ -538,9 +618,9 @@ namespace VRChatArchiveMod.Modules
 					if (i >= acts.Count) { try { UnityEngine.Object.DestroyImmediate(card.gameObject); } catch { } continue; }
 					// Cloned-in tiles have no donor of their own; reuse the last real one so they are
 					// styled from a card VRChat has actually themed.
-					Transform donorCard = donorGrid.childCount > i
-						? donorGrid.GetChild(i)
-						: (donorGrid.childCount > 0 ? donorGrid.GetChild(donorGrid.childCount - 1) : null);
+					// Rotated, not pinned to the last card: every extra tile used to borrow the sixth
+					// card's icon, which is how Radar and Player list came out as two storefronts.
+					Transform donorCard = donorGrid.childCount > 0 ? donorGrid.GetChild(i % donorGrid.childCount) : null;
 					SetupCard(card, acts[i], donorCard);
 					if (donorCard != null) _pairs.Add(new Pair { Clone = card, Donor = donorCard });
 					if (acts[i].State != null)
@@ -572,6 +652,17 @@ namespace VRChatArchiveMod.Modules
 			// instead of wearing a palette of ours. The ON state rides the game's Foreground
 			// overlay (see MenuCard.SetLit), which is how VRChat lights its own toggle cards.
 			Core.MenuCard.Setup(card, donor, act.Label, act.Do, lit, keepStyle: true);
+			Core.MenuCard.StripBadges(card);
+
+			// The game's own glyph for what the tile does, when one of the hints names a loaded
+			// sprite. Resolved from SpriteIndex (built once per page fill); a miss keeps the donor
+			// icon, which the rotated donor choice keeps from repeating across the grid.
+			if (!string.IsNullOrEmpty(act.IconName))
+			{
+				var sp = SpriteIndex.Find(act.IconName);
+				if (sp != null) Core.MenuCard.SetIcon(card, sp);
+			}
+			Core.MenuCard.TintIcon(card);
 
 			// Our own icon, if the tile brought one. Done after Setup so it overrides the sprite the
 			// clone inherited rather than being overwritten by it.
@@ -859,11 +950,18 @@ namespace VRChatArchiveMod.Modules
 			catch { }
 		}
 
-		// THE HEADER'S OWN BACK ARROW. Menu_DevTools ships a Button_Back that VRChat leaves
-		// disabled; on a sub-page we switch it on and point it at Root. Using the game's arrow
-		// rather than drawing one means it sits where every other VRChat back arrow sits, and is
-		// themed by the same StyleElement.
-		private Transform _backBtn;
+		// THE HEADER'S BACK ARROW — a CLONE of the Button_Back that Menu_DevTools ships disabled.
+		//
+		// It used to be VRChat's own object: we switched it on, wiped its listeners and re-pointed
+		// it at Root. That breaks rule 1 (never modify VRChat's objects) and it never held — the
+		// game's page controller still owned that button, re-styled it and re-armed it to ITS page
+		// stack, so the arrow either did nothing or popped a VRChat page instead of ours. The
+		// clone sits in the same slot (first in the header's left container, where every VRChat
+		// back arrow sits) and keeps the child icon's own styling; its ROOT is stripped like every
+		// other clone of ours, and it gets a fresh Button so none of VRChat's serialized onClick
+		// targets ride along. The original stays exactly as shipped: disabled, untouched.
+		private Transform _backBtn;      // VRChat's own — read as the donor, never written
+		private Transform _backClone;
 		private bool _backWired;
 
 		private void SyncBackButton()
@@ -879,19 +977,49 @@ namespace VRChatArchiveMod.Modules
 					if (_backBtn == null) return;
 				}
 
+				if (_backClone == null)
+				{
+					// Unity-null covers a canvas rebuild too: a dead clone means a dead listener,
+					// so the wire flag drops with it and the new clone is wired below.
+					_backWired = false;
+					var go = UnityEngine.Object.Instantiate(_backBtn.gameObject, _backBtn.parent);
+					go.name = "VA_Button_Back";
+					_backClone = go.transform;
+					_backClone.SetAsFirstSibling();
+
+					// The cloned Button carries VRChat's persistent onClick calls; a stripped root
+					// cannot be trusted to have nulled every one of them, so it goes and a clean
+					// Button takes its target graphic.
+					var old = go.GetComponent<UnityEngine.UI.Button>();
+					UnityEngine.UI.Graphic target = null;
+					try { if (old != null) target = old.targetGraphic; } catch { }
+					try { if (old != null) UnityEngine.Object.DestroyImmediate(old); } catch { }
+					StripRoot(_backClone);
+
+					var btn = go.AddComponent<UnityEngine.UI.Button>();
+					if (target == null) target = go.GetComponent<UnityEngine.UI.Graphic>() ?? go.GetComponentInChildren<UnityEngine.UI.Graphic>(true);
+					if (target != null) btn.targetGraphic = target;
+					// Same feedback rule as our cards (MenuCard.Setup): white tint = untouched at
+					// rest, brighter on hover/press, so the arrow visibly reacts to the pointer.
+					btn.transition = UnityEngine.UI.Selectable.Transition.ColorTint;
+					btn.colors = Core.MenuCard.Tint(Color.white);
+					btn.interactable = true;
+				}
+
 				if (!_backWired)
 				{
-					var btn = _backBtn.GetComponent<UnityEngine.UI.Button>();
+					var btn = _backClone.GetComponent<UnityEngine.UI.Button>();
 					if (btn != null)
 					{
-						try { btn.onClick.RemoveAllListeners(); } catch { }
 						Core.UiClick.AddClick(btn, () => GoTo(QmPage.Root));
 						_backWired = true;
 					}
 				}
 
-				bool want = _qmPage != QmPage.Root;
-				if (_backBtn.gameObject.activeSelf != want) _backBtn.gameObject.SetActive(want);
+				// Shown only on a sub-page AND only once it actually does something — an arrow
+				// that is lit but unwired is a lie the user clicks three times.
+				bool want = _qmPage != QmPage.Root && _backWired;
+				if (_backClone.gameObject.activeSelf != want) _backClone.gameObject.SetActive(want);
 			}
 			catch { }
 		}
@@ -951,11 +1079,23 @@ namespace VRChatArchiveMod.Modules
 
 		// VRChat's own tab controller decides when the page is shown, so there is nothing to
 		// force here any more — we only keep our toggle tiles reflecting the live config.
+		private bool _wasActive;   // our page's activeSelf on the previous tick: gives the "just shown" edge
+
 		private void Pump()
 		{
 			try
 			{
-				if (_page == null || !_page.activeSelf) return;
+				bool active = _page != null && _page.activeSelf;
+				bool shown = active && !_wasActive;
+				_wasActive = active;
+				if (!active)
+				{
+					// Hidden: forget the sub-page so the next open lands on Root, like every VRChat
+					// page does. Reopening straight onto Movement showed a lit Back arrow on a page
+					// the user never navigated to, and FillPage below rebuilds it from Root.
+					if (_qmPage != QmPage.Root) { _qmPage = QmPage.Root; _pageDirty = true; }
+					return;
+				}
 
 				// A tile asked for another sub-page: rebuild the grid with that set. Done here, in
 				// the pump, rather than inside the click handler — a click runs during VRChat's own
@@ -975,10 +1115,22 @@ namespace VRChatArchiveMod.Modules
 
 				// A live capture caught Menu_DevTools active AT THE SAME TIME as Menu_QM_Launchpad.
 				// In uGUI the later sibling draws on top, and Launchpad is the later one — so it
-				// covered our page and swallowed every click. Being last sibling while we are open
-				// puts us on top without touching VRChat's own page state.
-				if (_page.transform.GetSiblingIndex() != _page.transform.parent.childCount - 1)
-					_page.transform.SetAsLastSibling();
+				// covered our page and swallowed every click.
+				//
+				// The fix used to be "last sibling, EVERY frame". That kept us above every page
+				// VRChat stacks in Body after ours — whatever it opens on top while our tab is
+				// still active rendered underneath us and could not be clicked, one of the
+				// "buttons do nothing" reports. Now: one SetAsLastSibling on the show edge (the
+				// game has just reordered Body for its own page, so a single reorder lands above
+				// it), then only ever "just above Launchpad" — the one page the capture proved
+				// overlaps us — so anything VRChat stacks later stays on top and clickable.
+				if (shown) _page.transform.SetAsLastSibling();
+				var lp = _body != null ? _body.Find("Menu_QM_Launchpad") : null;
+				if (lp != null && lp.gameObject.activeSelf)
+				{
+					int want = lp.GetSiblingIndex() + 1;
+					if (_page.transform.GetSiblingIndex() < want) _page.transform.SetSiblingIndex(want);
+				}
 
 				RepairSprites();
 
@@ -1009,6 +1161,10 @@ namespace VRChatArchiveMod.Modules
 		{
 			try { if (_page != null) _page.SetActive(_pageWasActive); } catch { }
 			try { if (_tab != null) _tab.SetActive(_tabWasActive); } catch { }
+			// The back-arrow clone is OURS, parented under VRChat's header: destroy it so the page
+			// is left exactly as found. The original Button_Back was never touched.
+			try { if (_backClone != null) UnityEngine.Object.Destroy(_backClone.gameObject); } catch { }
+			_backClone = null; _backBtn = null; _backWired = false; _wasActive = false;
 			_page = null; _tab = null; _body = null; _fails = 0; _nextTry = 0f;
 			_toggles.Clear();
 		}

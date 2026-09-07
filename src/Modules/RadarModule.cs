@@ -30,6 +30,7 @@ namespace VRChatArchiveMod.Modules
 		private Type _playerType;
 		private bool _resolved;
 		private bool _hotkeyWasDown;
+		private float _nextMapAt;
 
 		public override void OnUpdate()
 		{
@@ -53,6 +54,13 @@ namespace VRChatArchiveMod.Modules
 				var cam = Camera.main;
 				if (cam == null) return;
 				float range = Mathf.Max(5f, ModConfig.RadarRange.Value);
+				// THROTTLE THE MAP RENDER. RadarMapCamera.Tick renders a full second-camera pass of the
+				// whole scene; at 30+ players in a heavy world that was ~340 ms/s on its own and a prime
+				// suspect in the freeze-then-dropped-to-home disconnects. A top-down minimap does not need
+				// a fresh render every frame -- 10 Hz is indistinguishable, and OnGui still BLITS the cached
+				// texture every frame so the map itself never flickers.
+				// EVERY FRAME (the owner's call, 2026-09-04 evening: "100% fluide, nvm the cost"). The
+				// throttle above is history; MapEveryFrames in the config is the only brake left.
 				RadarMapCamera.Tick(range, cam);
 			}
 			catch { }
@@ -119,7 +127,7 @@ namespace VRChatArchiveMod.Modules
 				// The configured size is a 1080p design value; on a taller screen the map grows with
 				// it instead of shrinking into the corner. Also floored well above the old 120px.
 				// Fixed proportion of the screen — one interface, no size setting.
-				float size = Mathf.Clamp(Screen.height * 0.30f, Core.Hud.S(240f), Core.Hud.S(460f));
+				float size = Core.Hud.SideWidth;   // shared with the player list and the instance log
 				float range = Mathf.Max(5f, ModConfig.RadarRange.Value);
 				float radius = size * 0.5f;
 				// BOTTOM-RIGHT corner, MOBA-minimap style. The four-corner HUD gives the top
@@ -141,14 +149,6 @@ namespace VRChatArchiveMod.Modules
 				// The camera RENDER moved to OnLateUpdate (below): calling _cam.Render() from inside
 				// an OnGui repaint meant a full scene render several times per frame, which was ~31
 				// ms/s on its own. Here we only BLIT the texture the render already produced.
-				if (ModConfig.RadarMap.Value && RadarMapCamera.Texture != null)
-				{
-					var prev = GUI.color;
-					GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(ModConfig.RadarMapOpacity.Value));
-					GUI.DrawTexture(rect, RadarMapCamera.Texture, ScaleMode.StretchToFill, false);
-					GUI.color = prev;
-				}
-
 				// Orient the radar to the camera's horizontal facing (forward = up).
 				Vector3 fwd = cam.transform.forward; fwd.y = 0f;
 				if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
@@ -156,6 +156,38 @@ namespace VRChatArchiveMod.Modules
 				Vector3 right = new Vector3(fwd.z, 0f, -fwd.x); // 90° clockwise on the horizontal plane
 
 				Vector3 localPos = cam.transform.position;
+
+				if (ModConfig.RadarMap.Value && RadarMapCamera.Texture != null)
+				{
+					var prev = GUI.color;
+					GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(ModConfig.RadarMapOpacity.Value));
+					// CONTINUOUS MAP BETWEEN RENDERS. The cached picture was taken at RenderPos covering
+					// range x Overscan; every frame it is slid to where RenderPos now sits on the radar,
+					// clipped to the panel, so walking never steps. No rotation compensation: GUI clipping
+					// does not follow a rotated matrix (the turned picture stuck out of the panel), and at
+					// 30 renders/s the heading is at most ~33 ms behind — invisible.
+					float ov = RadarMapCamera.Overscan;
+					if (RadarMapCamera.HasRender)
+					{
+						Vector3 me = localPos;
+						try { var lt = PlayerRef.LocalTransform(); if (lt != null) me = lt.position; } catch { }
+						Vector3 back = RadarMapCamera.RenderPos - me;           // where the picture's centre is now
+						float ox = Vector3.Dot(back, right) / range * radius;
+						float oz = Vector3.Dot(back, fwd) / range * radius;
+						float half = rect.width * 0.5f * ov;
+						GUI.BeginGroup(rect);
+						GUI.DrawTexture(new Rect(rect.width * 0.5f + ox - half, rect.height * 0.5f - oz - half, half * 2f, half * 2f), RadarMapCamera.Texture, ScaleMode.StretchToFill, false);
+						GUI.EndGroup();
+					}
+					else
+					{
+						float half = rect.width * 0.5f * ov;
+						GUI.BeginGroup(rect);
+						GUI.DrawTexture(new Rect(rect.width * 0.5f - half, rect.height * 0.5f - half, half * 2f, half * 2f), RadarMapCamera.Texture, ScaleMode.StretchToFill, false);
+						GUI.EndGroup();
+					}
+					GUI.color = prev;
+				}
 
 				ResolveReflection();
 				int count = players.Count;
@@ -259,11 +291,36 @@ namespace VRChatArchiveMod.Modules
 
 		// --- trust rank (mirrors EspModule) ---
 
+		// CACHED. TrustColor reads up to nine APIUser properties, each an il2cpp call that scans the
+		// user's tag list -- for every player, on every repaint. A rank does not change mid-second,
+		// so the answer is kept per APIUser (keyed by its native pointer, which is stable for the
+		// object's life) and re-read once a second; the table is dropped every 30 s so players who
+		// left cannot accumulate. The reads themselves are untouched: same properties, same order.
+		private struct TrustEntry { public Color Col; public float At; }
+		private static readonly System.Collections.Generic.Dictionary<IntPtr, TrustEntry> TrustCache =
+			new System.Collections.Generic.Dictionary<IntPtr, TrustEntry>();
+		private static float _trustDropAt;
+
 		private static Color TrustColor(APIUser u)
 		{
 			try
 			{
 				if (u == null) return CVisitor;
+				IntPtr key = u.Pointer;
+				float now = Time.realtimeSinceStartup;
+				if (now >= _trustDropAt) { TrustCache.Clear(); _trustDropAt = now + 30f; }
+				if (TrustCache.TryGetValue(key, out TrustEntry e) && now - e.At < 1f) return e.Col;
+				Color col = TrustColorUncached(u);
+				TrustCache[key] = new TrustEntry { Col = col, At = now };
+				return col;
+			}
+			catch { return CVisitor; }
+		}
+
+		private static Color TrustColorUncached(APIUser u)
+		{
+			try
+			{
 				if (IsVrcTeam(u)) return CVrcTeam;
 				if (u.hasVeryNegativeTrustLevel || u.hasNegativeTrustLevel) return CNuisance;
 				if (u.hasLegendTrustLevel || u.hasVeteranTrustLevel) return CTrusted;

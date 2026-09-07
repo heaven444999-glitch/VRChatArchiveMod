@@ -69,10 +69,19 @@ namespace VRChatArchiveMod.Modules
 
 				if (_bg == null) { if (!Resolve()) { _fails++; return; } }
 
-				var sp = OurSprite();
+				// SOLID colour or the Archive wallpaper image (QuickMenu/BackgroundSolid), then the dim.
+				bool solid = false; try { solid = ModConfig.QmBackgroundSolid != null && ModConfig.QmBackgroundSolid.Value; } catch { }
+				var sp = solid ? SolidSprite() : OurSprite();
 				if (sp == null) return;
 				Apply(_bg, sp, ref _original);
 				Apply(_bgPrev, sp, ref _originalPrev);
+				// COLOUR each pass (Apply forces white only when the sprite actually changes). Solid mode
+				// tints the flat sprite; image mode darkens by WallpaperDim (a grey multiply on the sprite).
+				Color tint;
+				if (solid) { tint = SolidColor(); }
+				else { float dim = 0f; try { dim = Mathf.Clamp01(ModConfig.QmWallpaperDim != null ? ModConfig.QmWallpaperDim.Value : 0f); } catch { } float v = 1f - dim; tint = new Color(v, v, v, 1f); }
+				try { if (_bg != null) _bg.color = tint; } catch { }
+				try { if (_bgPrev != null) _bgPrev.color = tint; } catch { }
 
 				// Liquid wallpaper removed: the animated overlay never worked right on the current
 				// QuickMenu and was only ever a toggle that did nothing useful. Anything a previous
@@ -498,26 +507,66 @@ namespace VRChatArchiveMod.Modules
 			return true;
 		}
 
-		private Sprite OurSprite()
+		private static Sprite _solid;
+		private Sprite SolidSprite()
 		{
-			if (_ours != null) return _ours;
+			if (_solid != null) return _solid;
 			try
 			{
-				var tex = AssetLoader.MenuBackground;   // ressources/menu_bg.png, embedded
-				if (tex == null) return null;
-				_ours = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-				if (_ours != null) _ours.hideFlags = HideFlags.HideAndDontSave;
+				var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+				var px = new Color[16]; for (int i = 0; i < 16; i++) px[i] = Color.white;
+				tex.SetPixels(px); tex.Apply(); tex.hideFlags = HideFlags.HideAndDontSave;
+				_solid = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f));
+				if (_solid != null) _solid.hideFlags = HideFlags.HideAndDontSave;
 			}
 			catch { }
+			return _solid;
+		}
+		private static Color SolidColor()
+		{
+			try { if (ColorUtility.TryParseHtmlString(ModConfig.QmBackgroundColor?.Value, out var c)) return c; } catch { }
+			return new Color(0.043f, 0.027f, 0.078f, 1f);
+		}
+
+		private string _srcKey;
+		private Sprite OurSprite()
+		{
+			try
+			{
+				string path = null; try { path = ModConfig.QmCustomBackgroundImage != null ? ModConfig.QmCustomBackgroundImage.Value : null; } catch { }
+				Texture2D tex = null; string key = "embedded";
+				if (!string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path))
+				{
+					long mt = 0; try { mt = System.IO.File.GetLastWriteTimeUtc(path).Ticks; } catch { }
+					key = "file:" + path + "|" + mt;
+					if (key == _srcKey && _ours != null) return _ours;
+					try
+					{
+						byte[] data = System.IO.File.ReadAllBytes(path);
+						var t = new Texture2D(2, 2, TextureFormat.RGBA32, false, false); t.hideFlags = HideFlags.HideAndDontSave; t.wrapMode = TextureWrapMode.Clamp;
+						if (ImageConversion.LoadImage(t, new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(data))) tex = t;
+						else VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] custom image did not decode: " + path);
+					}
+					catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] custom image read failed: " + e.Message); }
+				}
+				if (tex == null) { key = "embedded"; if (key == _srcKey && _ours != null) return _ours; tex = AssetLoader.MenuBackground; }
+				if (tex == null) return _ours;
+				_ours = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+				if (_ours != null) { _ours.hideFlags = HideFlags.HideAndDontSave; _srcKey = key; VRChatArchiveModPlugin.Logger.LogInfo("[MenuSkin] wallpaper source: " + key + " (" + tex.width + "x" + tex.height + ")."); }
+			}
+			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] OurSprite: " + e.Message); }
 			return _ours;
 		}
 
 		private void Restore()
 		{
-			try { if (_bg != null && _original != null && _bg.sprite == _ours) _bg.sprite = _original; }
+			try { if (_bg != null && _original != null && (_bg.sprite == _ours || _bg.sprite == _solid)) _bg.sprite = _original; }
 			catch { }
-			try { if (_bgPrev != null && _originalPrev != null && _bgPrev.sprite == _ours) _bgPrev.sprite = _originalPrev; }
+			try { if (_bgPrev != null && _originalPrev != null && (_bgPrev.sprite == _ours || _bgPrev.sprite == _solid)) _bgPrev.sprite = _originalPrev; }
 			catch { }
+			// Our dim/solid tint must not linger on VRChat's own wallpaper after a toggle-off.
+			try { if (_bg != null) _bg.color = Color.white; } catch { }
+			try { if (_bgPrev != null) _bgPrev.color = Color.white; } catch { }
 		}
 
 	}

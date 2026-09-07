@@ -185,15 +185,14 @@ namespace VRChatArchiveMod.Modules
 			Line("--- settings ---");
 			try
 			{
-				Line($" loadingScreen    : {ModConfig.LoadingScreenEnabled.Value}   music: {ModConfig.LoadingMusic.Value}");
 				Line($" vaTags           : {ModConfig.VaTagsEnabled.Value}  plates={ModConfig.VaTagsShowPlates.Value}");
 				Line($" fewTags          : {ModConfig.FewTagsEnabled.Value}");
-				Line($" esp / radar      : {ModConfig.EspEnabled.Value} / {ModConfig.RadarEnabled.Value}");
+				Line($" esp              : capsule={ModConfig.EspCapsule.Value} meshGlow={ModConfig.EspHighlight.Value} portals={ModConfig.EspPortals.Value} items={ModConfig.EspItems.Value} throughWalls={ModConfig.EspThroughWalls.Value}");
+				Line($" radar            : {ModConfig.RadarEnabled.Value}");
 				Line($" antiCrash        : {ModConfig.AntiCrashEnabled.Value}");
 				Line($" antiBlock        : {ModConfig.AntiBlockEnabled.Value}");
 				Line($" udonLog          : {ModConfig.UdonLogEnabled.Value}  frameEvents={ModConfig.UdonLogFrameEvents.Value}");
 				Line($" watchlist        : {ModConfig.WatchlistEnabled.Value}");
-				Line($" menuCaptureInput : {ModConfig.MenuCaptureInput.Value}");
 			}
 			catch (Exception e) { Line(" (settings dump failed: " + e.Message + ")"); }
 			Line("");
@@ -337,9 +336,7 @@ namespace VRChatArchiveMod.Modules
 				Line($"  roster (VaTags)     : {VaTagsModule.Roster.Count}   tagged users in DB: {VaTagsModule.RecordsLoaded}");
 				Line($"  tag fetch           : {VaTagsModule.LastFetchInfo}");
 				Line($"  last tag status     : {VaTagsModule.LastStatus}");
-				Line($"  loading screen      : showing={EraLoadingModule.IsLoading}  music={EraLoadingModule.MusicState}");
 				Line($"  udon events         : {UdonLogModule.PerSecond}/s   total {UdonLogModule.TotalSeen}");
-				Line($"  qm console          : {QuickMenuConsoleModule.State}");
 
 				// Measured per-module frame cost, when the profiler is on. This turns "the mod
 				// lags" into a ranked number instead of a guess.
@@ -352,8 +349,6 @@ namespace VRChatArchiveMod.Modules
 				}
 
 				// Actionable problems.
-				if (ModConfig.LoadingMusic.Value && EraLoadingModule.MusicState == "no clip")
-					Problem("loading music is ON but no clip was decoded — the embedded WAV failed to load.");
 				// "0 records" alone is NOT a failure: the first health snapshot can land before the
 				// first fetch has come back (5s in debug), and the endpoint answers fine. Only report
 				// when a fetch actually FAILED — verified live: GET /api/va-tags returns 200.
