@@ -1,8 +1,10 @@
-Screenshots referenced by the README go here, under exactly these names:
+Images used by the README.
 
-  quickmenu-panels.png    the PLAYERS / INSTANCE LOG panels beside the QuickMenu wings
-  launchpad-console.png   the console in the Launch Pad banner slot (ARCHIVER or CACHE logs)
-  radar-esp.png           the radar HUD with the ESP visible
-  tags-nameplates.png     player nameplates carrying archive tags/ranks
+  logo.png          Kawaii Studio mark, downscaled from the site's 1024px CuteLogo.png
+  mod-ingame.webp   the mod running in VRChat (roster, events, instance log, radar, QuickMenu)
 
-PNG, cropped to the menu (not the whole 4K desktop), ideally 1200-1600 px wide.
+Worth adding, if you capture them — crop to the menu, not the whole desktop, 1200-1600 px wide:
+
+  quickmenu-panels  the PLAYERS / INSTANCE LOG panels beside the QuickMenu wings, close up
+  launchpad-console the console in the Launch Pad banner slot (ARCHIVER or CACHE logs)
+  tags-nameplates   player nameplates carrying archive ranks/tags

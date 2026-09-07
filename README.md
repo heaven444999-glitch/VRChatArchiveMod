@@ -1,4 +1,10 @@
+<p align="center">
+  <img src="docs/img/logo.png" alt="Kawaii Studio" width="180">
+</p>
+
 <h1 align="center">VRChat Archive Mod</h1>
+
+<p align="center"><em>by <a href="https://kawaiistudio.org">Kawaii Studio</a> · <a href="https://vrchatarchive.org">vrchatarchive.org</a></em></p>
 
 <p align="center">
   A client-side <strong>BepInEx 6 (IL2CPP)</strong> plugin for VRChat — built for preserving and
@@ -30,20 +36,17 @@
 
 ## Screenshots
 
-*Being added — see `docs/img/README.txt` for what goes where.*
+<p align="center">
+  <img src="docs/img/mod-ingame.webp" alt="The mod running in VRChat: instance roster, event feed, instance log, radar and the themed QuickMenu">
+</p>
 
-<!-- READY TO GO LIVE: drop the four PNGs into docs/img/ under exactly these names, then delete
-     this comment's opening and closing markers. Nothing else needs editing. The block is kept
-     commented until then so the page shows no broken images.
+<p align="center"><em>Everything the mod draws, in one instance — the <strong>PLAYERS</strong> roster and
+<strong>EVENTS</strong> feed at the left, the <strong>INSTANCE LOG</strong> and <strong>RADAR</strong> at the
+right, and the QuickMenu wearing the mod's own theme. All of it is local: nobody else in the instance
+sees any of it.</em></p>
 
-| | |
-|---|---|
-| <img src="docs/img/quickmenu-panels.png" alt="QuickMenu side panels"> | <img src="docs/img/launchpad-console.png" alt="Launch Pad console"> |
-| **QuickMenu side panels** — the instance roster and the event log, built beside the menu's wings and following them as they retract. | **Launch Pad console** — the promo banner slot showing what the archiver is uploading and which avatar bundles just loaded. |
-| <img src="docs/img/radar-esp.png" alt="Radar and ESP"> | <img src="docs/img/tags-nameplates.png" alt="Player tags on nameplates"> |
-| **Radar & ESP** — where everyone is, on a HUD you can size and place. | **Tags** — archive rank and player tags rendered on nameplates. |
-
--->
+<!-- Room for more: drop further captures into docs/img/ and add them here.
+     See docs/img/README.txt for the shots that would be worth having. -->
 
 ---
 
