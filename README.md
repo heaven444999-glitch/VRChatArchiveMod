@@ -1,8 +1,49 @@
-# VRChat Archive Mod
+<h1 align="center">VRChat Archive Mod</h1>
 
-A client-side **BepInEx 6 (IL2CPP)** plugin for VRChat — built for preserving and organizing avatars, with a set of local, quality-of-life tools around it.
+<p align="center">
+  A client-side <strong>BepInEx 6 (IL2CPP)</strong> plugin for VRChat — built for preserving and
+  organizing avatars, with a set of local, quality-of-life tools around it.
+</p>
+
+<p align="center">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff5aa0">
+  <img alt="Target: .NET 6" src="https://img.shields.io/badge/.NET-6.0-512bd4">
+  <img alt="BepInEx 6 IL2CPP" src="https://img.shields.io/badge/BepInEx-6%20(IL2CPP)-8143e6">
+  <img alt="Local only" src="https://img.shields.io/badge/network-local%20only-00e5ff">
+</p>
 
 > **Unofficial** and **local-only**. Not affiliated with VRChat Inc. Loading third-party code into VRChat may violate its Terms of Service — see [Disclaimer](#disclaimer).
+
+---
+
+## What it does
+
+- **Archives avatars.** Favourite, inspect and record what you meet, so a public avatar that gets deleted tomorrow is not simply gone.
+- **Puts the data where you are looking.** Instance roster, event log and an archiver console live *inside* the QuickMenu, as panels attached to its wings — not a floating window pinned to the world.
+- **Refuses to crash.** An avatar anti-crash pass clamps particle, light, cloth, PhysBone, polygon, material and shader bombs, and every clamp is journaled so switching it off puts the avatar back exactly as it was.
+- **Stays out of everyone else's game.** Every visualization, movement tweak and list runs on your machine and changes only your view. Where it talks to a network it talks to `127.0.0.1` or to this project's own API — never to the other clients in your instance.
+- **Survives VRChat updates.** The IL2CPP layer is obfuscated and renamed every build, so the mod verifies native pointers before dereferencing them, corrects the interop field-offset slot, and degrades a feature to "unavailable" rather than taking the process down.
+
+**Contents** — [Screenshots](#screenshots) · [Overview](#overview) · [Architecture](#architecture) · [Modules](#modules) · [Building](#building) · [Credits](#credits--third-party) · [Disclaimer](#disclaimer) · [License](#license)
+
+---
+
+## Screenshots
+
+*Being added — see `docs/img/README.txt` for what goes where.*
+
+<!-- READY TO GO LIVE: drop the four PNGs into docs/img/ under exactly these names, then delete
+     this comment's opening and closing markers. Nothing else needs editing. The block is kept
+     commented until then so the page shows no broken images.
+
+| | |
+|---|---|
+| <img src="docs/img/quickmenu-panels.png" alt="QuickMenu side panels"> | <img src="docs/img/launchpad-console.png" alt="Launch Pad console"> |
+| **QuickMenu side panels** — the instance roster and the event log, built beside the menu's wings and following them as they retract. | **Launch Pad console** — the promo banner slot showing what the archiver is uploading and which avatar bundles just loaded. |
+| <img src="docs/img/radar-esp.png" alt="Radar and ESP"> | <img src="docs/img/tags-nameplates.png" alt="Player tags on nameplates"> |
+| **Radar & ESP** — where everyone is, on a HUD you can size and place. | **Tags** — archive rank and player tags rendered on nameplates. |
+
+-->
 
 ---
 
@@ -192,7 +233,9 @@ Copy the built DLL into your VRChat BepInEx plugins folder, then launch VRChat t
 <VRChat>/BepInEx/plugins/VRChatArchiveMod.dll
 ```
 
-The plugin logs to the BepInEx console/log. If the module list does not register, check that `libs/` matched your interop assemblies and that the IL2CPP fixes reported success in the log. (`DEPLOY.bat` in the repo is an example of the author's own copy-to-plugins step — edit the paths for your machine.)
+The plugin logs to the BepInEx console/log. If the module list does not register, check that `libs/` matched your interop assemblies and that the IL2CPP fixes reported success in the log.
+
+VRChat must be **closed** while you copy: the plugin DLL is locked for as long as the game is running.
 
 ---
 

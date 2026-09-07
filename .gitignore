@@ -44,3 +44,7 @@ __pycache__/
 
 # Editor/perf scratch copies kept beside a file while tuning it — never part of a build.
 *.bak-*
+
+# The author's own copy-to-plugins script: hardcoded local drive layout, of no use to
+# anyone else and not something a public repo should advertise.
+DEPLOY.bat
