@@ -45,6 +45,19 @@
 right, and the QuickMenu wearing the mod's own theme. All of it is local: nobody else in the instance
 sees any of it.</em></p>
 
+### Bad Apple!!, played with the world's own objects
+
+<p align="center">
+  <a href="https://youtu.be/gdFYaCBWtog">
+    <img src="docs/img/badapple-thumb.jpg" alt="Bad Apple!! rendered in VRChat out of the world's pickups — click to watch" width="640">
+  </a>
+</p>
+
+<p align="center"><em><strong><a href="https://youtu.be/gdFYaCBWtog">▶ BAD APPLE VRCHAT MOD</a></strong> — every loose
+object in the world becomes a pixel. The shadow art is played back frame by frame onto them, and the
+soundtrack is the <strong>clock</strong>: the picture is driven off the audio's playback position, so it cannot
+drift from the music while the networked mode waits to take ownership of the objects.</em></p>
+
 <!-- Room for more: drop further captures into docs/img/ and add them here.
      See docs/img/README.txt for the shots that would be worth having. -->
 
@@ -161,7 +174,7 @@ Self-only locomotion and novelty features. Every movement tool moves *you* throu
 - **SpawnSoundModule** — plays an embedded "spawn stinger" WAV once locally each time you finish loading into an instance, as a 2D `AudioSource` that sends nothing.
 - **VideoModule** — finds the world's Udon video players and points one at a chosen URL on *your* client only (validated through VRChat's `TryCreateAllowlistedVRCUrl`), never taking ownership or syncing.
 - **VideoUrlModule** — injects a URL into the world's video players and plays it *synced* to the whole instance, driving `BaseVRCVideoPlayer.LoadURL` plus the Udon `VRCUrl` variable and play events, taking ownership only on genuinely networked objects.
-- **BadAppleModule** — plays *Bad Apple!!* in the VRChat chatbox as shadow-art over OSC (`/chatbox/input`) from DLL-embedded pre-baked frame data, on a background thread with configurable cadence.
+- **BadAppleModule** — plays *Bad Apple!!* in the VRChat chatbox as shadow-art over OSC (`/chatbox/input`) from DLL-embedded pre-baked frame data, on a background thread with configurable cadence. The same baked frames drive `MarkModule`'s object show, where the world's own pickups become the pixels — [see it running](https://youtu.be/gdFYaCBWtog).
 - **EraLoadingModule** — draws a recreated VRChat 2017/2018-era loading screen with era music over the modern one, detecting loading passively by watching the game's own loading popup.
 
 ### Udon Tools & Anti-Crash
