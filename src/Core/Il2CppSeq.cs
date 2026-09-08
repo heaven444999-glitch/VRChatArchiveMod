@@ -83,6 +83,21 @@ namespace VRChatArchiveMod.Core
 		//    probe just before it). CopyTo is one interface call on a normal class object and the
 		//    array it fills is read through the interop's own wrapper: no boxed struct, no
 		//    interface dispatch per element, nothing an enumerator could get wrong.
+		//
+		//    THIS PATH MUST NOT END THE SEARCH WHEN IT FINDS NOTHING (2026-09-07).
+		//    ImmutableArray<string> -- exactly what IUdonSymbolTable.GetSymbols() hands back on this
+		//    build -- DOES satisfy the TryCast below, because the struct implements ICollection<T>.
+		//    So this path was entered, its Count came back 0 for all 60 behaviours in a USharpVideo
+		//    world, and "return outp" handed back an empty list, retiring the search before step 4 --
+		//    the indexer, which is the one written FOR ImmutableArray. The symptom was silent and
+		//    total: the injector found no VRCUrl symbol anywhere, concluded the world had no
+		//    scriptable player, and fell back to the local-only direct LoadURL. The crash trail said
+		//    so on every one of its 60 lines:
+		//        "UdonSymbols gave nothing: GetSymbols/ICollection.CopyTo
+		//         [ImmutableArray`1/ImmutableArray`1]"
+		//    So: commit to this path only if it actually produced names; otherwise fall through. A
+		//    genuinely empty collection costs one wasted indexer pass and still returns empty, which
+		//    is the right answer anyway.
 		try
 		{
 			var col = (seq as Il2CppObjectBase)?.TryCast<Il2CppSystem.Collections.Generic.ICollection<string>>();
@@ -90,12 +105,14 @@ namespace VRChatArchiveMod.Core
 			{
 				LastPath = "ICollection.CopyTo";
 				int total = col.Count;
-				if (total <= 0) return outp;
-				var arr = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray(total);
-				col.CopyTo(arr, 0);
-				int n = total > Cap ? Cap : total;
-				for (int i = 0; i < n; i++) { string s = arr[i]; if (!string.IsNullOrEmpty(s)) outp.Add(s); }
-				return outp;
+				if (total > 0)
+				{
+					var arr = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray(total);
+					col.CopyTo(arr, 0);
+					int n = total > Cap ? Cap : total;
+					for (int i = 0; i < n; i++) { string s = arr[i]; if (!string.IsNullOrEmpty(s)) outp.Add(s); }
+				}
+				if (outp.Count > 0) return outp;
 			}
 		}
 		catch { }

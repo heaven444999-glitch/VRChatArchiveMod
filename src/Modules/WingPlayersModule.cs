@@ -132,6 +132,12 @@ namespace VRChatArchiveMod.Modules
 				// The toggle is part of what is DRAWN, so it belongs in the signature: without it,
 				// flipping the switch changed nothing until a player happened to join or leave.
 				h = h * 31 + (PositionsOn() ? 1 : 0);
+				// SAME RULE, SAME TRAP (2026-09-08). The custom username is drawn on the local row as
+				// "real → custom", and it is not part of the roster data the hash above walks — so
+				// setting one applied instantly, was verified in the log, and yet the panel kept the
+				// old line until somebody happened to join. It is drawn, therefore it is in the
+				// signature.
+				try { h = h * 31 + (SpoofModule.Applied ?? "").GetHashCode(); } catch { }
 				return h;
 			}
 			catch { return -1; }
@@ -192,6 +198,24 @@ namespace VRChatArchiveMod.Modules
 			string name = "<color=" + col + "><b>" + Trunc(p.Name, 20) + "</b></color>";
 			if (p.IsMaster) name = PanelSkin.Tag("FFC800", "♛") + " " + name;
 			if (p.IsLocal) name += PanelSkin.Tag("FF4FD8", " (you)");
+			// CUSTOM USERNAME, SHOWN BESIDE THE REAL ONE RATHER THAN REPLACING IT.
+			//
+			// This roster's Name comes from APIUser.displayName (VaTagsModule.ReadApiFields) — the API
+			// record, the same source VRChat's own nameplate uses. The custom username writes
+			// VRCPlayerApi.displayName, which is what UDON reads. Two different objects, so the spoof
+			// cannot move this row, and that is correct rather than broken.
+			//
+			// Overwriting the row with the spoofed name would be a lie about the API truth, and writing
+			// the spoof INTO APIUser is forbidden outright: those are ApiModel fields carrying
+			// Save()/Put(), so a forged value can travel back to VRChat under this account. So the row
+			// shows BOTH — the real name, then an arrow to what the worlds are being told. It doubles
+			// as confirmation that the write landed, without a trip to the log.
+			try
+			{
+				if (p.IsLocal && !string.IsNullOrEmpty(SpoofModule.Applied))
+					name += PanelSkin.Tag("7CFF9E", " → " + Trunc(SpoofModule.Applied, 16));
+			}
+			catch { }
 			if (p.IsOwner) name += PanelSkin.Tag("FFC800", " ★");
 			// Who has blocked YOU — the whole reason BlockedByProbeModule exists. Prefixed and red, so
 			// it is the first thing read on the line.

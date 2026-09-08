@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>VRChatArchiveMod</AssemblyName>
     <Product>VRCHAT ARCHIVE MOD</Product>
-    <Version>3.9.20</Version>
+    <Version>3.9.30</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>

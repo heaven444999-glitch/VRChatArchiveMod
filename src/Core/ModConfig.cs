@@ -31,6 +31,8 @@ namespace VRChatArchiveMod.Core
 		// heavy avatar, and trimming it piece by piece still leaves the rest of it running.
 		public static ConfigEntry<bool> HideAvatarOverBudget;
 		public static ConfigEntry<bool> SelfHide;             // your own avatar not drawn on your screen (SelfHideModule)
+		public static ConfigEntry<string> UdonNameSpoof;      // name this client's Udon scripts read for you (SpoofModule)
+		public static ConfigEntry<bool> FloatSyncedOnly;      // FLOAT OBJECTS: only pickups whose position is networked
 		public static ConfigEntry<bool> NsfwFilter;           // hide keyword-named renderers on other players' avatars (NsfwFilterModule)
 		public static ConfigEntry<string> NsfwKeywords;
 		public static ConfigEntry<bool> AntiBlockEnabled;
@@ -308,6 +310,10 @@ namespace VRChatArchiveMod.Core
 				"NSFW FILTER: comma-separated words matched (case-insensitively) against object names on other avatars. Add or remove words freely; each must be 3+ characters.");
 			SelfHide = cfg.Bind("AntiCrash", "SelfHide", false,
 				"SELF HIDE: your own avatar is not drawn on YOUR screen (every renderer under it switched off - no mesh, no mirror reflection, no first-person hands). IK, camera, animator and what everyone else sees are untouched. Follows avatar changes and is re-asserted twice a second; OFF puts everything back.");
+			UdonNameSpoof = cfg.Bind("Spoof", "UdonName", "",
+				"CUSTOM USERNAME: the name the world's Udon scripts read for you ON THIS CLIENT. Empty = off. Written to VRCPlayerApi.displayName and verified by reading it back; re-applied on every world change. Your nameplate and VRChat's own player list keep your real name (they come from the API, not from Udon), but a world that copies the name it read into a synced variable - a leaderboard, a name sign - sends this one to everyone. Worlds that key on your real name (allowlists, saved progress) stop recognising you while it is set. Refuses to arm if the il2cpp field-offset repair did not verify.");
+			FloatSyncedOnly = cfg.Bind("AntiCrash", "FloatSyncedOnly", true,
+				"FLOAT OBJECTS: only take pickups whose position is actually networked (they carry a VRCObjectSync), which are the ones that float for EVERYONE. A plain VRC_Pickup floats on your screen alone, and in a prop-heavy world those are most of them - skipping them is what keeps the sweep from stalling the game. Switch off to float every pickup, including the ones only you will see.");
 			HideAvatarOverBudget = cfg.Bind("AntiCrash", "HideAvatarOverBudget", false,
 				"When an avatar trips more than HideAvatarTrips categories at once, hide the whole avatar instead of trimming it. The avatar is shown again when this toggle or the master goes off.");
 

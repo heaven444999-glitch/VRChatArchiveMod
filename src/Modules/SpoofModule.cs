@@ -1,0 +1,228 @@
+using System;
+using UnityEngine;
+using VRChatArchiveMod.Core;
+
+namespace VRChatArchiveMod.Modules
+{
+	// CUSTOM USERNAME — the name the world's Udon scripts read for you, on this client.
+	//
+	// THE MECHANISM, PROVEN RATHER THAN ASSUMED (2026-09-08). The first cut of this shipped on a
+	// grep: "get_displayName and set_displayName appear as strings inside VRCSDKBase.dll" says
+	// nothing about which type owns them, and it was withdrawn after a crash it probably did not
+	// cause. Decompiling the actual type settles it — VRC.SDKBase.VRCPlayerApi.displayName is a
+	// writable instance field, and Il2CppInterop's generated setter is well formed:
+	//
+	//     set {
+	//       IntPtr num = IL2CPP.Il2CppObjectBaseToPtrNotNull(this);
+	//       IL2CPP.FieldWriteWbarrierStub(num,
+	//           (IntPtr)((nint)num + (int)IL2CPP.il2cpp_field_get_offset(NativeFieldInfoPtr_displayName)),
+	//           IL2CPP.ManagedStringToIl2Cpp(value));
+	//     }
+	//
+	// Base pointer plus offset, once, through a GC write barrier. Nothing to be clever about.
+	//
+	// WHICH MAKES THE FIELD OFFSET THE ONLY REAL HAZARD, and it is a big one. That setter calls
+	// il2cpp_field_get_offset, which Il2CppInterop reads from FieldInfo+0x08 — the slot that holds
+	// the METADATA TOKEN on this build, not the offset (Core/FieldOffsetFix.cs). Unrepaired, the
+	// write lands at base + 0x04000nnn: far outside the object, corrupting whatever is there, with
+	// the access violation arriving later and somewhere else. So this module REFUSES TO ARM unless
+	// FieldOffsetFix.Verified, exactly as Core/Il2CppDelegates gates the delegate bridge.
+	//
+	// WHAT IT REACHES. Every client builds its own VRCPlayerApi objects from the network, so this
+	// writes the one in OUR process: the Udon scripts that see the new name are the ones running
+	// HERE. Your nameplate is drawn by VRChat from the API record, not by Udon, so it keeps your
+	// real name — this is a custom name inside worlds, not a change of pseudonym. It does reach the
+	// others when a world copies what it read into a synced variable, which is the usual pattern for
+	// leaderboards and name signs: the world read it here and sent it itself.
+	//
+	// IT IS VERIFIED BY READ-BACK. The write is followed by a read, and the log says whether the two
+	// agree. That is the difference between "the mod says it applied it" and knowing it landed — and
+	// it is what the first version lacked when its own PLAYERS panel appeared to disagree with it
+	// (that panel reads EspModule's cache, which is a different thing entirely).
+	public class SpoofModule : IModule
+	{
+		public override string Name => "Spoof";
+
+		public static string Status = "";
+
+		/// <summary>Your true display name, captured before anything was written over it.</summary>
+		public static string RealName { get; private set; } = "";
+
+		/// <summary>The name last successfully written, or "" when off.</summary>
+		public static string Applied { get; private set; } = "";
+
+		/// <summary>False when FieldOffsetFix could not repair the offset slot: the feature is then
+		/// off for the session rather than writing to a wild address.</summary>
+		public static bool Armed { get; private set; }
+
+		private static bool _armChecked;
+		private static float _nextCheck;
+		private static string _lastLogged = "";
+		private static IntPtr _lastApi = IntPtr.Zero;
+
+		// DRIFT INSTRUMENTATION (2026-09-08). "It is not reliable enough" could not be confirmed or
+		// denied from the log, because the log only spoke when the WANTED name changed: every silent
+		// re-write after VRChat put the real name back looked exactly like nothing happening. If the
+		// game rewrites this field, then between two of our passes it holds the real name, and any
+		// Udon script reading in that window sees it — which is precisely what unreliable feels like.
+		// So the passes are counted: how many found the value still ours, and how many found it
+		// reverted. A number tells us whether we are fighting the game, and how fast it fights back.
+		private static int _held, _reverted;
+		private static float _nextStatLog;
+
+		public override void OnUpdate()
+		{
+			try
+			{
+				float now = Time.realtimeSinceStartup;
+				if (now < _nextCheck) return;
+				// TEN TIMES A SECOND, not twice. A read of displayName is one il2cpp field access —
+				// far cheaper than the NativeGuard syscalls that made ObjectGravity expensive — so
+				// the window in which a world could read the real name back is 100 ms instead of
+				// 500. Rejoining a world rebuilds the local VRCPlayerApi and restores the real name,
+				// which is why this has to keep watching at all rather than write once.
+				_nextCheck = now + 0.1f;
+
+				if (!_armChecked)
+				{
+					_armChecked = true;
+					try { Armed = FieldOffsetFix.Verified; } catch { Armed = false; }
+					if (!Armed)
+					{
+						Status = "custom username unavailable: field offsets unrepaired on this build";
+						VRChatArchiveModPlugin.Logger.LogWarning(
+							"[Spoof] NOT ARMED — FieldOffsetFix could not verify the offset slot, so a field "
+							+ "write would land outside the object. Custom username is off for this session.");
+					}
+				}
+				if (!Armed) return;
+
+				var api = PlayerRef.LocalApi();
+				if (api == null || !NativeGuard.Alive(api)) return;
+
+				// A NEW VRCPlayerApi MEANS A NEW WORLD. Comparing the native pointer is what notices
+				// it: the field on the new object still holds the real name, so Applied has to be
+				// cleared or the "already correct" test below would skip the re-write.
+				IntPtr ptr;
+				try { ptr = api.Pointer; } catch { return; }
+				if (ptr != _lastApi)
+				{
+					_lastApi = ptr;
+					if (Applied.Length > 0)
+					{
+						Applied = "";
+						VRChatArchiveModPlugin.Logger.LogInfo("[Spoof] new local VRCPlayerApi (world change) — re-applying.");
+					}
+				}
+
+				string current;
+				try { current = api.displayName ?? ""; } catch { return; }
+
+				string wanted = "";
+				try { wanted = (ModConfig.UdonNameSpoof.Value ?? "").Trim(); } catch { }
+
+				// Learn the real name only from a value we did not write, or the restore is a no-op.
+				if (RealName.Length == 0 && current.Length > 0
+					&& !string.Equals(current, Applied, StringComparison.Ordinal))
+				{
+					RealName = current;
+					VRChatArchiveModPlugin.Logger.LogInfo("[Spoof] real display name noted: " + RealName);
+				}
+
+				if (wanted.Length == 0)
+				{
+					if (Applied.Length > 0 && RealName.Length > 0
+						&& string.Equals(current, Applied, StringComparison.Ordinal))
+					{
+						try { api.displayName = RealName; } catch { }
+						VRChatArchiveModPlugin.Logger.LogInfo("[Spoof] restored to " + RealName);
+					}
+					Applied = ""; _lastLogged = "";
+					Status = "custom username: off";
+					return;
+				}
+
+				// STILL OURS: count it and leave. This is the branch that used to be completely
+				// silent, which is why "is it holding?" had no answer.
+				if (string.Equals(current, wanted, StringComparison.Ordinal))
+				{
+					Applied = wanted;
+					_held++;
+					StatLog(now, wanted);
+					return;
+				}
+
+				// NOT OURS ANY MORE. Either we have never written it, or something put the old value
+				// back — and which of the two it is only shows up in the ratio below.
+				if (Applied.Length > 0) _reverted++;
+
+				try { api.displayName = wanted; }
+				catch (Exception e) { Status = "custom username: " + e.Message; return; }
+
+				// READ IT BACK. The whole point: this line is the difference between believing and
+				// knowing, and it costs one interop read twice a second.
+				string after;
+				try { after = api.displayName ?? ""; } catch { after = "<unreadable>"; }
+				bool ok = string.Equals(after, wanted, StringComparison.Ordinal);
+				Applied = ok ? wanted : "";
+				Status = ok ? ("custom username: " + wanted) : "custom username: the write did not stick";
+
+				if (!string.Equals(wanted, _lastLogged, StringComparison.Ordinal))
+				{
+					_lastLogged = wanted;
+					if (ok)
+						VRChatArchiveModPlugin.Logger.LogInfo(
+							"[Spoof] udon name = \"" + wanted + "\" — VERIFIED by read-back (real: "
+							+ (RealName.Length > 0 ? RealName : "?") + "). Worlds on this client read the new "
+							+ "one; your nameplate still shows the real one.");
+					else
+						VRChatArchiveModPlugin.Logger.LogWarning(
+							"[Spoof] wrote \"" + wanted + "\" but read back \"" + after
+							+ "\" — the write did not stick. Not retrying in a loop.");
+				}
+			}
+			catch (Exception e) { Status = "spoof: " + e.Message; }
+		}
+
+		// THE ANSWER TO "IS IT HOLDING?", once every ten seconds and only while a name is set.
+		//
+		// held = passes that found our value still in place. reverted = passes that found the real
+		// name back after we had written ours. A clean run reads "held 100, reverted 0" and the
+		// feature is solid; anything else is the game writing over us, and the ratio says how often
+		// — which is the difference between "it works" and "a world reading at the wrong moment sees
+		// your real name", with no guessing in between.
+		private static void StatLog(float now, string wanted)
+		{
+			if (now < _nextStatLog) { if (_nextStatLog == 0f) _nextStatLog = now + 10f; return; }
+			_nextStatLog = now + 10f;
+			int total = _held + _reverted;
+			if (total == 0) return;
+			string line = "[Spoof] \"" + wanted + "\" holding: " + _held + " ok, " + _reverted
+				+ " reverted out of " + total + " checks in the last 10 s";
+			if (_reverted == 0) VRChatArchiveModPlugin.Logger.LogInfo(line + " — stable.");
+			else VRChatArchiveModPlugin.Logger.LogWarning(
+				line + " — the game is putting the real name back; a world reading between two of our "
+				+ "passes would see it. Re-asserted each time.");
+			_held = 0; _reverted = 0;
+		}
+
+		// A world change rebuilds the local player; force the next pass to re-apply rather than wait
+		// for the pointer comparison to notice.
+		public override void OnSceneLoaded(int buildIndex)
+		{
+			Applied = ""; _lastApi = IntPtr.Zero; _nextCheck = 0f;
+			_held = 0; _reverted = 0; _nextStatLog = 0f;
+		}
+
+		public override void OnShutdown()
+		{
+			try
+			{
+				if (!Armed || Applied.Length == 0 || RealName.Length == 0) return;
+				var api = PlayerRef.LocalApi();
+				if (api != null && NativeGuard.Alive(api)) api.displayName = RealName;
+			}
+			catch { }
+		}
+	}
+}

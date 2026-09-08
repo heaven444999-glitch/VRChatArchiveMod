@@ -1,4 +1,4 @@
-using BepInEx;
+﻿using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
@@ -55,6 +55,8 @@ namespace VRChatArchiveMod
 			ModuleManager.Register(new SelfHideModule());
 			// FLOAT OBJECTS: gravity off on every pickup body (FUN toggle).
 			ModuleManager.Register(new ObjectGravityModule());
+			// CUSTOM USERNAME: what the world's Udon scripts are told your name is (local write).
+			ModuleManager.Register(new SpoofModule());
 			// MENU BACKGROUNDS: the VRC+ backgrounds (parallax included) shown locally. Flips one bool
 			// on the game's own BackgroundOption assets — no API model is touched, nothing is sent.
 			ModuleManager.Register(new VrcPlusBackgroundsModule());
@@ -211,7 +213,7 @@ namespace VRChatArchiveMod
 	{
 		public const string Guid = "org.vrchatarchive.mod";
 		public const string Name = "VRCHAT ARCHIVE MOD";
-		public const string Version = "3.9.20";
+		public const string Version = "3.9.30";
 	}
 }
 
