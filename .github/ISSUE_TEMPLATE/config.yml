@@ -1,0 +1,22 @@
+blank_issues_enabled: false
+contact_links:
+  - name: The build fails on my machine
+    url: https://github.com/kawaiistudio/VRChatArchiveMod/blob/main/CONTRIBUTING.md#before-you-can-build
+    about: >-
+      Read the build section first. Two directories this project needs are deliberately not in the
+      repository: libs/ (the BepInEx 6 IL2CPP framework assemblies and the VRChat/Unity interop
+      assemblies generated from your own game install) and ressources/ (the embedded media). Neither
+      is ours to redistribute. A build that stops on missing references or on a missing
+      EmbeddedResource is the expected result of not supplying them, not a bug in the mod.
+  - name: I have found a security problem
+    url: https://github.com/kawaiistudio/VRChatArchiveMod/security/policy
+    about: >-
+      Do not open a public issue for it. The security policy says what is in scope — harm that lands
+      on the person running the mod — and how to report it privately through GitHub's own advisory
+      flow, where the details stay between you and the maintainer until there is a fix.
+  - name: VRChat Archive — the project and the archive itself
+    url: https://vrchatarchive.org
+    about: >-
+      The site this mod belongs to, and the home of the desktop client the mod talks to over loopback.
+      Questions about accounts, the archive's contents, tags or the client itself belong there rather
+      than in this repository, which only holds the in-game plugin's source.

@@ -1,0 +1,290 @@
+# ---------------------------------------------------------------------------
+# C# syntax check — PARSER ONLY. Read this before trusting a green tick.
+#
+# WHAT THIS IS
+# It runs Roslyn's C# parser over every tracked .cs file in the repository and
+# fails if any file produces a parse error: an unbalanced brace, a truncated
+# file, a half-applied patch, a bad paste, a stray backtick from a chat window.
+# That class of breakage is cheap to introduce and expensive to notice, and it
+# is the only class this job can see.
+#
+# WHAT THIS IS NOT
+# It is NOT a build. It cannot catch a type error, a missing member, a wrong
+# overload, a renamed VRChat field, a bad Harmony patch target or any other
+# IL2CPP interop mistake, because those need semantic analysis, and semantic
+# analysis needs references — which this repository does not have and never
+# will:
+#
+#   * VRChatArchiveMod.csproj references libs/bepinex/*.dll (8 BepInEx 6
+#     IL2CPP assemblies) and libs/interop/*.dll (248 assemblies generated from
+#     a local VRChat install). Those are Unity's and VRChat's property, they
+#     are not redistributable, and libs/ is gitignored.
+#   * The csproj also embeds 18 files from ressources/ (16 MB of audio,
+#     images and pre-baked frame data, some of it third-party). ressources/ is
+#     gitignored too, and a missing <EmbeddedResource> is a hard MSBuild error.
+#
+# So `dotnet build` on a fresh public clone fails by design, on every runner,
+# forever. A CI job that ran it would be permanently red and would teach
+# everyone to ignore the badge. This job is deliberately the largest check
+# that can be honest about a clone with no libs/ and no ressources/ — parsing
+# needs no references at all.
+#
+# Do not reword the badge, the workflow name or the job name into anything
+# that sounds like "build" or "tests". Overstating this check would be worse
+# than not having it.
+#
+# ONE MORE LIMITATION, STATED HONESTLY
+# The parser does not read inside disabled #if regions, so a syntax error
+# hidden in one would slip through. That costs nothing today: there is not a
+# single preprocessor conditional anywhere in the tracked C# sources. If that
+# ever changes, this note becomes a real gap.
+# ---------------------------------------------------------------------------
+
+name: C# syntax
+
+on:
+  push:
+    branches: [main]
+    # Documentation-only commits (README, NOTICE, docs/img, CHANGELOG) cannot
+    # change what the parser sees, so they do not spend a runner.
+    paths:
+      - '**.cs'
+      - '.github/workflows/csharp-syntax.yml'
+  pull_request:
+    paths:
+      - '**.cs'
+      - '.github/workflows/csharp-syntax.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: csharp-syntax-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parse:
+    name: Parse only — no build, no game assemblies
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@v4
+
+      # Pinned so the check is reproducible, and installed by setup-dotnet
+      # whether or not the runner image happens to ship it. The number is
+      # near-arbitrary: all this SDK has to do is build a net8.0 console app.
+      # The Roslyn that does the parsing comes from NuGet, not from the SDK,
+      # so this does not decide which C# the parser understands. And it has
+      # nothing to do with the mod's own target framework (net6.0) — nothing
+      # here compiles the mod.
+      - name: Set up .NET SDK (for the parser host, not for the mod)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # The parser tool is generated into RUNNER_TEMP, OUTSIDE the repository
+      # tree. That is deliberate: it can never be mistaken for project source,
+      # it can never be swept up by a source glob, and nothing extra has to be
+      # committed for this check to exist.
+      - name: Generate the parser tool (outside the repository tree)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOL="${RUNNER_TEMP}/csharp-syntax-check"
+          mkdir -p "$TOOL"
+
+          cat > "$TOOL/SyntaxCheck.csproj" <<'CSPROJ'
+          <Project Sdk="Microsoft.NET.Sdk">
+
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net8.0</TargetFramework>
+              <AssemblyName>SyntaxCheck</AssemblyName>
+              <RootNamespace>SyntaxCheck</RootNamespace>
+              <LangVersion>latest</LangVersion>
+              <Nullable>disable</Nullable>
+              <ImplicitUsings>disable</ImplicitUsings>
+              <InvariantGlobalization>true</InvariantGlobalization>
+              <NuGetAudit>false</NuGetAudit>
+            </PropertyGroup>
+
+            <ItemGroup>
+              <!-- The Roslyn parser, straight from nuget.org. This is the only
+                   dependency the check has, and it is public. -->
+              <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+            </ItemGroup>
+
+          </Project>
+          CSPROJ
+
+          cat > "$TOOL/Program.cs" <<'PROGRAM'
+          using System;
+          using System.Collections.Generic;
+          using System.IO;
+          using System.Linq;
+          using Microsoft.CodeAnalysis;
+          using Microsoft.CodeAnalysis.CSharp;
+          using Microsoft.CodeAnalysis.Text;
+
+          // SYNTAX ONLY.
+          //
+          // CSharpSyntaxTree.ParseText needs no references, no compilation and no
+          // assemblies: it turns text into a tree and reports what it could not
+          // read. Every diagnostic it produces is a lexer or parser diagnostic.
+          // Nothing here resolves a name, so nothing here can tell you whether a
+          // VRChat or BepInEx member still exists. That is the whole point — the
+          // assemblies that would answer that question are not redistributable
+          // and are never present on a runner.
+          internal static class Program
+          {
+              // Directories that are either build output or deliberately absent from
+              // a public clone. obj/ in particular holds SDK-generated .cs files, so
+              // skipping it keeps the file count identical on a runner and on a
+              // developer machine that has already built once.
+              private static readonly string[] SkipDirs =
+              {
+                  ".git", "bin", "obj", "libs", "ressources", "packages", "node_modules"
+              };
+
+              private static int Main(string[] args)
+              {
+                  string root = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
+                  root = Path.GetFullPath(root);
+
+                  List<string> files = Collect(root).OrderBy(p => p, StringComparer.Ordinal).ToList();
+
+                  // A check that silently passes because it found nothing is worse
+                  // than no check. If the walk comes back empty, the checkout or the
+                  // path argument is wrong, and that is a failure.
+                  if (files.Count == 0)
+                  {
+                      Console.Error.WriteLine("SYNTAX CHECK: no .cs file found under " + root);
+                      Console.Error.WriteLine("SYNTAX CHECK: refusing to report success on an empty file set.");
+                      return 2;
+                  }
+
+                  // LanguageVersion.Latest, to match <LangVersion>latest</LangVersion>
+                  // in VRChatArchiveMod.csproj. DocumentationMode.None because the
+                  // /// blocks are prose for humans, not a doc-XML build, and their
+                  // contents must not produce diagnostics. No preprocessor symbols
+                  // are defined: the tracked sources contain no #if at all.
+                  CSharpParseOptions options = new CSharpParseOptions(
+                      LanguageVersion.Latest,
+                      DocumentationMode.None,
+                      SourceCodeKind.Regular);
+
+                  int errors = 0;
+
+                  foreach (string file in files)
+                  {
+                      // File.ReadAllText detects and strips a UTF-8 BOM and does not
+                      // throw on odd bytes. The tree is about half BOM, half not, and
+                      // the parser must not care either way.
+                      string source = File.ReadAllText(file);
+                      SyntaxTree tree = CSharpSyntaxTree.ParseText(source, options, file);
+
+                      foreach (Diagnostic d in tree.GetDiagnostics())
+                      {
+                          if (d.Severity != DiagnosticSeverity.Error)
+                              continue;
+
+                          errors++;
+
+                          LinePosition pos = d.Location.GetLineSpan().StartLinePosition;
+                          string rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+
+                          // file(line,col): error CSxxxx: message — the shape every
+                          // editor and every log reader already knows how to jump to.
+                          Console.WriteLine(rel
+                              + "(" + (pos.Line + 1) + "," + (pos.Character + 1) + "): "
+                              + "error " + d.Id + ": " + d.GetMessage());
+                      }
+                  }
+
+                  Console.WriteLine();
+                  Console.WriteLine("SYNTAX CHECK: parsed " + files.Count + " file(s), found "
+                      + errors + " parse error(s).");
+                  Console.WriteLine("SYNTAX CHECK: this is the Roslyn PARSER only. It cannot see type");
+                  Console.WriteLine("SYNTAX CHECK: errors, missing members or IL2CPP interop mistakes,");
+                  Console.WriteLine("SYNTAX CHECK: because the VRChat and BepInEx assemblies are not");
+                  Console.WriteLine("SYNTAX CHECK: redistributable and are never present on a runner.");
+
+                  return errors == 0 ? 0 : 1;
+              }
+
+              private static IEnumerable<string> Collect(string root)
+              {
+                  foreach (string path in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+                  {
+                      string rel = Path.GetRelativePath(root, path).Replace('\\', '/');
+                      bool skip = false;
+
+                      foreach (string segment in rel.Split('/'))
+                      {
+                          for (int i = 0; i < SkipDirs.Length; i++)
+                          {
+                              if (string.Equals(segment, SkipDirs[i], StringComparison.OrdinalIgnoreCase))
+                              {
+                                  skip = true;
+                                  break;
+                              }
+                          }
+                          if (skip) break;
+                      }
+
+                      if (!skip) yield return path;
+                  }
+              }
+          }
+          PROGRAM
+
+          echo "Parser tool written to $TOOL"
+
+      - name: Build the parser tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build "${RUNNER_TEMP}/csharp-syntax-check/SyntaxCheck.csproj" \
+            --configuration Release \
+            --verbosity minimal
+
+      - name: Parse every tracked .cs file (syntax only — this is not a build)
+        shell: bash
+        run: |
+          set -uo pipefail
+          REPORT="${RUNNER_TEMP}/csharp-syntax-report.txt"
+          status=0
+
+          # stderr is folded into the report on purpose. The empty-file-set
+          # guard (exit 2) writes its only two lines there, and without this
+          # the job summary for the one failure that means "your checkout is
+          # broken" would be an empty code fence explaining nothing.
+          dotnet run \
+            --project "${RUNNER_TEMP}/csharp-syntax-check/SyntaxCheck.csproj" \
+            --configuration Release \
+            --no-build \
+            -- "${GITHUB_WORKSPACE}" 2>&1 | tee "$REPORT" || status=$?
+
+          {
+            echo "### C# syntax check"
+            echo
+            echo '```'
+            cat "$REPORT"
+            echo '```'
+            echo
+            echo "This step runs Roslyn's parser over every tracked \`.cs\` file. It"
+            echo "checks that the source can be *read* — balanced braces, complete"
+            echo "declarations, no truncation. The result is in the block above."
+            echo "It does **not** compile the mod and cannot report type"
+            echo "errors, missing members or IL2CPP interop mistakes: that needs the"
+            echo "VRChat and BepInEx assemblies, which are not redistributable and"
+            echo "are never present on a runner."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          exit $status

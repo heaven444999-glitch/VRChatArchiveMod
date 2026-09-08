@@ -1,0 +1,75 @@
+name: Feature request
+description: Propose a feature, or a change to one that already exists.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This mod exists to preserve avatars and to make browsing, archiving and reading a room easier,
+        without trading the user's session stability for a feature. Proposals are weighed against that,
+        so the two questions worth answering first are what problem you are stuck with and what the mod
+        would do about it — not which VRChat internals it would call.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What are you trying to do today, and where does it fail or cost you something? Describe the
+        situation, not the solution. A proposal with a concrete problem behind it survives review; one
+        that starts at "add a button that…" usually does not.
+      placeholder: |
+        When I meet an avatar in a public instance I want to know whether it is already in my archive
+        before I decide to save it. Today I have to open the desktop client and search by id, by which
+        point the person has usually moved on.
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: The proposed behaviour
+      description: >-
+        What should the mod do, from the user's point of view? Where does it appear, what switches it
+        on, what does it look like when it is off, and what happens when the data it needs is not there?
+        Off by default is the norm for anything that is not a fix.
+      placeholder: |
+        On the avatar detail pane, next to the existing Save to Archive button, show a small marker when
+        the id is already archived. Off by default, one toggle. When the desktop client is not running,
+        the marker simply does not appear.
+    validations:
+      required: true
+  - type: textarea
+    id: placement
+    attributes:
+      label: Where it belongs
+      description: >-
+        Which existing module should own this, or does it need a new one? Every feature is a module
+        deriving from `IModule` — an abstract class, despite the name — registered once in
+        `src/Plugin.cs`, with its settings bound in `src/Core/ModConfig.cs`. A guess is fine — say
+        "not sure" if you do not know the codebase.
+      placeholder: "Probably ArchiveFavButtonModule, since it already clones the buttons on that pane."
+    validations:
+      required: false
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: The two invariants this project will not break
+      description: >-
+        Both are hard constraints, not preferences. A proposal that cannot satisfy them will be closed,
+        however good the idea is.
+      options:
+        - label: >-
+            **It changes my own client only.** The feature affects what I see, hear or where I stand —
+            it does not push anything at the other players in my instance, and it sends nothing about
+            them anywhere. If it genuinely cannot avoid touching networked state (taking ownership of a
+            pickup, a synced video URL, the chatbox, voice), then it must be opt-in, off by default, and
+            labelled in its own UI as something everyone in the instance will see — the way the existing
+            networked features already are.
+          required: true
+        - label: >-
+            **It fails quietly when VRChat moves underneath it.** VRChat re-obfuscates its IL2CPP
+            metadata every update, so anything resolved by name, offset or native export can vanish
+            overnight. The feature must be able to report itself unavailable (`FeatureHealth`), guard
+            its pointers before dereferencing them (`NativeGuard`), and go through the delegate gate
+            (`Il2CppDelegates`) rather than taking the game's process down with it.
+          required: true

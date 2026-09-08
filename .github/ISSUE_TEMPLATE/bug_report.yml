@@ -1,0 +1,151 @@
+name: Bug report
+description: Something in the mod misbehaves, breaks after a VRChat update, or takes the game down with it.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you write anything down, two things about this project.
+
+        **This is an unofficial mod.** It is not affiliated with, endorsed by, or supported by
+        VRChat Inc. Nothing reported here can be escalated to them, and a problem that turns out
+        to be VRChat's own behaviour will be closed as out of scope rather than forwarded.
+
+        **Redact people, including yourself.** Logs and screenshots from a live instance carry other
+        players' display names, `usr_` / `avtr_` / `wrld_` ids, instance ids and invite links. None of
+        that helps anyone read a stack trace, and this repository is public and indexed. Replace those
+        strings with `<redacted>` before pasting. The mod's own diagnostics report strips *credentials*
+        (`key=`, `token=`, `password=`, `session=` and long base64 blobs — see `src/Core/Redact.cs`);
+        it does not strip names or ids, so that part is still on you.
+  - type: input
+    id: mod-version
+    attributes:
+      label: Mod version
+      description: >-
+        The plugin prints it at startup, in `BepInEx/LogOutput.log`:
+        `VRCHAT ARCHIVE MOD v3.9.20 loading (BepInEx IL2CPP)...`. It is also in the header of every
+        diagnostics report the mod writes to `BepInEx/VRChatArchiveMod/diagnostics/`. If you built the
+        DLL yourself, the `<Version>` in `VRChatArchiveMod.csproj` is the same number.
+      placeholder: "3.9.20"
+    validations:
+      required: true
+  - type: input
+    id: vrchat-build
+    attributes:
+      label: VRChat build
+      description: >-
+        The single most useful line in this form. VRChat ships obfuscated IL2CPP and renames its
+        metadata on every game update, so types, fields and native exports the mod resolves by name
+        or by offset move without warning. A feature that worked yesterday, stopped today, and had no
+        code change in between is almost always that — and without the exact build the report cannot
+        be reproduced or even dated. Where to find it: the `game` line in the header of the mod's own
+        diagnostics report (`BepInEx/VRChatArchiveMod/diagnostics/va-report_<timestamp>.log`), or the
+        version string VRChat itself displays in the client.
+      placeholder: "e.g. VRChat 2026.2.1p3 — copy the string exactly as shown"
+    validations:
+      required: true
+  - type: input
+    id: bepinex-version
+    attributes:
+      label: BepInEx version
+      description: >-
+        The BepInEx 6 (IL2CPP) build you are loading the mod with, from the banner at the top of
+        `BepInEx/LogOutput.log`. Il2CppInterop changes between bleeding-edge builds, and the mod's
+        `FieldOffsetFix`, `NestedTypeFix` and delegate gate are written against particular behaviour
+        of that layer.
+      placeholder: "e.g. BepInEx 6.0.0-be.<build> (IL2CPP)"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      description: Several features behave differently in VR — the QuickMenu wing panels and the desktop-only movement tools especially.
+      options:
+        - Desktop
+        - VR
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which module or area
+      description: Pick the closest match. "Not sure" is a legitimate answer and better than a wrong guess.
+      options:
+        - Whole mod / startup (nothing loads, or no modules register)
+        - Archiving, favourites and the asset-bundle cache
+        - QuickMenu integration and theming (Archive tab, wing panels, Launch Pad console)
+        - Anti-crash, Photon Guard, anti-block, NSFW filter, watchlist
+        - ESP, radar and on-screen overlays
+        - Movement, objects and body (fly, noclip, speed, gravity, grab, orbit, ghost, mimic)
+        - Media (Bad Apple chatbox and object show, soundboard, video URL)
+        - Udon and network observation (Udon log, Udon manager, network log, send counter)
+        - Community tagging (VA tags, FewTags)
+        - Desktop client link and diagnostics (the loopback control channel, diagnostics report)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected instead
+      description: Two short paragraphs beat one long one. Say what you saw on screen, not only what the log said.
+      placeholder: |
+        What happened: the Archive tab appears in the QuickMenu but every tile is grey and nothing
+        responds to a click.
+
+        What I expected: the tiles keep the Launchpad styling and open their sub-pages.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Start from a cold game launch. Note whether it happens in every world or only one, in a public
+        instance or only alone, on the first join or only after a world change — those distinctions are
+        usually what separates a mod bug from a VRChat timing quirk.
+      placeholder: |
+        1. Launch VRChat through BepInEx.
+        2. Join any public instance.
+        3. Open the QuickMenu, go to the VRChat Archive tab.
+        4. Click any tile — nothing happens; repeats on every relaunch.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: BepInEx console / log excerpt
+      description: >-
+        From `BepInEx/LogOutput.log`. Paste roughly thirty lines *around* the failure, not the whole
+        file: the `[Error` or `[Warning` line, the exception type and message, and the stack trace
+        under it. The lines immediately before it are often the ones that identify which module was
+        running. If the plugin never loaded at all, the top of the file is the interesting part instead.
+        If the game *died* rather than logged anything, the mod may also have left a breadcrumb file at
+        `BepInEx/VRChatArchiveMod/crash/<name>.trail`, whose last line is the last step that completed
+        before the process went — paste that line too. It is consumed on the next launch, so take it
+        before you relaunch. Strip display names, `usr_` / `avtr_` / `wrld_` ids and instance ids
+        before pasting.
+      render: text
+      placeholder: |
+        [Info   :VRCHAT ARCHIVE MOD] VRCHAT ARCHIVE MOD v3.9.20 loading (BepInEx IL2CPP)...
+        [Error  :VRCHAT ARCHIVE MOD] <exception and stack trace here>
+    validations:
+      required: true
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I searched the existing issues, open and closed, and this is not already reported.
+          required: true
+        - label: >-
+            I am running the newest version of the mod available to me. If I built it myself, I built
+            from the current `main`.
+          required: true
+        - label: >-
+            I understand this mod is unofficial, that VRChat Inc. neither supports nor endorses it,
+            that loading third-party code into VRChat may breach its Terms of Service, and that it is
+            provided as-is with no warranty.
+          required: true

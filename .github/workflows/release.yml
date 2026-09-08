@@ -1,0 +1,294 @@
+name: Release
+
+# Turns a pushed tag into a DRAFT GitHub release whose notes are that version's section of
+# CHANGELOG.md, after checking that the tag, the .csproj and src/Plugin.cs all agree on the
+# version number. The maintainer then attaches the locally built DLL and presses Publish.
+# tools/release.ps1 drives this whole sequence from a Windows machine.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY THERE IS NO BUILD JOB, AND WHY ONE MUST NEVER BE ADDED.
+#
+# VRChatArchiveMod.csproj references libs/bepinex/*.dll (8 BepInEx 6 IL2CPP framework assemblies)
+# and libs/interop/*.dll (248 Il2CppInterop assemblies generated from a local VRChat install), and
+# it embeds 18 files out of ressources/. Both directories are gitignored on purpose: they are
+# Unity's, VRChat's and third-party owners' property, and are not ours to redistribute. A fresh
+# public clone therefore has neither, and a missing <Reference> or <EmbeddedResource> is a hard
+# MSBuild error, not a warning. `dotnet build` here would fail on every single run, and a badge
+# that is permanently red teaches its own maintainer to stop reading it.
+#
+# So every step below is written to work on a fresh public clone with nothing but git, sed and
+# awk. If a check cannot pass under that rule, it does not belong in this file.
+# ---------------------------------------------------------------------------------------------
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re-)draft the release from, for example v3.9.20'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Draft the release from the tag
+    runs-on: ubuntu-latest
+    permissions:
+      # Creating a release, and later accepting the maintainer's `gh release upload`, both write
+      # to the contents scope. Nothing else in this workflow needs a permission at all.
+      contents: write
+
+    steps:
+      - name: Resolve the tag
+        id: tag
+        env:
+          # The input is passed through the environment instead of being interpolated into the
+          # script body. A ${{ }} substitution pastes its raw text straight into the shell before
+          # bash ever sees it, so a crafted value would run as code; $TAG_INPUT cannot.
+          TAG_INPUT: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${TAG_INPUT}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          if ! printf '%s' "${TAG}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '${TAG}' is not of the form vX.Y.Z, for example v3.9.20."
+            exit 1
+          fi
+
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${TAG#v}" >> "${GITHUB_OUTPUT}"
+          echo "Tag ${TAG} -> version ${TAG#v}"
+
+      - name: Check out the tagged tree
+        uses: actions/checkout@v4
+        with:
+          # Check out the tag itself, not the branch the dispatch happened to be started from,
+          # so the version files read below are the ones the tag actually points at.
+          ref: ${{ steps.tag.outputs.tag }}
+          # Full history and all tags: the notes step uses `git describe` on the parent of this
+          # tag to find the previous release and build a compare link.
+          fetch-depth: 0
+
+      - name: Verify the tag matches the project version
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Two files carry the version, and both are checked.
+          #
+          # VRChatArchiveMod.csproj <Version> is what the assembly is stamped with.
+          # src/Plugin.cs PluginInfo.Version is what [BepInPlugin] registers and what the mod
+          # prints into the BepInEx log on load, so it is the number a user reads back to you in
+          # a bug report. These two have disagreed before: at the 3.5.0 release the csproj said
+          # 3.5.0 while Plugin.cs still said 3.4.0, and the in-game banner was wrong for the whole
+          # life of that release. Nothing in a build catches that, so it is caught here.
+          CSPROJ_VERSION="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' VRChatArchiveMod.csproj | head -n 1)"
+          PLUGIN_VERSION="$(sed -n 's/.*public const string Version = "\([^"]*\)".*/\1/p' src/Plugin.cs | head -n 1)"
+
+          echo "tag             ${VERSION}"
+          echo "csproj          ${CSPROJ_VERSION:-<none found>}"
+          echo "src/Plugin.cs   ${PLUGIN_VERSION:-<none found>}"
+
+          BAD=0
+          [ "${CSPROJ_VERSION}" = "${VERSION}" ] || BAD=1
+          [ "${PLUGIN_VERSION}" = "${VERSION}" ] || BAD=1
+
+          if [ "${BAD}" -ne 0 ]; then
+            echo "::error::Version mismatch. Tag ${TAG} says ${VERSION}, VRChatArchiveMod.csproj says '${CSPROJ_VERSION}', src/Plugin.cs says '${PLUGIN_VERSION}'. All three must agree before a release is drafted."
+            {
+              echo "## Release refused: version mismatch"
+              echo
+              echo "| Source | Version |"
+              echo "| --- | --- |"
+              echo "| tag \`${TAG}\` | \`${VERSION}\` |"
+              echo "| \`VRChatArchiveMod.csproj\` | \`${CSPROJ_VERSION:-none found}\` |"
+              echo "| \`src/Plugin.cs\` | \`${PLUGIN_VERSION:-none found}\` |"
+              echo
+              echo "No release was created. Fix the version in the two files, commit, then move the tag:"
+              echo
+              echo '```sh'
+              echo "git push --delete origin ${TAG}"
+              echo "git tag -d ${TAG}"
+              echo "git tag -a ${TAG} -m 'VRChat Archive Mod ${TAG}'"
+              echo "git push origin ${TAG}"
+              echo '```'
+              echo
+              echo "\`tools/release.ps1 -Version ${VERSION}\` performs the same three checks before it tags anything, and offers to fix the two files for you."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          echo "All three agree on ${VERSION}."
+
+      - name: Build the release notes from CHANGELOG.md
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::error::CHANGELOG.md does not exist at ${TAG}. The release notes are taken from it, so there is nothing to publish."
+            exit 1
+          fi
+
+          # Everything between this version's "## [x.y.z]" heading and the next "## " heading.
+          # Matched as literal text with substr rather than as a regex: the version is full of
+          # dots, and every way of escaping them inside an awk string is a way of getting it
+          # subtly wrong on the runner's awk (Ubuntu's is mawk, not gawk). A literal compare
+          # cannot match 3x9x20 either, which is what the escaping was for.
+          awk -v ver="${VERSION}" '
+            BEGIN { head = "## [" ver "]"; n = length(head) }
+            substr($0, 1, n) == head           { found = 1; next }
+            found && substr($0, 1, 3) == "## " { exit }
+            found                              { print }
+          ' CHANGELOG.md > section.raw
+
+          # Trim blank lines from both ends: delete leading blanks, reverse, delete them again,
+          # reverse back.
+          sed -e '/./,$!d' section.raw | tac | sed -e '/./,$!d' | tac > section.trimmed
+
+          # CHANGELOG.md separates its sections with a horizontal rule, which the extraction picks
+          # up as the section's last line. The footer below opens with a rule of its own, so a
+          # trailing one is dropped rather than published as two rules in a row.
+          if [ "$(tail -n 1 section.trimmed)" = "---" ]; then
+            sed '$ d' section.trimmed | tac | sed -e '/./,$!d' | tac > release-notes.md
+          else
+            cp section.trimmed release-notes.md
+          fi
+
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## [${VERSION}]' section, or that section is empty."
+            echo "Headings that do exist:"
+            grep -n '^## ' CHANGELOG.md || echo "  (none)"
+            {
+              echo "## Release refused: no changelog section for ${VERSION}"
+              echo
+              echo "\`CHANGELOG.md\` needs a section headed \`## [${VERSION}]\`; everything between it and the next \`## \` heading becomes the release notes."
+              echo
+              echo "Headings found in the file at \`${TAG}\`:"
+              echo
+              echo '```'
+              grep '^## ' CHANGELOG.md || echo "(none)"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          # Installation and the honest explanation of why the binary arrives separately. This is
+          # appended to every release body rather than repeated by hand in CHANGELOG.md.
+          cat >> release-notes.md <<'FOOTER'
+
+          ---
+
+          ### Install
+
+          Download `VRChatArchiveMod.dll` from the assets below and drop it into your BepInEx plugins folder:
+
+          ```
+          <VRChat>/BepInEx/plugins/VRChatArchiveMod.dll
+          ```
+
+          VRChat must be closed while you copy it — the DLL is locked for as long as the game is running.
+          It needs a BepInEx 6 (IL2CPP) install; the plugin reports its status in the BepInEx console.
+
+          ### Why the DLL is attached by hand
+
+          This page is generated by a workflow, but the binary is not, and cannot be. The project compiles
+          against BepInEx 6 (IL2CPP) framework assemblies and against Il2CppInterop assemblies generated
+          from a local VRChat install, and it embeds media that is not ours to redistribute. None of that
+          is in this repository and none of it can be, so no CI runner is able to build this project. The
+          maintainer builds it locally and uploads the DLL to this release; if the assets below are empty,
+          that step has not happened yet.
+
+          Unofficial, and not affiliated with VRChat Inc. Loading third-party code into VRChat may violate
+          its Terms of Service — see the [Disclaimer](https://github.com/kawaiistudio/VRChatArchiveMod#disclaimer).
+          FOOTER
+
+          # `git describe` on the tag's parent gives the previous release, if there is one. The
+          # very first release has no predecessor, and then the compare link is simply omitted.
+          PREVIOUS="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [ -n "${PREVIOUS}" ]; then
+            printf '\n**Full changelog**: %s/%s/compare/%s...%s\n' \
+              "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${PREVIOUS}" "${TAG}" >> release-notes.md
+            echo "Previous tag: ${PREVIOUS}"
+          else
+            echo "No previous tag; compare link omitted."
+          fi
+
+          echo "----- release notes -----"
+          cat release-notes.md
+          echo "-------------------------"
+
+      - name: Create the draft release
+        id: release
+        # Pinned to the major version: v2 keeps security fixes coming without a new SHA every time,
+        # and this action only ever handles this repository's own release metadata.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: VRChat Archive Mod ${{ steps.tag.outputs.tag }}
+          body_path: release-notes.md
+          # DRAFT, deliberately.
+          #
+          # The one file anyone opens a Releases page for is VRChatArchiveMod.dll, and it cannot be
+          # produced here. Publishing at tag-push time would put a release with no download in front
+          # of every watcher for however long it takes the maintainer to upload the binary, notify
+          # them about it, and move the "Latest" pointer to a version nobody can actually install.
+          # A draft is invisible to anyone without write access, sends no notification, and does not
+          # become Latest until it is published, so the release only ever appears complete. Drafts
+          # still accept `gh release upload <tag>` — gh looks a draft up by its tag name — which is
+          # what lets the binary arrive after the page.
+          draft: true
+          prerelease: false
+
+      - name: Say what to do next
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Draft release ${TAG} is waiting for its DLL"
+            echo
+            echo "[Open the draft](${RELEASE_URL})"
+            echo
+            echo "The notes came from the \`## [${VERSION}]\` section of \`CHANGELOG.md\`. The release is a"
+            echo "**draft**: nobody can see it yet, and it is not Latest. It has no assets, because the"
+            echo "compiled DLL cannot be built on a runner — the project links against BepInEx 6 (IL2CPP)"
+            echo "and VRChat interop assemblies that are not redistributable and are not in this repository."
+            echo
+            echo "### Attach the DLL and publish"
+            echo
+            echo "From the repository root on the build machine, after \`dotnet build -c Release\`:"
+            echo
+            echo '```sh'
+            echo "gh release upload ${TAG} bin/Release/VRChatArchiveMod.dll --clobber"
+            echo "gh release view ${TAG} --web        # read the draft one last time"
+            echo "gh release edit ${TAG} --draft=false"
+            echo '```'
+            echo
+            echo "Or let the script do all of it, including the build and this tag:"
+            echo
+            echo '```powershell'
+            echo "powershell -ExecutionPolicy Bypass -File tools\\release.ps1 -Version ${VERSION}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "Draft release ready: ${RELEASE_URL}"

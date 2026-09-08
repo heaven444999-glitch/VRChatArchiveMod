@@ -1,0 +1,411 @@
+# ---------------------------------------------------------------------------
+# EditorConfig — https://editorconfig.org
+#
+# This file DESCRIBES the code that is already here. It is not a wish list.
+# Every value below was measured against the tracked tree before it was written
+# down, and where the codebase is genuinely inconsistent the setting is left out
+# and the reason recorded, rather than picked arbitrarily and inflicted on 101
+# files that predate this file.
+#
+# Measured on the tree as of version 3.9.20 (101 tracked .cs files, 42 404
+# lines, 100 of them under src/ plus AssetBundlePatch.cs at the root):
+#
+#   indentation      tabs in 101 of 101 files, 0 space-indented files
+#   braces           Allman: 0 same-line braces after a declaration, 0 after
+#                    if/for/while/foreach/switch/using/lock/fixed
+#   namespaces       block-scoped in 101 of 101, file-scoped in 0
+#   usings           516 directives, all at column 0, none inside a namespace
+#   qualification    0 uses of `this.`
+#   spacing          4000 `if (`, 0 `if(`
+#   private fields   755 `_camelCase` against 3 exceptions
+#   `s_` prefix      0 occurrences anywhere
+#   const members    202 PascalCase, 0 otherwise
+#   hygiene          1 line with trailing whitespace in 42 404;
+#                    0 files missing a final newline
+#
+# SEVERITIES ARE `suggestion`, DELIBERATELY. This is the first editor config in
+# the repository and it arrives after the code. A `warning` would light up the
+# Error List on a clean checkout, and a rule everyone learns to ignore is worse
+# than no rule. `suggestion` shows up where you are already looking — the file
+# you have open — and nowhere else.
+# ---------------------------------------------------------------------------
+
+root = true
+
+
+# ---------------------------------------------------------------------------
+# Everything
+# ---------------------------------------------------------------------------
+[*]
+
+# UTF-8 without a BOM. Safe here: every tracked non-.cs text file (README.md,
+# LICENSE, NOTICE, .gitignore, VRChatArchiveMod.csproj, BADAPPLE_TEST.bat,
+# docs/img/README.txt and the three tools/*.py) is already BOM-free, so this
+# setting rewrites nothing. .cs is exempted below — see the note there.
+charset = utf-8
+
+# LF. Matches what git already stores (see .gitattributes: the index is
+# uniformly LF), so an editor honouring this converges the 38 working-tree
+# files that are still checked out CRLF, one save at a time, with no commit.
+end_of_line = lf
+
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Tabs. Nothing in this repository is space-indented except the .csproj and the
+# Python tools, which get their own sections below.
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+
+# ---------------------------------------------------------------------------
+# C#
+# ---------------------------------------------------------------------------
+[*.cs]
+
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# CHARSET IS DELIBERATELY UNSET FOR C#.
+#
+# The .cs files are split 43 with a UTF-8 BOM against 58 without, and the split
+# correlates with nothing — not the directory, not the content, not the line
+# endings. All 101 are valid UTF-8 either way, so the compiler does not care.
+#
+# `charset = utf-8` would make editors strip 43 BOMs; `charset = utf-8-bom`
+# would make them add 58. Either value produces a mass rewrite of files that are
+# not otherwise being changed, for no compilation benefit whatsoever. Leaving it
+# unset means an editor preserves whatever a file already has.
+#
+# `unset` is the EditorConfig-standard way to cancel an inherited property.
+# Tooling that does not understand it will read an invalid charset name and
+# ignore the key, which is the same outcome.
+charset = unset
+
+# Line length is a soft target of about 100 columns, not a rule. 609 lines are
+# already over 120, and the longest (568 characters, src/Core/ModConfig.cs) is a
+# ConfigDescription prose string that is worse for being wrapped. An enforced
+# cap would flag hundreds of lines the author wrote that way on purpose, so this
+# is documented in CONTRIBUTING.md instead of enforced here.
+max_line_length = off
+
+
+# --- using directives ------------------------------------------------------
+# All 516 directives sit at column 0, above the namespace. Every file that has
+# any System using starts with it. Two files put a blank line inside the using
+# block; that is the only reason separate_import_directive_groups is set at
+# suggestion rather than being treated as absolute.
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+# Unused usings: flagged, not auto-removed on save. Several files carry a using
+# that only a conditionally-compiled or commented-out block needs.
+dotnet_diagnostic.IDE0005.severity = suggestion
+
+
+# --- namespaces ------------------------------------------------------------
+# Block-scoped, 101 of 101, even though <LangVersion>latest</LangVersion> would
+# permit file-scoped. Three namespaces exist: VRChatArchiveMod (1 file),
+# VRChatArchiveMod.Core (36), VRChatArchiveMod.Modules (64 — the 63 files in
+# src/Modules plus AssetBundlePatch.cs, which sits at the repository root but
+# declares the Modules namespace like the rest of them). 1 + 36 + 64 = 101.
+csharp_style_namespace_declarations = block_scoped:suggestion
+
+
+# --- braces and new lines --------------------------------------------------
+# Allman everywhere: 0 same-line `{` after a declaration and 0 after
+# if/for/while/foreach/switch/using/lock/fixed, against 3913 braces sitting on a
+# line of their own. There is exactly one `} else` in the tree, at
+# src/Modules/ForceGrabModule.cs:279, and it is a complete if/else written on a
+# single line rather than a brace-style exception — the preserve_single_line
+# settings below are what keep a Format Document pass from breaking it apart.
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# THE TWO MOST IMPORTANT LINES IN THIS FILE. Allman is the layout for a block
+# that spans lines; it is not a mandate to explode short ones. This codebase
+# leans hard on one-line forms — 2175 braceless `if (x) stmt;`, 522 one-line
+# `if (x) { a; b; }`, and 517 one-line `try { ... } catch { }` guarding an
+# il2cpp call that can fail for reasons the caller cannot do anything about.
+# With these two set to false, a Format Document pass would rewrite thousands of
+# lines and turn every narrow guard into six lines of noise.
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = true
+
+# Braces required only when the body spans lines. `false` would be wrong in the
+# other direction: it would suggest stripping braces from 3913 real blocks.
+csharp_prefer_braces = when_multiline:silent
+
+
+# --- indentation details ---------------------------------------------------
+# switch: `case` labels one level inside the brace, case bodies one further.
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_indent_case_contents_when_block = true
+
+
+# --- spacing ---------------------------------------------------------------
+# `if (` never `if(`; no padding inside parentheses; a space after every comma.
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_after_cast = false
+csharp_space_after_comma = true
+csharp_space_before_comma = false
+csharp_space_after_dot = false
+csharp_space_before_dot = false
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_before_semicolon_in_for_statement = false
+csharp_space_around_declaration_statements = false
+csharp_space_before_open_square_brackets = false
+csharp_space_between_empty_square_brackets = false
+csharp_space_between_square_brackets = false
+
+# NOTE — one thing no EditorConfig key can express: 219 lines use a tab for
+# indentation and then spaces for column alignment (aligned `??`, aligned `:`
+# in a ternary, aligned trailing comments). A formatter with operator alignment
+# switched on would destroy that. If your editor offers "align consecutive
+# assignments/operators", leave it off.
+
+
+# --- `this.` ---------------------------------------------------------------
+# Zero uses in 42 404 lines. The `_` prefix already marks instance state.
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+
+# --- language keywords over BCL type names ---------------------------------
+# The keyword is used exclusively. There is not one place in the tracked tree
+# where `String`, `Int32`, `Boolean` or `Single` is written as a type name: the
+# 21 occurrences of the identifier `String` and the 4 of `Int32` are all
+# something else — `JsonValueKind.String` enum members, and the "String" and
+# "Int32" string literals in UdonManagerModule's Udon type-name switch. So this
+# pair records a habit that is already absolute; it corrects nothing today.
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+
+
+# --- var -------------------------------------------------------------------
+# The rule in practice: the keyword when the type is a builtin, `var` when the
+# type is apparent from the right-hand side or too long to be worth repeating.
+# 1775 occurrences of `var`, against explicit local declarations of the form
+# `type name =` numbering 636 `float`, 466 `int`, 424 `string`, 227 `bool`: the
+# builtins are spelled out, everything else is inferred. The other half of the
+# same habit — only 13 locals in the entire tree are written
+# `Type x = new Type(...)` with the type named on both sides.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:silent
+
+
+# --- expression-bodied members ---------------------------------------------
+# 224 expression-bodied member declarations (`Name => "ESP";`,
+# `OnShutdown() => Stop();`). Used for genuine one-liners, never to compress a
+# multi-statement body onto one line.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_style_expression_bodied_accessors = when_on_single_line:suggestion
+csharp_style_expression_bodied_indexers = when_on_single_line:suggestion
+csharp_style_expression_bodied_operators = when_on_single_line:suggestion
+csharp_style_expression_bodied_local_functions = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:silent
+csharp_style_expression_bodied_lambdas = true:silent
+
+
+# --- modern C# the codebase deliberately does not use ----------------------
+# Silenced rather than argued with. The project targets net6.0 with
+# LangVersion=latest, and the tracked tree contains zero target-typed `new()`,
+# zero records, zero primary constructors, zero #region and zero partial types.
+# Left at their defaults these produce a steady drip of suggestions to rewrite
+# working code in a style the rest of the file does not use.
+csharp_style_implicit_object_creation_when_type_is_apparent = false:silent
+dotnet_style_prefer_collection_expression = false:silent
+dotnet_style_object_initializer = true:silent
+dotnet_style_collection_initializer = true:silent
+csharp_style_prefer_primary_constructors = false:silent
+csharp_style_prefer_top_level_statements = false:silent
+
+# Accessibility modifiers are written out everywhere; keep it that way.
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
+csharp_preferred_modifier_order = public,private,protected,internal,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,volatile,async:suggestion
+
+# Null handling and pattern matching that the codebase does already use.
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+csharp_style_throw_expression = true:silent
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+csharp_style_inlined_variable_declaration = true:suggestion
+
+# Unused parameters: silent. Harmony patch methods and Il2Cpp callbacks have
+# signatures fixed by the thing calling them; a parameter you do not read is
+# still required to be there.
+dotnet_code_quality_unused_parameters = all:silent
+
+
+# ---------------------------------------------------------------------------
+# C# naming
+# ---------------------------------------------------------------------------
+
+# --- styles ---
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+# --- symbol groups ---
+dotnet_naming_symbols.constant_fields.applicable_kinds = field
+dotnet_naming_symbols.constant_fields.applicable_accessibilities = *
+dotnet_naming_symbols.constant_fields.required_modifiers = const
+
+dotnet_naming_symbols.private_static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_readonly_fields.applicable_accessibilities = private, private_protected
+dotnet_naming_symbols.private_static_readonly_fields.required_modifiers = static, readonly
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, private_protected
+
+dotnet_naming_symbols.visible_members.applicable_kinds = property, method, event, field, namespace, class, struct, enum, delegate
+dotnet_naming_symbols.visible_members.applicable_accessibilities = public, internal, protected, protected_internal
+
+# --- rules, in order; the first rule a symbol matches is the one applied ---
+
+# 1. const members are PascalCase. 202 of them, 0 exceptions.
+#    (The 16 camelCase consts in the tree are method-local, which this does not
+#    match. The 2 UPPER_SNAKE ones live in a single file.)
+dotnet_naming_rule.constants_are_pascal_case.symbols = constant_fields
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case
+dotnet_naming_rule.constants_are_pascal_case.severity = suggestion
+
+# 2. private static readonly: NOT CHECKED, on purpose.
+#    This is the one place the codebase is genuinely two-minded, and it is a
+#    meaningful distinction rather than an accident: PascalCase (161) is used
+#    for immutable lookup tables and colour palettes, which read as constants;
+#    _camelCase (66) is used for cached component and object references, which
+#    read as fields that merely happen to be assigned once. Neither is wrong.
+#    This rule exists only to match those symbols first and stay silent, so
+#    rule 3 below never fires on them.
+dotnet_naming_rule.private_static_readonly_unchecked.symbols = private_static_readonly_fields
+dotnet_naming_rule.private_static_readonly_unchecked.style = pascal_case
+dotnet_naming_rule.private_static_readonly_unchecked.severity = none
+
+# 3. every other private field is _camelCase. 755 against 3 exceptions.
+#    Note there is no `s_` variant: static private fields take the same plain
+#    `_` prefix as instance ones (`private static bool _uiReady;`), and `s_`
+#    appears nowhere in the tree.
+dotnet_naming_rule.private_fields_are_underscore_camel_case.symbols = private_fields
+dotnet_naming_rule.private_fields_are_underscore_camel_case.style = underscore_camel_case
+dotnet_naming_rule.private_fields_are_underscore_camel_case.severity = suggestion
+
+# 4. anything visible outside its own type is PascalCase — including the public
+#    fields on the small nested holder classes
+#    (`private sealed class Held { public Renderer R; public bool WasEnabled; }`).
+dotnet_naming_rule.visible_members_are_pascal_case.symbols = visible_members
+dotnet_naming_rule.visible_members_are_pascal_case.style = pascal_case
+dotnet_naming_rule.visible_members_are_pascal_case.severity = suggestion
+
+# NOT ENCODED, and both omissions are deliberate:
+#
+#   * No "interfaces must be prefixed with I" rule. The tracked tree declares no
+#     interfaces at all, and the type that looks like one is not:
+#     src/Core/IModule.cs holds an abstract CLASS named IModule that all 63
+#     modules override. Any rule phrased as "a class must not start with I"
+#     fires on it, on every build, forever, for nothing.
+#
+#   * No rule for local variables or parameters. Their convention was not
+#     measured, and a naming rule nobody checked against the code is exactly the
+#     kind of thing this file is trying not to be.
+
+
+# ---------------------------------------------------------------------------
+# MSBuild project files — 2 spaces, as VRChatArchiveMod.csproj already is
+# ---------------------------------------------------------------------------
+[*.{csproj,props,targets,sln,xml}]
+indent_style = space
+indent_size = 2
+
+
+# ---------------------------------------------------------------------------
+# YAML — 2 spaces, and never tabs. The YAML spec forbids tab indentation
+# outright, so this is a correctness setting, not a taste one.
+# ---------------------------------------------------------------------------
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+
+# ---------------------------------------------------------------------------
+# JSON
+# ---------------------------------------------------------------------------
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+
+
+# ---------------------------------------------------------------------------
+# Python — 4 spaces, PEP 8, matching the three tools in tools/
+# ---------------------------------------------------------------------------
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+
+# ---------------------------------------------------------------------------
+# Markdown
+# ---------------------------------------------------------------------------
+[*.md]
+indent_style = space
+indent_size = 2
+
+# TRAILING WHITESPACE IS NOT STRIPPED IN MARKDOWN. Two spaces at the end of a
+# line is the syntax for a hard line break, and an editor helpfully deleting
+# them reflows the paragraph in the rendered page while the source diff looks
+# like nothing happened. README.md does not rely on this today — it contains no
+# trailing whitespace at all — so this is the one setting in the file that
+# guards a future edit rather than describing an existing habit.
+trim_trailing_whitespace = false
+
+
+# ---------------------------------------------------------------------------
+# Windows-only scripts — CRLF, matching .gitattributes.
+# cmd.exe can fail to find a label or a trailing `goto` in a LF-only .bat, and
+# the symptom looks nothing like a line-ending problem.
+# ---------------------------------------------------------------------------
+[*.{bat,cmd,ps1,psm1,psd1}]
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+
+
+# ---------------------------------------------------------------------------
+# Plain text, and files with no extension that live at the repository root
+# ---------------------------------------------------------------------------
+[*.txt]
+indent_style = space
+indent_size = 4
+
+[{LICENSE,NOTICE}]
+indent_style = space
+indent_size = 4

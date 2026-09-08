@@ -1,0 +1,421 @@
+# Repository hygiene.
+#
+# This workflow deliberately does NOT build the mod, and no workflow in this repository ever will.
+# Two blockers make a runner build impossible, and both are intentional:
+#
+#   1. VRChatArchiveMod.csproj references libs/bepinex/*.dll and libs/interop/*.dll — BepInEx 6
+#      (IL2CPP) framework assemblies plus interop assemblies generated from a local VRChat install.
+#      Those are Unity's and VRChat's property, they are not redistributable, and libs/ is gitignored.
+#   2. The csproj embeds 18 files from ressources/, which is gitignored for licensing reasons. A
+#      missing EmbeddedResource is a hard MSBuild error, not a warning.
+#
+# So `dotnet build` would fail on every single run. A permanently red badge teaches a maintainer to
+# stop reading CI results, which is worse than having no CI at all. Everything below instead checks
+# the things that CAN be checked on a fresh public clone with no libs/ and no ressources/: that the
+# repository does not leak, and that its own documentation still matches its own files.
+#
+# Rule for anyone adding a step here: it must pass on a clone that has neither of those directories.
+
+name: Repository hygiene
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Hygiene checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------------
+      # (a) Nothing forbidden is tracked.
+      #
+      # Every check uses `git ls-files`, never a filesystem walk. That is not a
+      # stylistic preference: a working clone legitimately HAS libs/, ressources/,
+      # bin/, obj/ and local archives sitting on disk. `find` would flag all of
+      # them and this job would be red on every developer machine. Only what git
+      # actually tracks can leak to the public, so only that is inspected.
+      # ---------------------------------------------------------------------
+      - name: No non-redistributable or private files committed
+        shell: bash
+        run: |
+          set -euo pipefail
+          violations=""
+
+          forbid() {
+            # $1 human label   $2 ERE matched against tracked paths   $3 why it is forbidden
+            local hits
+            hits="$(git ls-files | grep -Ei -- "$2" || true)"
+            echo "-- $1"
+            echo "   why: $3"
+            if [ -n "$hits" ]; then
+              echo "   TRACKED, AND MUST NOT BE:"
+              printf '%s\n' "$hits" | sed 's/^/       /'
+              violations="${violations}${1}"$'\n'
+            else
+              echo "   ok"
+            fi
+          }
+
+          forbid "libs/" '^libs/' \
+            "BepInEx 6 and the VRChat/Unity/Il2CppInterop assemblies are generated from a local game
+                install. They are Unity's and VRChat's property and are not ours to redistribute."
+          forbid "ressources/" '^ressources/' \
+            "Embedded audio, images and baked frame data, some of it third-party. Not distributable
+                under this repository's MIT licence."
+          forbid "captures/" '^captures/' \
+            "Runtime UI and hierarchy dumps taken in live instances. They can contain other players'
+                display names, user ids and instance ids."
+          forbid "bin/ and obj/" '^(bin|obj)/' \
+            "Build output. It carries the embedded ressources/ assets inside the compiled DLL, so
+                committing it would publish exactly what point 2 above refuses to publish."
+          forbid "DEPLOY.bat" '(^|/)DEPLOY\.bat$' \
+            "The author's copy-to-plugins script. It hard-codes a private drive layout across three
+                drives, is useless to anyone else, and was already removed once (commit 3c84ed8)."
+          forbid "archives" '\.(rar|7z|zip)$' \
+            "Local scratch archives. Nothing in this project's source needs to ship as an archive,
+                and an archive hides its contents from every other check in this job."
+          forbid "binaries" '\.(dll|exe|pdb|so|dylib)$' \
+            "This repository publishes source only. A committed binary cannot be reviewed, and the
+                only DLLs that exist around this project are the non-redistributable ones."
+          forbid "editor scratch copies" '\.bak-' \
+            "Tuning copies kept beside a file. They are never part of a build and drift silently."
+
+          # Belt and braces: anything .gitignore claims to exclude but git is tracking anyway.
+          # `git check-ignore` exits 1 when it matches nothing, which is the success case here.
+          echo "-- files tracked despite being gitignored"
+          echo "   why: a file added before its .gitignore rule stays tracked forever and is invisible"
+          echo '        to a normal "git status", which is precisely how DEPLOY.bat got published.'
+          ignored="$(git ls-files | git check-ignore --stdin --no-index || true)"
+          if [ -n "$ignored" ]; then
+            echo "   TRACKED, AND MUST NOT BE:"
+            printf '%s\n' "$ignored" | sed 's/^/       /'
+            violations="${violations}gitignored-but-tracked"$'\n'
+          else
+            echo "   ok"
+          fi
+
+          echo
+          if [ -n "$violations" ]; then
+            echo "FAILED. To fix, for each path listed above:"
+            echo "    git rm --cached '<path>'      # untrack it, keep your local copy"
+            echo "    # then make sure .gitignore covers it, and commit both changes together"
+            echo
+            echo "Untracking does NOT remove the file from history. If the file was ever pushed,"
+            echo "treat its contents as public and rotate anything sensitive in it."
+            echo "- (a) forbidden files: FAILED" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+          echo "PASSED: $(git ls-files | wc -l | tr -d ' ') tracked files, none forbidden."
+          echo "- (a) forbidden files: passed" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      # ---------------------------------------------------------------------
+      # (b) No secrets, no private infrastructure, no third-party identifiers.
+      #
+      # Every pattern below was run against this repository before being added
+      # here, and every one returns zero matches on the current tree. That
+      # matters: a check that starts red is a check nobody reads. Patterns that
+      # would have fired on legitimate code were deliberately narrowed —
+      #
+      #   * The Windows-path pattern excludes C:, because AssetBundlePatch.cs and
+      #     tools/pick_charset.py legitimately name C:\Users\<user>\AppData and
+      #     C:\Windows\Fonts. Only a non-C: drive letter indicates the author's
+      #     own layout, which is the DEPLOY.bat class of leak.
+      #   * The base64 pattern excludes '/', because Unity transform paths
+      #     ("CanvasGroup/Container/Window/QMParent/Body") are long and
+      #     slash-heavy and appear all over this codebase.
+      #   * The mailbox pattern only matches consumer mail providers, so a
+      #     project contact address stays allowed.
+      #   * The VRChat id pattern skips the all-zeros placeholder, which is real
+      #     UI hint text in src/Core/Menu.cs.
+      # ---------------------------------------------------------------------
+      - name: No secrets or private paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+
+          scan() {
+            # $1 label   $2 ERE   $3 grep flags   $4 optional allow-list ERE to drop from the results
+            local out
+            out="$(git ls-files -z | xargs -0 grep "$3" -- "$2" 2>/dev/null || true)"
+            if [ -n "${4:-}" ] && [ -n "$out" ]; then
+              out="$(printf '%s\n' "$out" | grep -Ev -- "$4" || true)"
+            fi
+            if [ -n "$out" ]; then
+              echo "-- $1: MATCHED"
+              printf '%s\n' "$out" | sed 's/^/       /'
+              bad=1
+            else
+              echo "-- $1: ok"
+            fi
+          }
+
+          scan "author's local drive layout (a non-C: Windows path)" \
+               '\b[D-Zd-z]:[\]' -HnIE
+          scan "private IP range or internal host" \
+               '\b(192\.168\.|10\.[0-9]+\.[0-9]+\.|172\.(1[6-9]|2[0-9]|3[01])\.)' -HnIE
+          scan "personal mailbox on a consumer provider" \
+               '[A-Za-z0-9._%+-]+@(gmail|outlook|hotmail|yahoo|proton(mail)?|live|icloud|aol|gmx|yandex)\.' -HnIiE
+          scan "credential assigned to a string literal" \
+               '(api[_-]?key|apikey|secret|password|passwd|token|bearer)"?[[:space:]]*[=:][[:space:]]*"[^"]{8,}' -HnIiE
+          scan "base64-looking blob of 40+ chars" \
+               '"[A-Za-z0-9+]{40,}={0,2}"' -HnIoE
+          scan "hex blob of 32+ chars (key or hash material)" \
+               '"[0-9a-fA-F]{32,}"' -HnIoE
+          scan "a real VRChat user/avatar/world/file/group id" \
+               '(usr|avtr|wrld|file|grp)_[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}' -HnIoE \
+               '00000000-0000-0000-0000-000000000000'
+
+          echo
+          if [ "$bad" -ne 0 ]; then
+            echo "FAILED. Each line above is file:line."
+            echo
+            echo "If it is a real secret: remove it, then ROTATE it. Deleting the line does not"
+            echo "help — once pushed, the value is in history and must be treated as public."
+            echo "If it is someone else's identifier or a private host, replace it with a"
+            echo "placeholder. If it is a genuine false positive, narrow the pattern in this"
+            echo "workflow and say in the commit message which line forced the change."
+            echo "- (b) secrets scan: FAILED" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+          echo "PASSED: no matches across $(git ls-files | wc -l | tr -d ' ') tracked files."
+          echo "- (b) secrets scan: passed" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      # ---------------------------------------------------------------------
+      # (c) Version consistency — WARNING ONLY, on purpose.
+      #
+      # During development the changelog legitimately leads the csproj: you write
+      # the entry for the version you are about to cut before you bump <Version>.
+      # Failing the build for that would punish the correct workflow, so this step
+      # reports and moves on. It exists to catch the opposite mistake — shipping a
+      # version bump with no changelog entry behind it.
+      # ---------------------------------------------------------------------
+      - name: Version consistency (warning only)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ver="$(grep -oE '<Version>[^<]+</Version>' VRChatArchiveMod.csproj \
+                 | sed -e 's/<Version>//' -e 's|</Version>||' || true)"
+          ver="${ver%%$'\n'*}"
+          echo "VRChatArchiveMod.csproj <Version> = ${ver:-<none found>}"
+
+          if [ -z "$ver" ]; then
+            echo "WARNING: no <Version> element found in VRChatArchiveMod.csproj."
+          elif [ ! -f CHANGELOG.md ]; then
+            echo "WARNING: CHANGELOG.md not found, so there is nothing to compare against."
+          else
+            # The first '## ' heading whose text starts with a version number. Prose headings
+            # ("## Scope of this file") and "## [Unreleased]" are skipped by the digit requirement.
+            heading="$(grep -nE '^##[[:space:]]+\[?v?[0-9]+\.[0-9]+' CHANGELOG.md || true)"
+            heading="${heading%%$'\n'*}"
+            if [ -z "$heading" ]; then
+              echo "WARNING: CHANGELOG.md has no released version heading yet."
+            else
+              echo "Top released section  = ${heading#*:}  (CHANGELOG.md line ${heading%%:*})"
+              case "${heading#*:}" in
+                *"$ver"*)
+                  echo "OK: the top released section names $ver." ;;
+                *)
+                  echo "WARNING: the top released section does not name $ver."
+                  echo "  If you are mid-development this is expected and fine."
+                  echo "  If you are cutting $ver, add its CHANGELOG.md entry before tagging." ;;
+              esac
+            fi
+          fi
+          echo "This step never fails the job."
+
+      # ---------------------------------------------------------------------
+      # (d) Embedded resources are documented.
+      #
+      # ressources/ is gitignored, so a fresh clone cannot build until the person
+      # cloning knows which 18 files to supply and what each one is. That list
+      # lives in CONTRIBUTING.md and nowhere else, which makes it exactly the kind
+      # of documentation that rots silently: adding an <EmbeddedResource> to the
+      # csproj is a one-line change, and nothing otherwise notices that the build
+      # instructions are now wrong. This step notices.
+      # ---------------------------------------------------------------------
+      - name: Embedded resources are documented
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Read the resource names straight out of the csproj. The backslash is matched with the
+          # bracket expression [\] rather than an escape, so the pattern survives every layer of
+          # shell and grep quoting unchanged.
+          grep 'EmbeddedResource' VRChatArchiveMod.csproj \
+            | grep -oE 'ressources[\]+[^"]+' \
+            | sed 's/^ressources.//' \
+            | sort -u > /tmp/embedded-resources.txt
+
+          count="$(wc -l < /tmp/embedded-resources.txt | tr -d ' ')"
+          echo "VRChatArchiveMod.csproj embeds $count resource(s) from ressources/."
+
+          if [ "$count" -eq 0 ]; then
+            echo "FAILED: no <EmbeddedResource Include=\"ressources\\...\"> entries were parsed."
+            echo "Either the csproj changed shape or this step's pattern is stale. Fix whichever it is."
+            exit 1
+          fi
+
+          if [ ! -f CONTRIBUTING.md ]; then
+            echo "WARNING: CONTRIBUTING.md does not exist, so the list cannot be checked."
+            echo "Skipping. Once CONTRIBUTING.md is added this becomes a hard check."
+            echo "- (d) embedded resources: skipped, no CONTRIBUTING.md" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 0
+          fi
+
+          missing=0
+          while IFS= read -r res; do
+            [ -n "$res" ] || continue
+            if grep -qF -- "$res" CONTRIBUTING.md; then
+              echo "  documented   $res"
+            else
+              echo "  MISSING      $res"
+              missing=$((missing+1))
+            fi
+          done < /tmp/embedded-resources.txt
+
+          echo
+          if [ "$missing" -gt 0 ]; then
+            echo "FAILED: $missing of $count embedded resource(s) are not named in CONTRIBUTING.md."
+            echo
+            echo "Someone cloning this repository cannot build without knowing what those files are,"
+            echo "and ressources/ is gitignored so they cannot look. Add each name marked MISSING to"
+            echo "the embedded-resources list in CONTRIBUTING.md, with one line saying what it is and"
+            echo "where it came from, then re-run. Alternatively, if the resource was removed, delete"
+            echo "its <EmbeddedResource> line from VRChatArchiveMod.csproj."
+            echo "- (d) embedded resources: FAILED" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+          echo "PASSED: all $count embedded resource(s) are named in CONTRIBUTING.md."
+          echo "- (d) embedded resources: passed ($count documented)" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      # ---------------------------------------------------------------------
+      # (e) Relative links and images in the docs actually resolve.
+      #
+      # Only relative targets are checked. External URLs are left alone on
+      # purpose: they fail for reasons that have nothing to do with this commit
+      # (rate limits, outages, a site behind Cloudflare), and a check that goes
+      # red because someone else's server had a bad afternoon is a check that
+      # gets ignored. A moved image inside the repository, by contrast, is always
+      # our fault and always fixable here.
+      # ---------------------------------------------------------------------
+      - name: Docs links resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/broken-links.txt
+          checked=0
+
+          for doc in README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CHANGELOG.md; do
+            if [ ! -f "$doc" ]; then
+              echo "-- $doc: not present, skipped"
+              continue
+            fi
+
+            # Markdown inline links and images  ](target)  plus HTML src="" / href="".
+            { grep -oE '\]\([^)]+\)' "$doc" | sed -e 's/^](//' -e 's/)$//'
+              grep -oiE '(src|href)="[^"]+"' "$doc" | sed -e 's/^[^"]*"//' -e 's/"$//'
+            } 2>/dev/null | sort -u > /tmp/link-targets.txt || true
+
+            n=0
+            while IFS= read -r target; do
+              [ -n "$target" ] || continue
+              # Skip external, protocol-relative, mail and pure in-page anchors.
+              case "$target" in
+                http://*|https://*|mailto:*|'#'*|//*) continue ;;
+              esac
+              target="${target%%#*}"    # drop a #fragment on a file link
+              target="${target%%\?*}"   # drop a ?query
+              [ -n "$target" ] || continue
+              n=$((n+1)); checked=$((checked+1))
+              if [ -e "$target" ]; then
+                echo "   ok       $doc -> $target"
+              else
+                echo "   BROKEN   $doc -> $target"
+                echo "$doc -> $target" >> /tmp/broken-links.txt
+              fi
+            done < /tmp/link-targets.txt
+            echo "-- $doc: $n relative target(s)"
+          done
+
+          echo
+          if [ -s /tmp/broken-links.txt ]; then
+            echo "FAILED: the following relative targets do not exist in the repository."
+            sed 's/^/       /' /tmp/broken-links.txt
+            echo
+            echo "Either the file moved and the link needs updating, or the file was never"
+            echo "committed. Check the second case first: images under docs/img/ are easy to"
+            echo "reference in a README and then forget to 'git add'."
+            echo "- (e) docs links: FAILED" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+          echo "PASSED: $checked relative target(s) all resolve."
+          echo "- (e) docs links: passed ($checked targets)" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      # ---------------------------------------------------------------------
+      # (f) The Python tools still parse.
+      #
+      # tools/ is the one part of this repository that a runner can genuinely
+      # execute: three standalone scripts with no dependency on libs/ or
+      # ressources/. compileall is a syntax check, not a test run — bake_badapple.py
+      # expects a video file and chatbox_probe.py expects VRChat listening on OSC,
+      # neither of which exists here.
+      # ---------------------------------------------------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python tools compile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files="$(git ls-files 'tools/*.py' || true)"
+          if [ -z "$files" ]; then
+            echo "FAILED: no tracked Python files under tools/."
+            echo "If the tools were moved, update this step. If they were deleted, remove it."
+            exit 1
+          fi
+          echo "Compiling:"
+          printf '%s\n' "$files" | sed 's/^/       /'
+          echo
+
+          if python -m compileall -q tools/; then
+            echo "PASSED: $(printf '%s\n' "$files" | wc -l | tr -d ' ') file(s) compiled clean on $(python --version)."
+            echo "- (f) python tools: passed" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          else
+            echo
+            echo "FAILED: a tool has a syntax error. The traceback above names the file and line."
+            echo "- (f) python tools: FAILED" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo
+            echo "### What this workflow checked"
+            echo
+            echo "The repository does not leak, and its documentation still matches its files."
+            echo
+            echo "It did **not** build the mod, and no workflow here ever will: the csproj needs"
+            echo "\`libs/\` (non-redistributable BepInEx and VRChat interop assemblies) and"
+            echo "\`ressources/\` (licence-restricted embedded assets), both of which are gitignored."
+            echo "A build step would fail on every run. See CONTRIBUTING.md for building locally."
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          echo "Repository hygiene run complete."

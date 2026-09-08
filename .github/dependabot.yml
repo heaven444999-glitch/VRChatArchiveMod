@@ -1,0 +1,75 @@
+# Dependabot configuration.
+#
+# ---------------------------------------------------------------------------
+# Why "github-actions" is the ONLY ecosystem configured here
+# ---------------------------------------------------------------------------
+# This is deliberate. Please do not "fix" it by adding nuget or dotnet-sdk.
+#
+# nuget — VRChatArchiveMod.csproj contains ZERO <PackageReference> items. Every
+#   dependency is a file-path <Reference> into libs/:
+#
+#       <Reference Include="$(MSBuildProjectDirectory)\libs\bepinex\*.dll" />
+#       <Reference Include="$(MSBuildProjectDirectory)\libs\interop\*.dll" />
+#
+#   Those are the BepInEx 6 (IL2CPP) framework assemblies and the interop
+#   assemblies generated from a local VRChat install. They do not come from
+#   nuget.org, they have no package version, and they are not redistributable —
+#   libs/ is gitignored for that reason. There is no manifest for Dependabot to
+#   read and nothing it could bump, so a nuget entry would either sit silent
+#   forever or fail on every run trying to restore a project that cannot be
+#   restored. The single string "PackageReference" in the csproj is the
+#   <RestoreProjectStyle> property, not a dependency.
+#
+# dotnet-sdk — there is no global.json in this repository, so no SDK version is
+#   pinned and there is nothing for that ecosystem to update. Nor would it help:
+#   no workflow here builds the C# project, and none ever will. The csproj needs
+#   both libs/ and ressources/, and both are gitignored, so `dotnet build` fails
+#   on a runner by design. See .github/workflows/repo-hygiene.yml for the full
+#   reasoning.
+#
+# That leaves the workflow files themselves, which are real, versioned, public
+# dependencies that genuinely go stale — and which Dependabot can update without
+# building anything.
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    # For this ecosystem "/" means .github/workflows/, not the repository root.
+    # Every workflow in that directory is covered by this one entry.
+    directory: "/"
+
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+
+    # Small repository, few actions, and a hygiene job that finishes in under a
+    # minute — there is no reason for more than a couple of these to be open at
+    # once. A low limit keeps a neglected week from burying real issues.
+    open-pull-requests-limit: 3
+
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        # All three update types are grouped on purpose. Every action in this
+        # repository is pinned to a major tag (actions/checkout@v4), which is a
+        # moving target that already absorbs minor and patch releases silently.
+        # The only bump Dependabot can actually see is a major one, so a group
+        # restricted to minor/patch would never match anything and the noise
+        # reduction would be imaginary. One PR per week, covering everything.
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+
+    # Matches the repository's existing commit style: sentence case, imperative,
+    # an optional "Scope: " prefix, and no Conventional Commits tags. Dependabot
+    # produces "CI: bump actions/checkout from 4 to 5", which sits correctly
+    # beside "README: a landing page, and stop publishing the author's deploy
+    # script". Do not change this to "chore(deps):" — nothing else in this
+    # repository's history uses that form.
+    commit-message:
+      prefix: "CI:"

@@ -1,0 +1,163 @@
+# ---------------------------------------------------------------------------
+# Line endings, diff drivers and language reporting.
+#
+# WHY THIS FILE EXISTS
+# The author works on Windows with core.autocrlf=true; contributors may not.
+# Without a .gitattributes, whether a file lands in a commit as LF or CRLF
+# depends on whoever happened to touch it, on which machine, with which editor.
+# One flip of that would produce a diff touching all 101 tracked .cs files and
+# bury the real change. Pinning it here makes the stored bytes the same for
+# everyone, whatever their platform or their local git config: attributes beat
+# core.autocrlf, so nobody has to configure anything.
+#
+# THE STATE OF THIS REPOSITORY WHEN THIS FILE WAS ADDED
+# Measured, not assumed:
+#
+#   * The index — what git actually stores — is ALREADY uniformly LF.
+#     `git ls-files --eol` reports i/lf for all 111 tracked text files and
+#     i/-text for the 3 tracked images.
+#   * The WORKING TREE is mixed: 38 files checked out CRLF, 72 LF, and one
+#     genuinely mixed file (src/Core/Il2CppDelegates.cs, 5 CRLF endings among
+#     its 68 lines).
+#
+# So this file changes what your working copy looks like, not what is committed.
+#
+# THE ONE-TIME NORMALIZE STEP
+# Adding a .gitattributes does NOT rewrite blobs that are already committed.
+# Git only applies the new rules the next time a file passes through the index.
+# The command that forces every tracked file through it at once is:
+#
+#     git add --renormalize .
+#     git status                     # inspect BEFORE committing
+#     git commit -m "Normalize line endings to LF; add .gitattributes"
+#
+# That is a whole-repo pass, and on most repositories it produces a single
+# large whitespace-only commit that must be landed on its own, never mixed with
+# a code change, and never while a branch or PR is open against it.
+#
+# HERE, IT IS EXPECTED TO STAGE NOTHING. Because the index is already LF, the
+# renormalize pass recomputes the identical blob for every one of the 111 text
+# files (checked file by file: LF-normalizing each working-tree file reproduces
+# its exact index hash). Run it anyway — it is the cheap way to prove the claim
+# rather than trust this comment — but `git status` coming back clean is the
+# correct outcome, not a sign that something failed.
+#
+# The 38 CRLF working-tree files are not rewritten by any of this. A fresh clone
+# writes them out as LF because of the eol=lf below. An existing working copy
+# converts a given file only when git next writes that file for itself — an
+# explicit `git checkout -- <path>`, or a branch switch that actually changes
+# it; a switch that leaves the file untouched leaves its CRLF untouched too.
+# Failing that, on the file's next save, if your editor honours the repository's
+# .editorconfig, which sets end_of_line = lf for the same files.
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Default: let git detect text, and store AND check out text as LF.
+# The `eol=lf` half is what stops Windows checkouts reintroducing CRLF.
+# ---------------------------------------------------------------------------
+* text=auto eol=lf
+
+
+# ---------------------------------------------------------------------------
+# Explicit rules for the file types actually tracked here, so the behaviour
+# does not depend on git's text/binary heuristic guessing right.
+# ---------------------------------------------------------------------------
+*.cs        text eol=lf
+*.csproj    text eol=lf
+*.props     text eol=lf
+*.targets   text eol=lf
+*.sln       text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.py        text eol=lf
+*.sh        text eol=lf
+*.xml       text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.editorconfig   text eol=lf
+LICENSE     text eol=lf
+NOTICE      text eol=lf
+
+
+# ---------------------------------------------------------------------------
+# Windows-only scripts: CRLF, deliberately.
+# cmd.exe mis-parses a LF-only .bat in ways that are hard to diagnose (a label
+# or a trailing `goto` can silently not be found), and PowerShell's own tooling
+# assumes CRLF. BADAPPLE_TEST.bat is the only file this currently matches; the
+# *.ps1 rule is here so the first PowerShell script added does not have to
+# rediscover the problem.
+# ---------------------------------------------------------------------------
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+
+# ---------------------------------------------------------------------------
+# Binary: never EOL-converted, never diffed as text.
+# -text disables all newline conversion; -diff stops git printing a megabyte of
+# mojibake when one of these changes. Most of these extensions live under the
+# gitignored libs/ and ressources/ trees rather than in the repo, and the rules
+# are here so that an accidental `git add -f` of one still behaves sanely.
+# Actually tracked today: docs/img/logo.png, docs/img/badapple-thumb.jpg,
+# docs/img/mod-ingame.webp.
+# ---------------------------------------------------------------------------
+*.png       -text -diff !eol
+*.jpg       -text -diff !eol
+*.jpeg      -text -diff !eol
+*.gif       -text -diff !eol
+*.webp      -text -diff !eol
+*.ico       -text -diff !eol
+*.gz        -text -diff !eol
+*.wav       -text -diff !eol
+*.mp3       -text -diff !eol
+*.ttf       -text -diff !eol
+*.ttc       -text -diff !eol
+*.otf       -text -diff !eol
+*.dll       -text -diff !eol
+*.exe       -text -diff !eol
+*.pdb       -text -diff !eol
+*.zip       -text -diff !eol
+*.7z        -text -diff !eol
+*.rar       -text -diff !eol
+
+
+# ---------------------------------------------------------------------------
+# Diff drivers. These are built into git — no configuration needed on the
+# contributor's side. `diff=csharp` teaches git which line to print in a hunk
+# header, so a diff says which method you are looking at instead of showing a
+# bare brace. That matters more than usual in this codebase: a typical file
+# opens with a long comment block, and roughly one line in five of src/ is a
+# comment, so an unlabelled hunk is often indistinguishable from any other.
+# ---------------------------------------------------------------------------
+*.cs        diff=csharp
+*.py        diff=python
+*.md        diff=markdown
+*.csproj    diff=html
+*.props     diff=html
+*.targets   diff=html
+
+
+# ---------------------------------------------------------------------------
+# GitHub Linguist — what the language bar on the repository page reports.
+#
+# The intent is honesty, not flattery:
+#   * docs/ is documentation and the images in it are illustrations, not source.
+#     Excluding it keeps a screenshot and a logo out of the language statistics.
+#   * tools/ is NOT excluded. bake_badapple.py, chatbox_probe.py and
+#     pick_charset.py are real, working source: they bake the embedded Bad Apple
+#     frame data and pick its character ramp, which is how ressources/*.frames
+#     is produced in the first place. Marking them vendored or generated would
+#     be a lie, so linguist-vendored is explicitly turned off on them in case a
+#     future heuristic decides a directory called "tools" is boilerplate.
+#   * *.csproj is XML. Linguist already classifies it that way; the line pins it
+#     so the classification cannot drift.
+# ---------------------------------------------------------------------------
+docs/**             linguist-documentation
+docs/img/**         linguist-documentation
+tools/**            linguist-vendored=false
+tools/*.py          linguist-detectable=true
+*.csproj            linguist-language=XML
