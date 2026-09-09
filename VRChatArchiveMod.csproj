@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>VRChatArchiveMod</AssemblyName>
     <Product>VRCHAT ARCHIVE MOD</Product>
-    <Version>3.9.57</Version>
+    <Version>3.9.58</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
@@ -49,6 +49,14 @@
     <EmbeddedResource Include="ressources\logo_archive.jpg"><LogicalName>logo_archive.jpg</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\spawn_darksquad.wav"><LogicalName>spawn_darksquad.wav</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\spawn_te_op.wav"><LogicalName>spawn_te_op.wav</LogicalName></EmbeddedResource>
+    <!-- 2017 loading screen (EraLoadingModule): five sprites, the logo, and the era track. -->
+    <EmbeddedResource Include="ressources\era\l17_dashring.png"><LogicalName>era_l17_dashring.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_midring.png"><LogicalName>era_l17_midring.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_ringglow.png"><LogicalName>era_l17_ringglow.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_wave.png"><LogicalName>era_l17_wave.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\l17_diamond.png"><LogicalName>era_l17_diamond.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\logo.png"><LogicalName>era_logo.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="ressources\era\music2017.wav"><LogicalName>era_music2017.wav</LogicalName></EmbeddedResource>
     <!-- Wallpapers behind the two QuickMenu side panels (Core/PanelSkin.cs). Cropped to the panel's
          own aspect (420x900, rendered 630x1350 for VR sharpness) and kept as JPEG deliberately: the
          same art as PNG costs 2.3 MB of DLL against 351 KB here, and the panel paints its own dark

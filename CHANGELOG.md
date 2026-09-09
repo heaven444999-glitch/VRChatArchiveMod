@@ -25,7 +25,52 @@ Two consequences worth stating up front:
 
 ## [Unreleased]
 
-Nothing since the 3.9.57 sync.
+Nothing since 3.9.58.
+
+---
+
+## [3.9.58] — 2026-09-08
+
+### Added
+
+- **`src/Modules/EraLoadingModule.cs` is back** — VRChat's 2017 loading screen, painted over the modern
+  one while a world loads, with the era track playing under it. It was removed at the 3.9.20 sync and
+  filed in this changelog as one of "the dead probe and capture modules"; it was neither dead nor a
+  probe. Restored from `5f08293` with the four changes below, and its seven artwork and audio files are
+  embedded again.
+
+  Nothing of VRChat's is hooked, patched or hidden. Detection is passive — objects named `LoadingPopup`
+  found through `Resources.FindObjectsOfTypeAll<Transform>()`, then read only for `activeInHierarchy` —
+  the screen is drawn on top in IMGUI, and the game's own loading audio is muted only while our track is
+  actually playing, restored the moment it stops. There is no Harmony patch, no AssetBundle and no
+  il2cpp field read anywhere in it.
+
+- Loading-screen artwork can be **overridden from disk**: a PNG in
+  `BepInEx\VRChatArchiveMod\loading\<key>.png` replaces that piece of the 2017 art with no rebuild, and
+  an empty folder leaves the original in place (`Core/AssetLoader.EraTexture`). Keys are `l17_ringglow`,
+  `l17_midring`, `l17_dashring`, `l17_diamond`, `l17_wave` and `logo`. Everything except the diamond and
+  the logo is drawn `StretchToFill` against sizes transcribed from the original canvas, so art of a
+  different aspect ratio is distorted rather than letterboxed.
+- Config section `[LoadingScreen]` — `Enabled`, `Music`, `MusicVolume`.
+
+### Fixed
+
+- **Turning the loading screen off no longer switches off a different feature.** `OnUpdate` returned
+  early when the toggle was off, so detection never ran and `IsLoading` stayed `false` for the whole
+  session — and `SpawnSoundModule` rode on that flag, so its spawn stinger stopped working while its own
+  toggle still read ON. Detection now always runs and the toggle decides only whether the screen is
+  drawn and whether the music plays; switching off mid-load still restores the game's audio at once.
+  This is very likely why the module was deleted rather than fixed, and it is the reason the restored
+  version is not a straight revert.
+- The popup scan swallowed an exception instead of skipping the object it came from
+  (`catch { }` where `AtLoginScreen` twelve lines away correctly writes `catch { continue; }`). Three
+  objects in this build are named `LoadingPopup` — one live in `level1`, plus two prefab copies in
+  `resources.assets` — and the `scene.IsValid()` test that guard protects is the only thing separating
+  them, so swallowing it is exactly how a prefab copy becomes a false positive.
+
+### Removed
+
+- `Rotated()` in `EraLoadingModule`, which had no callers.
 
 ---
 
@@ -360,7 +405,8 @@ built from a fresh clone of this repository, by design — `libs/` (proprietary 
 reference assemblies) and `ressources/` (the 18 embedded media files the `.csproj` lists) are not
 redistributable and are not included. See the README's Building section.
 
-[Unreleased]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/v3.9.57...main
+[Unreleased]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/v3.9.58...main
+[3.9.58]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/v3.9.57...v3.9.58
 [3.9.57]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/0153028...v3.9.57
 [3.9.20]: https://github.com/kawaiistudio/VRChatArchiveMod/commit/0153028b767c5a1845c0729031011bceeb077cea
 [3.5.0]: https://github.com/kawaiistudio/VRChatArchiveMod/commit/5f0829345e3376f3de1fe8cd5f0fbd56036a7b09

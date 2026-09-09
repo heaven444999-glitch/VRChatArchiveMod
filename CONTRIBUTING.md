@@ -97,15 +97,16 @@ VRChat's property. Committing either would be redistributing code we have no rig
 `.gitignore` states this at the point of exclusion, and the rule is not negotiable — a pull request
 that adds files under `libs/` will be closed.
 
-### `ressources/` — 19 embedded files, about 16.9 MiB
+### `ressources/` — 26 embedded files, about 22.6 MiB
 
-The `.csproj` embeds 19 files from `ressources/` into the DLL, each with an explicit `<LogicalName>`
+The `.csproj` embeds 26 files from `ressources/` into the DLL, each with an explicit `<LogicalName>`
 that the code looks up at runtime (`Core/AssetLoader.cs` and callers of
 `Assembly.GetManifestResourceStream`).
 
 | File | Size | Used by |
 |---|---|---|
 | `badapple.wav` | 9.2 MiB | `Core/BadAppleAudio.cs` — the object show's soundtrack, and its clock |
+| `era_music2017.wav` | 5.3 MiB | `Modules/EraLoadingModule.cs` — VRChat's 2017 loading track, 16-bit PCM (the only format `ClipFromWav` accepts) |
 | `spawn_darksquad.wav` | 2.1 MiB | `Modules/SpawnSoundModule.cs` — local spawn stinger |
 | `badapple_hd.frames.gz` | 1.9 MiB | `Modules/MarkModule.cs` — 64×48 object-art frames |
 | `spawn_te_op.wav` | 948 KiB | `Modules/SignatureSoundModule.cs` — one person's arrival clip; third-party music, supplied by the author |
@@ -122,6 +123,12 @@ that the code looks up at runtime (`Core/AssetLoader.cs` and callers of
 | `sb_mambo.wav` | 35 KiB | `Modules/SoundboardModule.cs` |
 | `5560-heart-rem.png` | 30 KiB | `Core/AssetLoader.cs`, soundboard default artwork |
 | `kawaii_logo.png` | 28 KiB | `Modules/LaunchpadConsoleModule.cs` — console header mark |
+| `era_l17_ringglow.png` | 85 KiB | `Modules/EraLoadingModule.cs` — 2017 outer glow ring, 855×854, spins at 1°/s |
+| `era_l17_dashring.png` | 49 KiB | `Modules/EraLoadingModule.cs` — 2017 dashed ring, 604×604, spins at 10°/s |
+| `era_l17_midring.png` | 39 KiB | `Modules/EraLoadingModule.cs` — 2017 middle ring, 645×644, static |
+| `era_logo.png` | 24 KiB | `Modules/EraLoadingModule.cs` — 2017 wordmark, the one sprite drawn ScaleToFit |
+| `era_l17_diamond.png` | 8.3 KiB | `Modules/EraLoadingModule.cs` — 2017 centre diamond, 788×788 |
+| `era_l17_wave.png` | 7.4 KiB | `Modules/EraLoadingModule.cs` — 2017 progress sprite, 325×89, drawn twice (tinted track, then clipped fill) |
 | `logo_archive.jpg` | 4.8 KiB | `Core/AssetLoader.cs` |
 | `badapple.charset` | 97 B | `Modules/BadAppleModule.cs` — the hanzi grey ramp |
 

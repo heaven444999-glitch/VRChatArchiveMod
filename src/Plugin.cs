@@ -178,6 +178,7 @@ namespace VRChatArchiveMod
 			ModuleManager.Register(new EspModule());
 			ModuleManager.Register(new CapsuleEspModule());
 			ModuleManager.Register(new HighlightEspModule());
+			ModuleManager.Register(new EraLoadingModule());
 			ModuleManager.Register(new SpawnSoundModule());
 			ModuleManager.Register(new SignatureSoundModule());
 			ModuleManager.Register(new RadarModule());
@@ -231,7 +232,7 @@ namespace VRChatArchiveMod
 	{
 		public const string Guid = "org.vrchatarchive.mod";
 		public const string Name = "VRCHAT ARCHIVE MOD";
-		public const string Version = "3.9.57";
+		public const string Version = "3.9.58";
 	}
 }
 

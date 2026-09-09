@@ -245,6 +245,9 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<float> RotatorNeckLimit;    // how far the widened neck clamp reaches, in degrees
 
 		// --- Era (2017 / 2018 / current look) ---
+		public static ConfigEntry<bool> LoadingScreenEnabled;
+		public static ConfigEntry<bool> LoadingMusic;
+		public static ConfigEntry<float> LoadingMusicVolume;
 
 		// --- Spawn stinger (plays once when you finish loading into an instance) ---
 		public static ConfigEntry<bool> SpawnSoundEnabled;
@@ -793,6 +796,13 @@ namespace VRChatArchiveMod.Core
 				"How far the widened neck clamp reaches, in degrees (90 to 1800). 180 is already all the "
 				+ "way round; a huge value risks feeding infinities into VRChat's own smoothing.");
 
+
+			LoadingScreenEnabled = cfg.Bind("LoadingScreen", "Enabled", true,
+				"Draw VRChat's 2017 loading screen over the modern one while a world loads. Painted in IMGUI from the original artwork; nothing of VRChat's is hooked, patched or hidden — it is drawn on top, and its own loading audio is muted only while our track is actually playing.");
+			LoadingMusic = cfg.Bind("LoadingScreen", "Music", true,
+				"Play the 2017 loading track while the screen is up, and mute VRChat's own loading audio for as long as it plays.");
+			LoadingMusicVolume = cfg.Bind("LoadingScreen", "MusicVolume", 0.55f,
+				"Volume of the loading track, 0 to 1.");
 
 			SpawnSoundEnabled = cfg.Bind("SpawnSound", "Enabled", true,
 				"Play a short stinger ('The Spawn Dark Squad') once each time you finish loading into an instance.");
