@@ -133,6 +133,12 @@ jobs:
       #   * The base64 pattern excludes '/', because Unity transform paths
       #     ("CanvasGroup/Container/Window/QMParent/Body") are long and
       #     slash-heavy and appear all over this codebase.
+      #     It also drops blobs of LETTERS ONLY. Il2CppInterop mangles VRChat's
+      #     obfuscated members into long CamelCase names, and one of them is 49
+      #     characters: "InterfacePublicAbstractStLoSpBoObgeMaStgeLoUnique", quoted
+      #     in src/Core/VrcPlusItems.cs, is a TYPE NAME and not key material. Real
+      #     base64 that long carries digits, so requiring one costs this check
+      #     nothing and stops it firing on every interop name the source names.
       #   * The mailbox pattern only matches consumer mail providers, so a
       #     project contact address stays allowed.
       #   * The VRChat id pattern skips the all-zeros placeholder, which is real
@@ -169,7 +175,8 @@ jobs:
           scan "credential assigned to a string literal" \
                '(api[_-]?key|apikey|secret|password|passwd|token|bearer)"?[[:space:]]*[=:][[:space:]]*"[^"]{8,}' -HnIiE
           scan "base64-looking blob of 40+ chars" \
-               '"[A-Za-z0-9+]{40,}={0,2}"' -HnIoE
+               '"[A-Za-z0-9+]{40,}={0,2}"' -HnIoE \
+               ':"[A-Za-z]+"$'
           scan "hex blob of 32+ chars (key or hash material)" \
                '"[0-9a-fA-F]{32,}"' -HnIoE
           scan "a real VRChat user/avatar/world/file/group id" \
