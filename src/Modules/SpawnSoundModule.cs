@@ -56,7 +56,11 @@ namespace VRChatArchiveMod.Modules
 					bool realSpawn = _goneSince < 0f || (now - _goneSince) >= AwaySeconds;
 					_inWorld = true;
 					_goneSince = -1f;
-					if (realSpawn && ModConfig.SpawnSoundEnabled.Value) Play();
+					// A SIGNATURE WINS OVER THE STINGER. Somebody who has their own arrival clip would
+					// otherwise hear both at once on their own spawn, one on top of the other.
+					bool mine = false;
+					try { mine = SignatureSoundModule.HasSignature(VaTagsModule.LocalUserId()); } catch { }
+					if (realSpawn && !mine && ModConfig.SpawnSoundEnabled.Value) Play();
 				}
 			}
 			catch { }

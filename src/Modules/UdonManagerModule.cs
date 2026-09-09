@@ -581,9 +581,29 @@ namespace VRChatArchiveMod.Modules
 		// It reuses the last scan's objects, so it can only ever fire on something that exists, and the
 		// status line says exactly what it resolved to.
 		public static int RunOnPlayer(string displayName, Vector3 playerPos, bool hasPos, string scope, string ev, string pattern, string match, string by)
+			=> RunOnPlayer(displayName, playerPos, hasPos, scope, ev, pattern, match, by, "", -1);
+
+		public static int RunOnPlayer(string displayName, Vector3 playerPos, bool hasPos, string scope, string ev, string pattern, string match, string by, string byVar, int playerId)
 		{
 			try
 			{
+				// BY VARIABLE — the only correct answer for a world that keeps its per-player scripts in
+				// one folder instead of on the players.
+				//
+				// The two modes below are both GEOMETRIC: they pick the matching object closest to the
+				// player, or closest to a UI label showing their name. That works when a world puts a
+				// script on each person. It is meaningless when it does not, and Among Us is the case
+				// that proved it: its thirty "Player Node (N)" all hang off Game Logic/Player Nodes, at
+				// effectively one place, and each says which person it belongs to in a VARIABLE —
+				// playerID, the VRChat actor number. "Nearest node to their nameplate" there resolves to
+				// an arbitrary node, so "kill this player" would kill somebody else and report success.
+				//
+				// So this asks the object instead of measuring it. No distance, no MaxReach, no guess:
+				// either a candidate's variable holds this player's id or none does, and if none does
+				// the honest answer is that the world does not have a node for them right now.
+				if (string.Equals(by, "var", StringComparison.OrdinalIgnoreCase))
+					return RunOnPlayerByVar(displayName, scope, ev, pattern, match, byVar, playerId);
+
 				bool byLabel = string.Equals(by, "label", StringComparison.OrdinalIgnoreCase);
 				Vector3 target = playerPos;
 				if (byLabel)
@@ -639,6 +659,131 @@ namespace VRChatArchiveMod.Modules
 				return ok ? 1 : 0;
 			}
 			catch (Exception ex) { Status = "player event failed: " + ex.Message; return 0; }
+		}
+
+		// Picks the candidate whose variable <byVar> holds this player's actor number, and fires there.
+		//
+		// Reads through GetProgramVariable, the same non-generic overload Variables() uses, and ONLY on
+		// behaviours that are active and enabled: asking a behaviour that never ran forces its Udon
+		// program to deserialise, which is the 0.1-3 s per script that made DUMP ALL unusable. A
+		// per-player node in a world you are standing in is live, so nothing is lost by skipping the
+		// dead ones.
+		private static int RunOnPlayerByVar(string displayName, string scope, string ev, string pattern, string match, string byVar, int playerId)
+		{
+			if (string.IsNullOrEmpty(byVar))
+			{
+				Status = "this action says by:var but names no variable (byVar) — nothing sent";
+				VRChatArchiveModPlugin.Logger.LogWarning("[UdonManager] by:var with no byVar — nothing sent.");
+				return 0;
+			}
+			if (playerId < 0)
+			{
+				Status = "no actor number for " + Trunc(displayName, 18) + " yet — try again in a second";
+				VRChatArchiveModPlugin.Logger.LogWarning(
+					"[UdonManager] by:var: no actor number for " + displayName + " (PlayerEntry.PlayerId is -1) "
+					+ "— VRCPlayerApi.playerId never read. Nothing sent.");
+				return 0;
+			}
+
+			MethodInfo getVar = _getVar;
+			if (getVar == null)
+			{
+				try
+				{
+					Type ubT = FindType("VRC.Udon.UdonBehaviour");
+					if (ubT != null)
+						foreach (var m in ubT.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+						{
+							if (m.Name != "GetProgramVariable" || m.IsGenericMethodDefinition) continue;
+							var ps = m.GetParameters();
+							if (ps.Length == 1 && ps[0].ParameterType == typeof(string)) { _getVar = m; break; }
+						}
+				}
+				catch { }
+				getVar = _getVar;
+			}
+			if (getVar == null)
+			{
+				Status = "cannot read Udon variables on this build — nothing sent";
+				VRChatArchiveModPlugin.Logger.LogWarning(
+					"[UdonManager] by:var: GetProgramVariable(string) not found on UdonBehaviour — nothing sent.");
+				return 0;
+			}
+
+			var cands = string.IsNullOrEmpty(pattern) ? Snapshot() : MatchEntries(pattern, match);
+			Entry hit = null;
+			int looked = 0, readable = 0, asleep = 0;
+			var seen = new List<int>();
+			foreach (var e in cands)
+			{
+				if (e == null || e.B == null) continue;
+				looked++;
+				if (!IsStarted(e)) { asleep++; continue; }
+				object raw;
+				try { raw = getVar.Invoke(e.B, new object[] { byVar }); }
+				catch { continue; }
+				if (raw == null) continue;
+				readable++;
+				// UNBOX THE IL2CPP WAY. GetProgramVariable returns a BOXED il2cpp value, so
+				// Convert.ToInt32 threw on every single node and the catch read it as "not a
+				// number" — 30 readable candidates and not one usable value. Render() is the
+				// class's own safe unboxer (dispatch on the il2cpp class name, then Unbox<T>),
+				// and it already covers every integer width.
+				int got;
+				string shown;
+				try { shown = Render(raw); }
+				catch { continue; }
+				if (!int.TryParse(shown, NumberStyles.Integer, CultureInfo.InvariantCulture, out got)) continue;
+				if (seen.Count < 40) seen.Add(got);
+				if (got != playerId) continue;
+				hit = e; break;
+			}
+
+			// ALWAYS SAY WHAT WAS COMPARED. Four of the returns above used to set Status — a UI
+			// string — and write nothing to the log, so a per-player action that resolved to nothing
+			// looked exactly like one nobody pressed. This line also settles the open question in a
+			// single run: whether the world's variable holds VRChat's ACTOR NUMBER or its own 0..N
+			// seat index. Small dense values against a large target id means a seat index, and no
+			// dump can reveal that — every node reads -1 while nobody is playing.
+			VRChatArchiveModPlugin.Logger.LogInfo(
+				"[UdonManager] by:var " + byVar + " looking for " + playerId + " (" + Trunc(displayName, 18) + "): "
+				+ looked + " candidate(s), " + asleep + " not started, " + readable + " readable, values ["
+				+ string.Join(",", seen.ToArray()) + "]" + (hit != null ? " -> MATCHED " + hit.Short : " -> NO MATCH"));
+
+			if (hit == null)
+			{
+				// EVERY CANDIDATE DORMANT is its own answer, and a different one from "nobody
+				// claims this player". A world keeps its per-player scripts switched off until a
+				// round starts, and nothing can be read from them until then — saying "no match"
+				// there sends you hunting for a bug that is not in the mod.
+				if (asleep > 0 && readable == 0)
+				{
+					Status = "all " + asleep + " '" + Trunc(pattern.Length > 0 ? pattern : "script", 16)
+						+ "' are switched off right now — this world only wakes them during a round";
+					VRChatArchiveModPlugin.Logger.LogWarning("[UdonManager] by:var: " + Status);
+					return 0;
+				}
+				Status = readable == 0
+					? "no '" + Trunc(pattern.Length > 0 ? pattern : "script", 16) + "' exposes " + Trunc(byVar, 14)
+					  + " (looked at " + looked + ") — press SCAN, or check the action's byVar"
+					: "no " + Trunc(pattern.Length > 0 ? pattern : "script", 16) + " has " + Trunc(byVar, 14) + " = "
+					  + playerId + " — " + Trunc(displayName, 16) + " may not be in the world's game right now";
+				return 0;
+			}
+
+			bool ok;
+			if (string.Equals(scope, "interact", StringComparison.OrdinalIgnoreCase)) ok = Interact(hit);
+			else if (string.Equals(scope, "local", StringComparison.OrdinalIgnoreCase)) ok = RunLocal(hit, ev);
+			else if (string.Equals(scope, "owner", StringComparison.OrdinalIgnoreCase)) ok = RunOwner(hit, ev);
+			else if (string.Equals(scope, "global", StringComparison.OrdinalIgnoreCase)) ok = RunGlobal(hit, ev);
+			else { Status = "unknown scope '" + scope + "'"; return 0; }
+
+			Status = ok
+				? "sent " + Trunc(ev, 20) + " to " + Trunc(displayName, 16) + " via " + Trunc(hit.Short, 20) + " (" + byVar + "=" + playerId + ")"
+				: "found " + Trunc(hit.Short, 20) + " for " + Trunc(displayName, 16) + " but the event did not fire";
+			VRChatArchiveModPlugin.Logger.LogInfo(
+				$"[UdonManager] player event {scope} '{ev}' -> {displayName} via {hit.Short} matched on {byVar}={playerId}");
+			return ok ? 1 : 0;
 		}
 
 		// The world position of a UI label whose text equals the player's name — UnityEngine.UI.Text

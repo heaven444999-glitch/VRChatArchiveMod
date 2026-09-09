@@ -25,23 +25,98 @@ Two consequences worth stating up front:
 
 ## [Unreleased]
 
-Nothing has changed in the shipped code since the 3.9.20 sync: `git diff 0153028..HEAD -- src` is empty,
-and so is the diff for `AssetBundlePatch.cs`, `VRChatArchiveMod.csproj` and `tools/`. The commits that
-follow it are documentation and repository hygiene only.
+Nothing since the 3.9.57 sync.
+
+---
+
+## [3.9.57] — 2026-09-08
+
+Set by the sync commit that brought the public tree up to the build shipping that day. `<Version>` in
+`VRChatArchiveMod.csproj` and `PluginInfo.Version` in `src/Plugin.cs` both read `3.9.57`.
+
+**This is one squashed sync, not a release.** Versions 3.9.21 through 3.9.56 were built in the private
+tree and left no commit, tag or release here, so the per-version history between 3.9.20 and this point
+is **unknown** to this repository. What follows is what the diff against `0153028` actually contains:
+29 files, +2 823 / −40, of which 9 are new. `src/` goes from 100 to 110 tracked files.
 
 ### Added
 
-- `docs/img/logo.png`, `docs/img/mod-ingame.webp` and `docs/img/badapple-thumb.jpg`, and a README that
-  uses them: a landing page with a "What it does" summary, a screenshots section, and a card linking the
-  Bad Apple object show. The video thumbnail is committed rather than hot-linked so GitHub's image proxy
-  is not in the path.
+- **`src/Modules/SignatureSoundModule.cs`** — a sound that belongs to a *person*, played on arrival.
+  Detection is local and unnetworked on purpose: every client in the instance sees the same arrival and
+  plays the clip for itself, so nothing can be spoofed by faking a trigger, no account or server is
+  needed, and — unlike the soundboard, where the sender is the one client that never hears what it just
+  fired — the person it belongs to hears their own. The first pass after a scene load seeds the roster
+  silently, so walking into a full world is not twenty arrivals; the local player is the deliberate
+  exception, because their own appearance in the roster *is* the moment they finished loading in.
+  The table of ids lives outside the repository (see *Security* below), so the public tree compiles it
+  empty.
+- **`src/Modules/PlayerStatesModule.cs`** — live AFK / seated / in-station state for remote players,
+  read off the avatar's own synced animator parameters, plus VR detection through
+  `VRCPlayerApi.IsUserInVR()`. Both carry an explicit *known* flag: an avatar that implements none of
+  those parameters reports "not known yet" rather than "not AFK", and a rig that never answers the VR
+  question produces silence rather than the claim that somebody is on desktop.
+- **`src/Modules/ChatMimicModule.cs`** — mirrors a chosen player's chatbox. Resolving whose bubble is
+  whose is the whole difficulty: VRChat keeps chat bubbles under a single global `NameplateManager`
+  rather than under the player they belong to, so the owning player is matched through the nameplate
+  container, with a rate-limited scene scan as the fallback.
+- **`src/Modules/FastSyncModule.cs`** — asks VRChat to serialise the local player at its own fast rate.
+  It is the game's own flag on the game's own serialiser, not a hand-rolled change to the Photon send
+  rate.
+- **`src/Modules/PlayerRotatorModule.cs`** — tilts the local capsule, including fully upside down, with
+  the neck clamp widened so the view follows instead of fighting it.
+- **`src/Core/Il2CppStr.cs`** — a *validated* il2cpp string reader. `Il2CppStringToManaged` takes a
+  pointer, reads the length out of the string header and memmoves; a stale pointer therefore faults
+  inside `memmove`, and an `AccessViolationException` is uncatchable on .NET 6, so a `try`/`catch`
+  around the call is decorative. This checks the object before reading it and counts what it rejects.
+- **`src/Core/VrcPlusItems.cs`**, **`src/Core/VRCPlusSpoof.cs`** — the VRC+ cosmetic gate, and what it
+  does and does not do. It changes what the client believes about an item it has **already
+  downloaded**; nothing is sent, no `ApiModel` is written, and anything VRChat validates server-side is
+  unaffected.
+- **`src/Core/EcoPatcher.cs`**.
+- Per-player Udon actions resolved **by variable** (`UdonManagerModule`, +145). A world that keeps one
+  script per person under a single parent — Among Us and its `Player Nodes/Player Node (N)` — cannot be
+  resolved geometrically: "the node nearest the nameplate" returns an arbitrary node *and reports
+  success*. The third mode reads a named variable (`playerID`) off each live candidate and fires on the
+  one whose value matches the player's actor number, or refuses explicitly if nobody claims them.
+- Platform tags read **PC / VR / Quest** in the wing player list, the instance HUD and the QuickMenu
+  (`WingPlayersModule`, `InstancePanelsModule`, `Core/Menu`). The build and the headset are two
+  different questions: the build tag is always drawn, and `VR` is added only when VRChat itself
+  answered — a headset on a PC is PC + VR.
 
-### Removed
+### Changed
 
-- `DEPLOY.bat` is no longer tracked, and is now ignored. It was the author's copy-the-DLL-into-plugins
-  step and carried absolute paths across three of the author's drives. The README describes the deploy
-  step in prose instead. Note that the file is still reachable in this repository's earlier commits;
-  removing it from the working tree does not remove it from history.
+- **The rainbow ESP follows a rank, not a list** (`Core/TrustKit`, `VaTagsModule`). It was a
+  hand-maintained set of user ids in `ESP/RainbowUsers`; anyone holding **Archive Legendary** is now
+  drawn with it automatically. The rank badge is rewritten on every tag pass and removed the moment the
+  level drops, so the rainbow lasts exactly as long as the rank does — nothing to grant by hand and
+  nothing to clean up after a demotion. The hand-kept list still works beside it. New toggle
+  `ESP/LegendaryRainbow` (on by default). The rule lives in `IsRainbow` and nowhere else, because there
+  are three ESPs and a rule written three times is a rule that will be right in two of them.
+- A signature sound suppresses the generic spawn stinger for the person who has one, instead of the two
+  playing over each other (`SpawnSoundModule`).
+
+### Fixed
+
+- **`SpoofModule` no longer faults reading a display name** (+97). It read the name through a raw
+  il2cpp string pointer; the pointer can go stale, and the fault lands inside `memmove` where nothing
+  can catch it. It goes through `Il2CppStr` now, and a written name is kept rooted so the il2cpp GC
+  cannot collect it out from under the object.
+- **`BlockedByProbeModule` no longer faults walking the moderation list** (+257 / −8). `TryCast<T>()`
+  dereferences two pointers — the target class and the object's own class — and either can be rotten,
+  which is why a stack full of `System.__Canon` cannot say which call it was. The list is walked
+  through its indexer instead, which removes the per-row cast entirely, and class pointers are
+  validated before use. The module was **not** disabled to achieve this.
+- Chat bubbles are found through the nameplate container rather than by assuming they hang under the
+  player, and the failure path is logged, not only the success path.
+
+### Security
+
+- **`*.local.cs` is gitignored.** Source that keys behaviour to a real VRChat user id — the signature
+  sound table — is kept out of the repository, for the same reason `ressources/` is. The audit before
+  the first push found real `usr_` ids in `ModConfig` defaults and blanked them; this makes the rule
+  structural rather than something to remember. The partial method those files implement has no body in
+  the public tree, so it compiles to an empty table, exactly as the project already compiles without the
+  media it embeds.
 
 ---
 
@@ -285,6 +360,7 @@ built from a fresh clone of this repository, by design — `libs/` (proprietary 
 reference assemblies) and `ressources/` (the 18 embedded media files the `.csproj` lists) are not
 redistributable and are not included. See the README's Building section.
 
-[Unreleased]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/0153028...main
+[Unreleased]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/v3.9.57...main
+[3.9.57]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/0153028...v3.9.57
 [3.9.20]: https://github.com/kawaiistudio/VRChatArchiveMod/commit/0153028b767c5a1845c0729031011bceeb077cea
 [3.5.0]: https://github.com/kawaiistudio/VRChatArchiveMod/commit/5f0829345e3376f3de1fe8cd5f0fbd56036a7b09

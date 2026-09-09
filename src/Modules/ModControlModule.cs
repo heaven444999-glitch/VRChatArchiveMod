@@ -329,6 +329,24 @@ namespace VRChatArchiveMod.Modules
 		// SIGNATURE lists: the user ids this mod announces on everyone else's client. Handing those
 		// to the user turns "who am I told about" into "who do I get to follow", and lets them
 		// delete the very announcement they are the audience for. Not theirs to edit.
+		// The chatbox lines seen since the last sync, drained so each is delivered exactly once.
+		private static string ChatMimicLinesJson()
+		{
+			try
+			{
+				var lines = ChatMimicModule.Drain();
+				if (lines == null || lines.Count == 0) return "[]";
+				var sb = new StringBuilder("[");
+				for (int i = 0; i < lines.Count; i++)
+				{
+					if (i > 0) sb.Append(',');
+					sb.Append(Json(lines[i]));
+				}
+				return sb.Append(']').ToString();
+			}
+			catch { return "[]"; }
+		}
+
 		private static bool IsInternal(string section, string key)
 			=> (string.Equals(section, "Favorites", StringComparison.OrdinalIgnoreCase)
 			    && string.Equals(key, "CategoryToBorrow", StringComparison.OrdinalIgnoreCase))
@@ -427,8 +445,25 @@ namespace VRChatArchiveMod.Modules
 						  .Append(",\"blockedByMe\":").Append(BlockedByProbeModule.IBlocked.Contains(p.UserId ?? "") ? "true" : "false")
 						  .Append(",\"playerId\":").Append(p.PlayerId)
 						  .Append(",\"isLocal\":").Append(p.IsLocal ? "true" : "false")
+						  // CUSTOM USERNAME, and only ever on the local row. "name" above comes from
+						  // APIUser.displayName and stays the truth; this is what the world's Udon
+						  // scripts are being told instead, so the client can draw "real -> custom"
+						  // the way the in-game PLAYERS panel does. Empty for everyone else, and
+						  // empty when the spoof is off.
+						  .Append(",\"udonName\":").Append(Json(p.IsLocal ? SpoofModule.Applied : ""))
 						  .Append(",\"isOwner\":").Append(p.IsOwner ? "true" : "false")
 						  .Append(",\"isMaster\":").Append(p.IsMaster ? "true" : "false")
+						  // LIVE STATE from the avatar animator (PlayerStatesModule). stateKnown is
+						  // what stops the client drawing "not AFK" for an avatar that has simply not
+						  // loaded yet — without it, "unknown" and "false" look identical on the row.
+						  .Append(",\"stateKnown\":").Append(p.StateKnown ? "true" : "false")
+						  .Append(",\"afk\":").Append(p.Afk ? "true" : "false")
+						  .Append(",\"seated\":").Append(p.Seated ? "true" : "false")
+						  .Append(",\"inStation\":").Append(p.InStation ? "true" : "false")
+						  .Append(",\"inVR\":").Append(p.InVR ? "true" : "false")
+						  // SEPARATE from stateKnown: the SDK answers IsUserInVR for every player, while
+						  // stateKnown only says whether their AVATAR's animator answered.
+						  .Append(",\"vrKnown\":").Append(p.VrKnown ? "true" : "false")
 						  // Live position for the client's PLAYERS card. hasPos is false when even the api
 						  // fallback could not place them; coords sanitised so a broken NaN transform cannot
 						  // make the whole sync invalid JSON.
@@ -528,6 +563,12 @@ namespace VRChatArchiveMod.Modules
 			  .Append(",\"mimicTarget\":").Append(Json(mimicTarget))
 			  .Append(",\"mimicMirror\":").Append(mimicMirror ? "true" : "false")
 			  .Append(",\"voiceMimicTarget\":").Append(Json(voiceMimicTarget))
+			  // MIMIC CHATBOX. The target so the toggle can show its state, and the LINES SEEN
+			  // SINCE THE LAST SYNC as an array — a single slot would drop the first of two
+			  // messages typed inside one poll interval, and people do type twice in a second.
+			  .Append(",\"chatMimicTarget\":").Append(Json(ChatMimicModule.TargetUid ?? ""))
+			  .Append(",\"chatMimicArmed\":").Append(ChatMimicModule.Armed ? "true" : "false")
+			  .Append(",\"chatMimicLines\":").Append(ChatMimicLinesJson())
 			  .Append(",\"objectOrbit\":").Append(objOrbit ? "true" : "false")
 			  .Append(",\"objectOrbitCenter\":").Append(Json(objOrbitCenter))
 			  .Append(",\"objectOrbitCount\":").Append(objOrbitCount)
@@ -544,6 +585,14 @@ namespace VRChatArchiveMod.Modules
 			  // FLOAT OBJECTS: gravity removed from every pickup's body (ObjectGravityModule), and how many.
 			  .Append(",\"floatObjects\":").Append(ObjectGravityModule.Active ? "true" : "false")
 			  .Append(",\"floatObjectsCount\":").Append(ObjectGravityModule.Count)
+			  // FAST SYNC: VRChat's own fast serialisation rate for the local player. Applied is the
+			  // READ-BACK, not the wish — the button shows what actually took, not what was asked.
+			  .Append(",\"fastSync\":").Append(FastSyncModule.Applied ? "true" : "false")
+			  .Append(",\"fastSyncStatus\":").Append(Json(FastSyncModule.Status ?? ""))
+			  // PLAYER ROTATOR: tilt held on your own capsule, with the neck clamp widened so the
+			  // view can follow. The status line carries WHY when the view half could not be armed.
+			  .Append(",\"rotator\":").Append(PlayerRotatorModule.Active ? "true" : "false")
+			  .Append(",\"rotatorStatus\":").Append(Json(PlayerRotatorModule.Status ?? ""))
 			  // MENU BACKGROUNDS: state and how many options were unlocked, so the client's switch
 			  // reflects reality instead of whatever it was last clicked to.
 			  .Append(",\"forceJoinStatus\":").Append(Json(Core.ForceJoin.LastStatus ?? ""))
@@ -1162,6 +1211,19 @@ namespace VRChatArchiveMod.Modules
 
 					// Mimic: copy somebody's pose onto your own avatar (MimicPoseModule). A toggle on
 					// the same player stops it; a different player switches the target.
+					// MIMIC CHATBOX: repeat what they type into YOUR chatbox. Read-only in game — the
+					// text is handed to the desktop client, which sends it over your own OSC.
+					case "chatMimic":
+						{
+							var p = FindPlayer(value);
+							if (p == null) return Refuse();
+							ChatMimicModule.Toggle(p);
+							return true;
+						}
+					case "chatMimicStop":
+						ChatMimicModule.Stop("stopped from the client");
+						return true;
+
 					case "mimic":
 						{
 							var p = FindPlayer(value);
@@ -1252,6 +1314,36 @@ namespace VRChatArchiveMod.Modules
 					// else, moving for yourself. Exactly the UnityExplorer gesture, as one button.
 					case "ghost":
 						OnMain(() => GhostModule.Toggle());
+						return true;
+
+					// FAST SYNC. It had NO switch anywhere — not here, not in the mod's menu, not in the
+					// client — so the only way to turn it on was hand-editing the BepInEx config, and it
+					// sat at its default of false forever while its log line said "armed". A module that
+					// is registered, resolves cleanly and cannot be reached is the same failure as
+					// WhoBlockedMe before it: shipped, and unreachable.
+					case "fastSync":
+						OnMain(() =>
+						{
+							try
+							{
+								if (ModConfig.FastSync == null) return;
+								ModConfig.FastSync.Value = !ModConfig.FastSync.Value;
+							}
+							catch { }
+						});
+						return true;
+
+					// PLAYER ROTATOR: tilt your own capsule (arrows / PageUp / PageDown) with the neck
+					// clamp widened so mouse-look can follow you past vertical. "flip" is the one-shot
+					// upside down, "reset" puts you back upright without switching the rotator off.
+					case "rotator":
+						OnMain(() => PlayerRotatorModule.Toggle());
+						return true;
+					case "rotatorFlip":
+						OnMain(() => PlayerRotatorModule.Flip());
+						return true;
+					case "rotatorReset":
+						OnMain(() => PlayerRotatorModule.ResetUpright());
 						return true;
 					// FLOAT OBJECTS: useGravity = false on every pickup's Rigidbody (yours float for everyone).
 					case "floatObjects":
@@ -1688,10 +1780,17 @@ namespace VRChatArchiveMod.Modules
 					// drives this from its per-player presets.
 					case "udonPlayerEvent":
 						{
+							// SEVEN FIELDS NOW, AND SIX STILL WORK. by:var needs the NAME of the variable
+							// that identifies the player (byVar), so it rides between `by` and `pattern` —
+							// pattern stays last because a world object's name may itself contain a '|'.
+							// A client that has not been updated sends six and lands in the old shape with
+							// no byVar, which is right: the two geometric modes never needed one.
 							string raw = value ?? "";
-							string[] parts = raw.Split(new[] { '|' }, 6);
+							string[] parts = raw.Split(new[] { '|' }, 7);
 							if (parts.Length < 6) return false;
-							string uid = parts[0], scope = parts[1], match = parts[2], ev = parts[3], by = parts[4], pattern = parts[5];
+							string uid = parts[0], scope = parts[1], match = parts[2], ev = parts[3], by = parts[4];
+							string byVar = parts.Length >= 7 ? parts[5] : "";
+							string pattern = parts.Length >= 7 ? parts[6] : parts[5];
 							OnMain(() =>
 							{
 								if (!UdonManagerModule.IsScope(scope))
@@ -1702,7 +1801,7 @@ namespace VRChatArchiveMod.Modules
 								}
 								var p = FindPlayer(uid);
 								if (p == null) { UdonManagerModule.Status = "that player is no longer in the instance"; _udonPayload = BuildUdon(); return; }
-								UdonManagerModule.RunOnPlayer(p.Name, p.Position, p.HasPos, scope, ev, pattern, match, by);
+								UdonManagerModule.RunOnPlayer(p.Name, p.Position, p.HasPos, scope, ev, pattern, match, by, byVar, p.PlayerId);
 								_udonPayload = BuildUdon();
 							});
 							return true;

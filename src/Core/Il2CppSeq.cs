@@ -125,15 +125,25 @@ namespace VRChatArchiveMod.Core
 				var lenP = t.GetProperty("Length") ?? t.GetProperty("Count");
 				var item = t.GetProperty("Item");
 				if (lenP?.GetValue(seq) is int len && item != null)
+				{
+					// ONE ARGS ARRAY, REUSED. This is a reflection call per element, and it became
+					// the hot path the moment step 3 was taught to fall through to it — a video
+					// injection reads the symbol table of every candidate script, which in a ProTV
+					// world is several hundred symbols. Allocating a fresh object[1] for each of them
+					// bought nothing: GetValue copies the value out before returning, so the same box
+					// can carry every index.
+					object[] args = new object[1];
 					for (int i = 0; i < len && i < Cap; i++)
 					{
 						try
 						{
-							string s = item.GetValue(seq, new object[] { i }) as string;
+							args[0] = i;
+							string s = item.GetValue(seq, args) as string;
 							if (!string.IsNullOrEmpty(s)) outp.Add(s);
 						}
 						catch { }
 					}
+				}
 			}
 			catch { }
 			return outp;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VRChatArchiveMod.Core;
@@ -245,6 +245,9 @@ namespace VRChatArchiveMod.Modules
 			badge += p.Platform == "Quest" ? PanelSkin.Tag("3BFF7A", "<b>Q</b>")
 			       : p.Platform == "PC" ? PanelSkin.Tag("3FA9FF", "<b>PC</b>")
 			       : PanelSkin.Tag("A8BCD4", "<b>" + Trunc(p.Platform, 3) + "</b>");
+			// VR is a SEPARATE question from the build, and only drawn when VRChat answered it
+			// (VrKnown). Silence when unknown — never the claim that somebody is on desktop.
+			if (p.VrKnown && p.InVR) badge += PanelSkin.Tag("8FE9A8", "<b>VR</b>");
 			r.Badge = badge;
 
 			return r;

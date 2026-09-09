@@ -31,6 +31,9 @@ namespace VRChatArchiveMod.Core
 		// heavy avatar, and trimming it piece by piece still leaves the rest of it running.
 		public static ConfigEntry<bool> HideAvatarOverBudget;
 		public static ConfigEntry<bool> SelfHide;             // your own avatar not drawn on your screen (SelfHideModule)
+		public static ConfigEntry<bool> StoreOwnership;       // client-side store ownership check always true (Core/EcoPatcher)
+		public static ConfigEntry<bool> VrcPlusSpoof;         // the client's own VRC+ flag reads true, locally (Core/VRCPlusSpoof)
+		public static ConfigEntry<bool> FastSync;             // VRChat's own fast serialisation rate for you (FastSyncModule)
 		public static ConfigEntry<string> UdonNameSpoof;      // name this client's Udon scripts read for you (SpoofModule)
 		public static ConfigEntry<bool> FloatSyncedOnly;      // FLOAT OBJECTS: only pickups whose position is networked
 		public static ConfigEntry<bool> NsfwFilter;           // hide keyword-named renderers on other players' avatars (NsfwFilterModule)
@@ -158,6 +161,7 @@ namespace VRChatArchiveMod.Core
 		// Players whose capsule cycles the spectrum instead of showing a trust colour.
 		public static ConfigEntry<string> RainbowUserIds;
 		public static ConfigEntry<float> RainbowSpeed;
+		public static ConfigEntry<bool> LegendaryRainbow;
 
 		// --- Instance panels (player list + join/leave log) ---
 		public static ConfigEntry<bool> InstancePanelsEnabled;
@@ -229,11 +233,26 @@ namespace VRChatArchiveMod.Core
 		public static ConfigEntry<float> FlyRotateSpeed;
 		public static ConfigEntry<bool> ArrowRotateEnabled;   // arrow-key rotation while flying (deg/sec)
 
+		// --- Player rotator: tilt your own capsule, and unclamp the view so it can follow ---
+		// WHO BLOCKED ME. A switch exists at all because this module asks VRChat's API through the
+		// il2cpp delegate bridge and then walks a native collection — the riskiest thing the mod does
+		// — and until now there was no way to turn it off short of deleting the mod.
+		public static ConfigEntry<bool> BlockedByProbe;
+
+		public static ConfigEntry<bool> RotatorEnabled;
+		public static ConfigEntry<bool> RotatorFreeLook;      // widen the neck clamp so mouse pitch goes past vertical
+		public static ConfigEntry<float> RotatorSpeed;        // degrees per second for the tilt keys
+		public static ConfigEntry<float> RotatorNeckLimit;    // how far the widened neck clamp reaches, in degrees
+
 		// --- Era (2017 / 2018 / current look) ---
 
 		// --- Spawn stinger (plays once when you finish loading into an instance) ---
 		public static ConfigEntry<bool> SpawnSoundEnabled;
 		public static ConfigEntry<float> SpawnSoundVolume;
+
+		// --- Signature sounds (a clip that belongs to a person, on arrival) ---
+		public static ConfigEntry<bool> SignatureSoundEnabled;
+		public static ConfigEntry<float> SignatureSoundVolume;
 
 		// --- Custom nameplates (2018-style frame drawn over the world) ---
 
@@ -310,6 +329,12 @@ namespace VRChatArchiveMod.Core
 				"NSFW FILTER: comma-separated words matched (case-insensitively) against object names on other avatars. Add or remove words freely; each must be 3+ characters.");
 			SelfHide = cfg.Bind("AntiCrash", "SelfHide", false,
 				"SELF HIDE: your own avatar is not drawn on YOUR screen (every renderer under it switched off - no mesh, no mirror reflection, no first-person hands). IK, camera, animator and what everyone else sees are untouched. Follows avatar changes and is re-asserted twice a second; OFF puts everything back.");
+			StoreOwnership = cfg.Bind("Spoof", "StoreOwnership", true,
+				"STORE OWNERSHIP: the client's own \"does this player have this product\" check answers yes, on THIS machine. Meant for walking your own published worlds' paid gates without buying your own product back to test one. Client-side only - anything VRChat validates on its servers is unaffected, so this makes the UI behave as owned, it does not obtain anything. Read live, so switching it off restores the game's answer at once.");
+			VrcPlusSpoof = cfg.Bind("Spoof", "VRCPlus", true,
+				"VRC+ STATUS: the client's own subscriber flag reads true on THIS machine, so the features the UI gates behind it open up. Local only - it postfixes the getter of the reactive property the menu binds to, and never APIUser, whose fields carry Save()/Put() and could travel back to VRChat under your account. Anything VRChat checks server-side is unaffected.");
+			FastSync = cfg.Bind("Network", "FastSync", false,
+				"FAST SYNC: asks VRChat to serialise YOU at its fast rate (FlatBufferNetworkSerializer.RequireFastRate). Your position, rotation and pose reach the other clients more often, so you look smoother to them and what you carry tracks your hands more closely. This is the GAME'S own flag on the GAME'S own serialiser, so its throttling and batching still apply - it is not a hand-rolled increase of the Photon send rate. It costs outbound bandwidth, which is why the game does not do it for everyone all the time. Re-applied on every world change, because joining rebuilds the serialiser at the default rate.");
 			UdonNameSpoof = cfg.Bind("Spoof", "UdonName", "",
 				"CUSTOM USERNAME: the name the world's Udon scripts read for you ON THIS CLIENT. Empty = off. Written to VRCPlayerApi.displayName and verified by reading it back; re-applied on every world change. Your nameplate and VRChat's own player list keep your real name (they come from the API, not from Udon), but a world that copies the name it read into a synced variable - a leaderboard, a name sign - sends this one to everyone. Worlds that key on your real name (allowlists, saved progress) stop recognising you while it is set. Refuses to arm if the il2cpp field-offset repair did not verify.");
 			FloatSyncedOnly = cfg.Bind("AntiCrash", "FloatSyncedOnly", true,
@@ -410,6 +435,8 @@ namespace VRChatArchiveMod.Core
 				+ "never drawn for you. People without the mod see nothing either way.");
 			RainbowSpeed = cfg.Bind("ESP", "RainbowSpeed", 0.35f,
 				"How fast the rainbow cycles, in full loops per second.");
+			LegendaryRainbow = cfg.Bind("ESP", "LegendaryRainbow", true,
+				"Draw anyone holding the Archive Legendary rank with the cycling rainbow, without listing their id above. The rank is granted and revoked by the tag system itself, so the rainbow follows it: it appears when they reach Legendary and goes away if they stop being one. The site draws that tier as a swept gradient and this is the same idea in game.");
 
 			WatchlistUserIds = cfg.Bind("Watchlist", "UserIds", "",
 				"Comma-separated VRChat user ids to watch.");
@@ -742,11 +769,40 @@ namespace VRChatArchiveMod.Core
 				"Left/Right arrow keys turn your player (works on the ground, not just while flying). "
 				+ "Speed follows RotateSpeed.");
 
+			// PLAYER ROTATOR. Off by default: it takes the arrow and page keys while it is on, and it
+			// widens VRChat's neck clamp, so it is not something to be holding quietly in the
+			// background.
+			RotatorEnabled = cfg.Bind("Rotator", "Enabled", false,
+				"Tilt your own capsule and take the view with it (RightShift+R). Up/Down arrows pitch, "
+				+ "PageUp/PageDown roll, RightShift+F flips you upside down, RightShift+Backspace resets. "
+				+ "Local: nothing is sent by hand.");
+			RotatorFreeLook = cfg.Bind("Rotator", "FreeLook", true,
+				"While the rotator is on, remove VRChat's limit on how far mouse-look may pitch, so the "
+				+ "view can follow you all the way over instead of stopping at the neck's stock range. "
+				+ "Put back exactly as found when the rotator is switched off.");
+			RotatorSpeed = cfg.Bind("Rotator", "Speed", 120f,
+				"Tilt speed in degrees per second (5 to 720).");
+			BlockedByProbe = cfg.Bind("Probe", "BlockedBy", true,
+				"Ask VRChat once per session who has blocked you (ApiPlayerModeration.FetchAllAgainstMe), so the "
+				+ "player lists can show BLOCKED. It is the only thing the mod does that both crosses the il2cpp "
+				+ "delegate bridge and walks a native collection, so it gets its own off switch. Turning it off "
+				+ "costs you the BLOCKED tag and nothing else. The mod also disables it BY ITSELF for one session "
+				+ "if the previous one died inside the probe.");
+
+			RotatorNeckLimit = cfg.Bind("Rotator", "NeckLimit", 180f,
+				"How far the widened neck clamp reaches, in degrees (90 to 1800). 180 is already all the "
+				+ "way round; a huge value risks feeding infinities into VRChat's own smoothing.");
+
 
 			SpawnSoundEnabled = cfg.Bind("SpawnSound", "Enabled", true,
 				"Play a short stinger ('The Spawn Dark Squad') once each time you finish loading into an instance.");
 			SpawnSoundVolume = cfg.Bind("SpawnSound", "Volume", 0.6f,
 				"Volume of the spawn stinger, 0 to 1.");
+
+			SignatureSoundEnabled = cfg.Bind("SignatureSound", "Enabled", true,
+				"Play a person's own signature clip when they arrive in your instance. Nothing is sent over the network: every client sees the same arrival and plays it for itself, so the person it belongs to hears it too.");
+			SignatureSoundVolume = cfg.Bind("SignatureSound", "Volume", 0.6f,
+				"Volume of signature sounds, 0 to 1.");
 
 			// Bounded on purpose: the point is to save the walk across a room, not to let one key
 			// collect every loose object in a world from the spawn point.

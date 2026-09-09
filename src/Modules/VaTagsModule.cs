@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -57,6 +57,23 @@ namespace VRChatArchiveMod.Modules
 			public bool Adult;       // 18+ (age verified)
 			public string Platform = "";   // "PC" | "Quest"
 			public bool ApiResolved;       // false until the async APIUser actually loaded; retried each pass
+			// LIVE STATE, read off the avatar's own animator parameters (PlayerStatesModule).
+			//
+			// VRChat drives AFK, Seated, InStation and VRMode on every avatar and syncs them, so these
+			// are the game's own answers about a REMOTE player rather than a guess from how they are
+			// drawn. StateKnown stays false until an animator carrying those parameters has actually
+			// been read: an avatar still loading, or a rig that exposes none of them, must not be
+			// reported as "not AFK" when the truth is "not known yet".
+			public bool StateKnown;
+			// VR is a SEPARATE question from the animator states, and it needs its own known-flag.
+			// StateKnown means "their avatar's animator answered"; VrKnown means "VRChat's own SDK
+			// answered IsUserInVR". A PC player in a headset whose avatar declares no VRMode parameter
+			// has StateKnown=false and VrKnown=true — one flag could not carry both.
+			public bool VrKnown;
+			public bool Afk;
+			public bool Seated;
+			public bool InStation;
+			public bool InVR;
 			public object Player;
 			public Transform Transform;
 			// The position we actually SHOW. Transform.position when we have a live transform, else
@@ -660,12 +677,16 @@ namespace VRChatArchiveMod.Modules
 			// "rainbow" code is the chunky stepped CoD-clan-tag look and would not match it. The colour
 			// is ignored by both (they write their own per-glyph spans); it is kept as the fallback for
 			// anywhere the effect is stripped.
-			new Rank(5, "Archive Legendary", "#FF5FCF", "sr"),
+			new Rank(5, LegendaryRankText, "#FF5FCF", "sr"),
 			new Rank(4, "Archive VIP",       "#FFD166", "glow"),     // --yellow
 			new Rank(3, "Archive Premium",   "#A855F7", "glow"),     // --purple
 			new Rank(2, "Archive Supporter", "#0066FF", "none"),     // --blue
 			new Rank(1, "Archive User",      "#00FF41", "none"),     // --green (.access-tier-standard)
 		};
+		// Named once, used by the table above and by IsLegendary below, so the two can never
+		// drift apart — a renamed badge that stops turning people rainbow would be a silent
+		// failure, not a compile error.
+		public const string LegendaryRankText = "Archive Legendary";
 		private const string AdminRankText = "Archive Admin";
 		private const string AdminRankColor = "#00E5FF";                // --cyan
 
@@ -685,6 +706,24 @@ namespace VRChatArchiveMod.Modules
 		{
 			"VIP", "Supporter",
 		};
+
+		/// <summary>True while this account carries the Archive Legendary rank badge. Read off the
+		/// tag database, which is the only thing the mod knows about ANOTHER person's level — and it
+		/// is the right source anyway: the badge is rewritten on every tag pass, so it goes away by
+		/// itself when somebody stops being Legendary.</summary>
+		public static bool IsLegendary(string uid)
+		{
+			if (string.IsNullOrEmpty(uid)) return false;
+			foreach (var t in TagsOf(uid))
+			{
+				if (t == null || string.IsNullOrEmpty(t.Text)) continue;
+				if (string.Equals(t.Text, LegendaryRankText, StringComparison.OrdinalIgnoreCase)) return true;
+				// The name the first build wrote. Somebody who earned it then and has not been
+				// through a tag pass since is still a Legendary.
+				if (string.Equals(t.Text, "Legendary Subscriber", StringComparison.OrdinalIgnoreCase)) return true;
+			}
+			return false;
+		}
 
 		public static Rank RankFor(int level)
 		{

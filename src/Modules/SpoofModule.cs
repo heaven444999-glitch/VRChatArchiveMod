@@ -116,7 +116,7 @@ namespace VRChatArchiveMod.Modules
 				}
 
 				string current;
-				try { current = api.displayName ?? ""; } catch { return; }
+				if (!ReadName(ptr, out current)) return;
 
 				string wanted = "";
 				try { wanted = (ModConfig.UdonNameSpoof.Value ?? "").Trim(); } catch { }
@@ -158,11 +158,12 @@ namespace VRChatArchiveMod.Modules
 
 				try { api.displayName = wanted; }
 				catch (Exception e) { Status = "custom username: " + e.Message; return; }
+				RootWritten(ptr);
 
 				// READ IT BACK. The whole point: this line is the difference between believing and
 				// knowing, and it costs one interop read twice a second.
 				string after;
-				try { after = api.displayName ?? ""; } catch { after = "<unreadable>"; }
+				if (!ReadName(ptr, out after)) after = "<unreadable>";
 				bool ok = string.Equals(after, wanted, StringComparison.Ordinal);
 				Applied = ok ? wanted : "";
 				Status = ok ? ("custom username: " + wanted) : "custom username: the write did not stick";
@@ -182,6 +183,100 @@ namespace VRChatArchiveMod.Modules
 				}
 			}
 			catch (Exception e) { Status = "spoof: " + e.Message; }
+		}
+
+		// WHY THIS DOES NOT USE api.displayName, WHICH IS THE OBVIOUS THING TO WRITE.
+		//
+		// Because it killed VRChat. From BepInEx/ErrorLog.log, 2026-09-08:
+		//
+		//     Fatal error. Internal CLR error. (0x80131506)
+		//        at System.Buffer.__Memmove(Byte*, Byte*, UIntPtr)
+		//        at System.String.Ctor(Char*, Int32, Int32)
+		//        at Il2CppInterop.Runtime.IL2CPP.Il2CppStringToManaged(IntPtr)
+		//        at VRC.SDKBase.VRCPlayerApi.get_displayName()
+		//        at VRChatArchiveMod.Modules.SpoofModule.OnUpdate()
+		//
+		// The generated getter reads the field and hands the pointer straight to
+		// Il2CppStringToManaged, which validates nothing: it takes the length out of the string
+		// header and memmoves. When that pointer is stale the fault happens INSIDE memmove — not an
+		// exception, not something the try/catch two lines up could ever see, but a CLR fatal that
+		// ends the process. Which is why every catch in this file looked like it was covering the
+		// read, and none of them was.
+		//
+		// AND THE GUARD ABOVE COULD NOT HAVE HELPED. NativeGuard.Alive(api) had already passed: the
+		// VRCPlayerApi object itself was fine. What was rotten was the pointer INSIDE its field —
+		// a string collected out from under us, or a field belonging to an object whose memory had
+		// been recycled after a world change. Alive() validates the object it is given and says
+		// nothing about what its fields point at, so the crash walked straight past it.
+		//
+		// Core/Il2CppStr does the read the careful way and simply refuses when the pointer will not
+		// stand up. A refused read returns false and this pass does nothing, which is exactly right:
+		// the next pass is 100 ms away.
+		private static IntPtr _nameField = IntPtr.Zero;
+		private static bool _nameFieldTried;
+		private static int _lastRejected;
+
+		// AND THE OTHER HALF OF THE CRASH: KEEPING THE STRING WE WROTE ALIVE.
+		//
+		// Reading defensively stops the MOD from dying on a dangling pointer. It does nothing for the
+		// GAME, which reads this same field constantly — and a Udon script reading it is the entire
+		// point of the feature, so a dangling pointer there is a crash inside VRChat's own code where
+		// no guard of ours can reach.
+		//
+		// This module is the only one in the mod that WRITES an il2cpp string into a VRChat field.
+		// api.displayName = wanted compiles to ManagedStringToIl2Cpp, which allocates a fresh string
+		// on the il2cpp heap, and the only thing referring to it afterwards is that one field. Every
+		// OTHER displayName in this process was allocated and rooted by VRChat itself, which is why
+		// the crash trace names this module and not the six others that read the same property.
+		//
+		// So the written string gets a real il2cpp GC root: Il2CppObjectBase takes an
+		// il2cpp_gchandle_new in its constructor, so simply HOLDING the wrapper is the root. One
+		// live handle at a time, replaced whenever the name changes — the previous wrapper is dropped
+		// and its finalizer releases the old handle.
+		private static Il2CppSystem.String _rooted;
+
+		private static void RootWritten(IntPtr apiPtr)
+		{
+			try
+			{
+				if (_nameField == IntPtr.Zero) return;
+				IntPtr strPtr;
+				if (!Il2CppStr.TryFieldPtr(apiPtr, _nameField, out strPtr)) return;
+				if (strPtr == IntPtr.Zero || !NativeGuard.IsLiveObject(strPtr)) return;
+				_rooted = new Il2CppSystem.String(strPtr);
+			}
+			catch { /* a root we could not take is a name that may drift back, never a crash */ }
+		}
+
+		private static bool ReadName(IntPtr apiPtr, out string name)
+		{
+			name = "";
+			if (!_nameFieldTried)
+			{
+				_nameFieldTried = true;
+				_nameField = Il2CppStr.FindField(apiPtr, "displayName");
+				if (_nameField == IntPtr.Zero)
+					VRChatArchiveModPlugin.Logger.LogWarning(
+						"[Spoof] VRCPlayerApi has no field called displayName on this build — custom username "
+						+ "cannot verify itself, so it stays off rather than writing blind.");
+			}
+			if (_nameField == IntPtr.Zero) { Armed = false; return false; }
+
+			IntPtr strPtr;
+			bool ok = Il2CppStr.TryFieldPtr(apiPtr, _nameField, out strPtr)
+				&& Il2CppStr.TryRead(strPtr, out name);
+
+			// Say it out loud when a read is refused — checked on EVERY pass, including the refused
+			// ones, which is the only way this line can ever print. A silent guard that fires
+			// constantly looks exactly like a feature that quietly stopped working.
+			if (Il2CppStr.Rejected != _lastRejected)
+			{
+				_lastRejected = Il2CppStr.Rejected;
+				VRChatArchiveModPlugin.Logger.LogWarning(
+					"[Spoof] refused an unsafe displayName read (" + _lastRejected + " so far). This is the "
+					+ "guard doing its job — that read used to end the process.");
+			}
+			return ok;
 		}
 
 		// THE ANSWER TO "IS IT HOLDING?", once every ten seconds and only while a name is set.

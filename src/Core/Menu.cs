@@ -1099,8 +1099,34 @@ namespace VRChatArchiveMod.Core
 			Slider(a.x, a.y + 164f, colW, "Rotate Speed (arrows)", ModConfig.FlyRotateSpeed.Value, 15, 360, v => ModConfig.FlyRotateSpeed.Value = v, "F0");
 			Slider(rx,   a.y + 164f, colW, "TP Max Dist (m)", ModConfig.ClickTpMaxDistance.Value, 10, 300, v => ModConfig.ClickTpMaxDistance.Value = v, "F0");
 
+			// ---- ROTATOR ------------------------------------------------------------------
+			// The two axes the arrow-key turning above deliberately refuses. Switching it ON also
+			// widens VRChat's neck clamp, and that is the half that makes upside-down usable rather
+			// than merely visible in a mirror: without it the body tilts and the camera stays level.
+			float ry = a.y + 210f;
+			GUI.Label(new Rect(a.x, ry, a.width, 16f), "ROTATOR — TILT YOURSELF", _header);
+			bool rotWas = Modules.PlayerRotatorModule.Active;
+			if (GuiKit.Toggle(new Rect(a.x, ry + 24f, colW, 40f),
+				rotWas ? "Rotator ON (RShift+R)" : "Rotator (RShift+R)", rotWas) != rotWas)
+				Modules.PlayerRotatorModule.Toggle();
+			if (GuiKit.Button(new Rect(rx, ry + 24f, colW, 40f), "FLIP UPSIDE DOWN  (RShift+F)"))
+				Modules.PlayerRotatorModule.Flip();
+
+			ModConfig.RotatorFreeLook.Value = GuiKit.Toggle(new Rect(a.x, ry + 70f, colW, 40f),
+				"Free look (unclamp mouse pitch)", ModConfig.RotatorFreeLook.Value);
+			if (GuiKit.Button(new Rect(rx, ry + 70f, colW, 40f), "BACK UPRIGHT  (RShift+Backspace)"))
+				Modules.PlayerRotatorModule.ResetUpright();
+
+			Slider(a.x, ry + 116f, colW, "Tilt Speed", ModConfig.RotatorSpeed.Value, 5, 720, v => ModConfig.RotatorSpeed.Value = v, "F0");
+			Slider(rx,   ry + 116f, colW, "Free-look reach (°)", ModConfig.RotatorNeckLimit.Value, 90, 720, v => ModConfig.RotatorNeckLimit.Value = v, "F0");
+
+			GUI.Label(new Rect(a.x, ry + 158f, a.width, 20f),
+				"Tilt: <color=#FFFFFF>↑ ↓</color> pitch · <color=#FFFFFF>PgUp/PgDn</color> roll · the neck clamp goes back exactly as found when you switch it off", _dim);
+			GUI.Label(new Rect(a.x, ry + 178f, a.width, 20f),
+				"<color=#FFFFFF>" + Modules.PlayerRotatorModule.Status + "</color>", _dim);
+
 			// ---- CONTROLS -----------------------------------------------------------------
-			float cy = a.y + 210f;
+			float cy = a.y + 410f;
 			GUI.Label(new Rect(a.x, cy, a.width, 16f), "CONTROLS", _header);
 			GUI.Label(new Rect(a.x, cy + 20f, a.width, 20f), "Fly: <color=#FFFFFF>Ctrl+F</color> toggles it · noclip switches on with it automatically (toggle it off above to keep collision)", _dim);
 			GUI.Label(new Rect(a.x, cy + 40f, a.width, 20f), "Move: <color=#FFFFFF>WASD</color> + <color=#FFFFFF>E/Q</color> · <color=#FFFFFF>Shift</color> boost · Rotate <color=#FFFFFF>← → ↑ ↓</color> · Teleport: <color=#FFFFFF>RMB+LMB</color>", _dim);
@@ -2202,6 +2228,7 @@ namespace VRChatArchiveMod.Core
 					badges += p.Platform == "Quest"
 						? "<color=#7CFF9E>Quest</color>"
 						: "<color=#7FB0FF>" + p.Platform + "</color>";
+					if (p.VrKnown && p.InVR) badges += " <color=#8FE9A8>VR</color>";
 				if (badges.Length > 0)
 					GUI.Label(new Rect(row.xMax - 148f, row.y + 4f, 140f, 18f), badges, _rowTagRight);
 

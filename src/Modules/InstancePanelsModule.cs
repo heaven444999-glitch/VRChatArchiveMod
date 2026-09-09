@@ -196,6 +196,7 @@ namespace VRChatArchiveMod.Modules
 							badge += pe.Platform == "Quest" ? "<color=#7CFF9E>Q</color>"
 							       : pe.Platform == "PC"    ? "<color=#7FB0FF>PC</color>"
 							       : "<color=#8FA3B8>" + Trunc(pe.Platform, 3) + "</color>";
+							if (pe.VrKnown && pe.InVR) badge += " <color=#8FE9A8>VR</color>";
 
 						string pid = pe.PlayerId >= 0 ? pe.PlayerId.ToString() : "";
 						bool member = false;
@@ -219,6 +220,15 @@ namespace VRChatArchiveMod.Modules
 						// sized to the character for "VRC+ 18+ PC" (badgeW = fs * 6.9f), and a seven
 						// letter word would spill left over the name of every row that has one.
 						string label = pe.IsLocal ? pe.Name + "  (you)" : pe.Name;
+						// The custom username, beside the real one on your own row — the same thing the
+						// wing PLAYERS panel shows. pe.Name is APIUser.displayName and stays the truth;
+						// this is what the world's Udon scripts are told instead.
+						try
+						{
+							if (pe.IsLocal && !string.IsNullOrEmpty(SpoofModule.Applied))
+								label += " → " + SpoofModule.Applied;
+						}
+						catch { }
 						try
 						{
 							if (!pe.IsLocal && BlockedByProbeModule.BlockedMe.Contains(pe.UserId ?? ""))

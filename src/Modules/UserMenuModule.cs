@@ -109,10 +109,26 @@ namespace VRChatArchiveMod.Modules
 
 				float now = Time.realtimeSinceStartup;
 				if (now < _nextTry) return;
-				// Back off rather than stop. The old code gave up permanently after 40 tries (two
-				// minutes) and said nothing, so opening a user menu later in a session found no
-				// cards and no explanation anywhere.
-				_nextTry = now + (_fails < 20 ? 3f : 15f);
+
+				// THE PAGE DOES NOT EXIST UNTIL YOU OPEN IT, AND THAT IS THE WHOLE BUG (2026-09-08).
+				//
+				// This module has failed on every world load for weeks with "no per-user page under
+				// Body", and its own diagnostic printed the answer without anyone reading it: the
+				// list of pages Body actually holds — Menu_QM_Launchpad, Menu_Notifications,
+				// Menu_Here, Menu_Camera and two dozen more — contains NO Menu_SelectedUser_*. Yet a
+				// UI tree dump taken while a user menu was open shows
+				//     .../Window/QMParent/Body/Menu_SelectedUser_Local(Clone)
+				// sitting exactly where this code looks. So the page is created ON DEMAND and lives
+				// only while it is open, and a probe on a 3-to-15 second timer misses that window
+				// essentially every time. The name list and the pattern fallback were never the
+				// problem; the CLOCK was.
+				//
+				// So: poll fast while the QuickMenu is actually open, and barely at all when it is
+				// not. A closed QuickMenu cannot be showing a user page, so the slow path costs
+				// nothing and the fast path only runs while somebody is looking at the menu.
+				bool qmOpen = false;
+				try { qmOpen = Core.QuickMenu.Visible; } catch { }
+				_nextTry = now + (qmOpen ? 0.25f : (_fails < 20 ? 3f : 15f));
 				if (!TryInject()) _fails++;
 			}
 			catch (Exception e)

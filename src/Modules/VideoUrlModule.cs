@@ -154,8 +154,17 @@ namespace VRChatArchiveMod.Modules
 			try
 			{
 				Probe("collecting video-adjacent behaviours");
+				var swCollect = System.Diagnostics.Stopwatch.StartNew();
 				var candidates = CollectVideoScripts();
+				swCollect.Stop();
 				Probe("scanning " + candidates.Count + " video-adjacent behaviour(s) for a VRCUrl symbol");
+				// TIMED IN TWO HALVES, because a one-second freeze needs an address and not a guess.
+				// Reading a script's symbol table is a reflection call per symbol; writing is a
+				// handful of calls total. Only the log can say which of the two the second went to.
+				_scanCollectMs = swCollect.Elapsed.TotalMilliseconds;
+				_scanReadMs = 0.0; _scanWriteMs = 0.0; _scanSymbols = 0;
+				double readMs = 0.0, writeMs = 0.0;
+				int symbolsSeen = 0;
 				int idx = 0;
 				foreach (var ub in candidates)
 				{
@@ -166,13 +175,18 @@ namespace VRChatArchiveMod.Modules
 					// ONE script in ONE world, and this is what identifies it.
 					string who = SafeName(ub.TryCast<Component>()?.gameObject);
 					Probe("candidate #" + idx + " '" + who + "' — reading symbols");
+					var swOne = System.Diagnostics.Stopwatch.StartNew();
 					string symbol = FindUrlSymbol(ub);
+					swOne.Stop(); readMs += swOne.Elapsed.TotalMilliseconds; _scanReadMs = readMs;
+					symbolsSeen += _lastSymbolCount; _scanSymbols = symbolsSeen;
 					Probe("candidate #" + idx + " '" + who + "' — symbols via " + _lastSymbolPath
 						+ (symbol == null ? ", no VRCUrl" : ", VRCUrl '" + symbol + "'"));
 					idx++;
 					if (symbol == null) continue;
 					Probe("candidate #" + idx + " '" + who + "' — WRITING '" + symbol + "'");
+					swOne.Restart();
 					if (TrySet(ub, symbol, vrcUrl)) scripted++;
+					swOne.Stop(); writeMs += swOne.Elapsed.TotalMilliseconds; _scanWriteMs = writeMs;
 					Probe("candidate #" + idx + " '" + who + "' — write returned");
 				}
 			}
@@ -198,6 +212,11 @@ namespace VRChatArchiveMod.Modules
 			// Got here alive: the trail is marked COMPLETED, so the next run knows this attempt did
 			// not crash. Only an injection that never reaches this line leaves an unfinished trail.
 			Probe("done — " + scripted + " via script, " + direct + " direct");
+			if (_scanReadMs + _scanWriteMs > 60.0)
+				VRChatArchiveModPlugin.Logger.LogWarning(
+					"[VideoUrl] injection cost: collect " + _scanCollectMs.ToString("0.#") + " ms, symbols "
+					+ _scanReadMs.ToString("0.#") + " ms over " + _scanSymbols + " symbol(s), write "
+					+ _scanWriteMs.ToString("0.#") + " ms — all on one frame.");
 			Core.CrashTrail.End();
 			return scripted + direct;
 		}
@@ -396,6 +415,7 @@ namespace VRChatArchiveMod.Modules
 				// re-asserted its own synced URL: "it just restarts the original video".
 				var symbols = UdonSymbols.All(ub);
 				_lastSymbolPath = "UdonSymbols." + UdonSymbols.LastPath;
+				_lastSymbolCount = symbols.Count;
 				if (symbols.Count == 0)
 				{
 					var symbolsProp = vars.GetType().GetProperty("VariableSymbols");
@@ -415,14 +435,25 @@ namespace VRChatArchiveMod.Modules
 
 				// Among the VRCUrl-typed symbols, the one that names itself a URL wins (_syncedURL,
 				// _url, syncUrl...); playlist/default entries lose; arrays (VRCUrl[]) never qualify.
+				// ONE ARGS ARRAY AND ONE PASS. GetProgramVariableType is a reflection Invoke into
+				// il2cpp, paid once per symbol per candidate script — several hundred times for a
+				// single injection in a ProTV world, which is where the 990 ms freeze came from. The
+				// array is reused (Invoke copies the argument before it returns), and the type NAMES
+				// are kept as they are computed, so the diagnostic block below reads them back
+				// instead of invoking a second time for the same symbols.
 				string best = null; int bestScore = -1; var seen = new List<string>();
+				object[] symArg = new object[1];
+				var typeNames = new List<string>(symbols.Count);
 				foreach (string sym in symbols)
 				{
-					if (string.IsNullOrEmpty(sym)) continue;
+					if (string.IsNullOrEmpty(sym)) { typeNames.Add(null); continue; }
 					object t;
-					try { t = getType.Invoke(ub, new object[] { sym }); }
-					catch { continue; }
-					if (!string.Equals(TypeNameOf(t), "VRCUrl", StringComparison.Ordinal)) continue;
+					symArg[0] = sym;
+					try { t = getType.Invoke(ub, symArg); }
+					catch { typeNames.Add(null); continue; }
+					string tn = TypeNameOf(t);
+					typeNames.Add(tn);
+					if (!string.Equals(tn, "VRCUrl", StringComparison.Ordinal)) continue;
 					seen.Add(sym);
 					string lo = sym.ToLowerInvariant();
 					int score = 1;
@@ -441,12 +472,14 @@ namespace VRChatArchiveMod.Modules
 					_dumpedNoUrl++;
 					var sb = new System.Text.StringBuilder();
 					int n = 0;
-					foreach (string sym in symbols)
+					// Reads the names resolved by the pass above — this used to Invoke all over again
+					// for up to 30 more symbols per candidate, purely to print them.
+					for (int i = 0; i < symbols.Count && i < typeNames.Count; i++)
 					{
-						if (string.IsNullOrEmpty(sym)) continue;
-						object t; try { t = getType.Invoke(ub, new object[] { sym }); } catch { continue; }
+						string sym = symbols[i];
+						if (string.IsNullOrEmpty(sym) || typeNames[i] == null) continue;
 						if (n++ > 0) sb.Append(", ");
-						sb.Append(sym).Append(':').Append(TypeNameOf(t));
+						sb.Append(sym).Append(':').Append(typeNames[i]);
 						if (n >= 30) { sb.Append(", …"); break; }
 					}
 					Probe("no VRCUrl on '" + SafeName(ub.TryCast<Component>()?.gameObject) + "' — " + symbols.Count + " symbol(s): " + sb);
@@ -615,6 +648,14 @@ namespace VRChatArchiveMod.Modules
 
 		private static string _lastSymbolPath = "none";
 		private static int _dumpedNoUrl;   // how many "no VRCUrl" candidates were dumped this session (capped)
+
+		// What the last injection cost, in halves. Fields rather than locals because the summary is
+		// printed after the try block that measures them, and a one-second freeze deserves an address
+		// rather than a guess — the same instrumentation that found the float-objects cost in minutes
+		// after two wrong diagnoses.
+		private static int _lastSymbolCount;
+		private static double _scanCollectMs, _scanReadMs, _scanWriteMs;
+		private static int _scanSymbols;
 
 		private static MethodInfo _setGeneric;    // SetProgramVariable<T>(string, T)
 		private static MethodInfo _setPlain;      // SetProgramVariable(string, Il2CppSystem.Object)

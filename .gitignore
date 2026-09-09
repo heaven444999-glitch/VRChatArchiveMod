@@ -48,3 +48,15 @@ __pycache__/
 # The author's own copy-to-plugins script: hardcoded local drive layout, of no use to
 # anyone else and not something a public repo should advertise.
 DEPLOY.bat
+
+# ---------------------------------------------------------------------------
+# Local-only source: real user ids.
+#
+# *.local.cs holds data about identifiable people (signature sounds are keyed
+# by VRChat user id). The publication rule for this repo is that no real user
+# id ships in it -- the audit before the first push blanked the ones that had
+# reached ModConfig defaults. The partial methods these files implement have
+# no body in the public tree, so it compiles with an empty table, the same way
+# it compiles without the media in ressources/.
+# ---------------------------------------------------------------------------
+*.local.cs

@@ -1073,7 +1073,7 @@ namespace VRChatArchiveMod.Modules
 		// with il2cpp_class_get_fields is what actually walks VRCPlayer's own layout.
 		private static bool _fieldsDumped;
 
-		private static GameObject FindNameplateContainer(object player)
+		internal static GameObject FindNameplateContainer(object player)
 		{
 			try
 			{

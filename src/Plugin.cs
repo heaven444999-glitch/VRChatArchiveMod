@@ -57,6 +57,20 @@ namespace VRChatArchiveMod
 			ModuleManager.Register(new ObjectGravityModule());
 			// CUSTOM USERNAME: what the world's Udon scripts are told your name is (local write).
 			ModuleManager.Register(new SpoofModule());
+			// AFK / SEATED / IN STATION / VR, from each avatar's own animator parameters.
+			ModuleManager.Register(new PlayerStatesModule());
+			// MIMIC CHATBOX: repeat a chosen player's chatbox text into yours (read only).
+			ModuleManager.Register(new ChatMimicModule());
+			// FAST SYNC: VRChat's own fast serialisation rate for the local player.
+			ModuleManager.Register(new FastSyncModule());
+			// VRC+ status, patched once. Gated by Spoof/VRCPlus at read time, so arming it
+			// here costs nothing while the setting is off.
+			try { Core.VRCPlusSpoof.Patch(); } catch { }
+			// Store ownership, patched once. Gated by Spoof/StoreOwnership at read time.
+			try { Core.EcoPatcher.Patch(); } catch { }
+			// VRC+ cosmetics (loading screens, props, emojis...): resolved at runtime, not
+			// by a hardcoded class name, because every type here is re-obfuscated per build.
+			try { Core.VrcPlusItems.Patch(); } catch { }
 			// MENU BACKGROUNDS: the VRC+ backgrounds (parallax included) shown locally. Flips one bool
 			// on the game's own BackgroundOption assets — no API model is touched, nothing is sent.
 			ModuleManager.Register(new VrcPlusBackgroundsModule());
@@ -74,6 +88,9 @@ namespace VRChatArchiveMod
 			ModuleManager.Register(new VoiceProbeModule());
 			ModuleManager.Register(new FewTagsModule());
 			ModuleManager.Register(new MovementModule());
+			// PLAYER ROTATOR: tilt your own capsule, and unclamp mouse-look so the view follows you
+			// past vertical. MovementModule turns yaw only, and says so in its own comment.
+			ModuleManager.Register(new PlayerRotatorModule());
 			ModuleManager.Register(new SpeedModule());
 			ModuleManager.Register(new VideoModule());
 			ModuleManager.Register(new OrbitModule());
@@ -162,6 +179,7 @@ namespace VRChatArchiveMod
 			ModuleManager.Register(new CapsuleEspModule());
 			ModuleManager.Register(new HighlightEspModule());
 			ModuleManager.Register(new SpawnSoundModule());
+			ModuleManager.Register(new SignatureSoundModule());
 			ModuleManager.Register(new RadarModule());
 			ModuleManager.Register(new InstancePanelsModule());
 			ModuleManager.Register(new VaTagsModule());
@@ -213,7 +231,7 @@ namespace VRChatArchiveMod
 	{
 		public const string Guid = "org.vrchatarchive.mod";
 		public const string Name = "VRCHAT ARCHIVE MOD";
-		public const string Version = "3.9.30";
+		public const string Version = "3.9.57";
 	}
 }
 

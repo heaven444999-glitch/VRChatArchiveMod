@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using VRC.Core;
 
@@ -82,14 +82,29 @@ namespace VRChatArchiveMod.Core
 			try
 			{
 				if (apiUserObj == null) return false;
-				string ids = ModConfig.RainbowUserIds.Value ?? "";
-				if (ids.Length == 0) return false;
 
+				// The id is read ONCE, before either test: it is the only expensive part of this method
+				// (a string marshal out of il2cpp) and both rules need it.
 				string uid = "";
 				var u = apiUserObj as VRC.Core.APIUser;
 				if (u != null) { try { uid = u.id ?? ""; } catch { } }
 				if (uid.Length == 0) return false;
 
+				// A RANK, NOT A LIST. Archive Legendary is granted and revoked by the tag system on its
+				// own — EnsureRankTag rewrites the badge on every pass and takes it off the moment the
+				// level drops — so binding the rainbow to it makes the rainbow last exactly as long as
+				// the rank does: nothing to grant by hand, nothing to clean up after a demotion. The
+				// site draws that tier as a swept gradient; this is the same statement in game.
+				try
+				{
+					if (ModConfig.LegendaryRainbow.Value && Modules.VaTagsModule.IsLegendary(uid)) return true;
+				}
+				catch { }
+
+				// The hand-kept list still stands beside it, for a signature somebody was given rather
+				// than earned.
+				string ids = ModConfig.RainbowUserIds.Value ?? "";
+				if (ids.Length == 0) return false;
 				return ids.IndexOf(uid, System.StringComparison.OrdinalIgnoreCase) >= 0;
 			}
 			catch { return false; }

@@ -288,12 +288,27 @@ namespace VRChatArchiveMod.Modules
 		// The panel is identified by a READABLE serialized field, not by its obfuscated class name,
 		// so a VRChat update that renames the class fails loudly here instead of silently doing
 		// nothing somewhere further down.
+		// NON-GENERIC (2026-09-08) — the same fix as ArchiveHijackModule.FindPanel, for the same
+		// reason: Resources.FindObjectsOfTypeAll<Panel>() returns an EMPTY array. Panel is an alias
+		// for an OBFUSCATED VRChat class, and the generic overload cannot resolve those. That is the
+		// sharper form of a rule the mod already half-knew: generics are fine for real Unity types
+		// (Transform, AudioSource and TMP_Text all work elsewhere in this codebase) and fail on the
+		// game's own renamed proxies. Il2CppType.Of<T>() plus TryCast<T>() is what sees them.
+		private static Il2CppSystem.Type _panelIl2;
+
 		private static Panel FindPanel()
 		{
 			try
 			{
-				foreach (var p in Resources.FindObjectsOfTypeAll<Panel>())
+				if (_panelIl2 == null) _panelIl2 = Il2CppInterop.Runtime.Il2CppType.Of<Panel>();
+				var found = Resources.FindObjectsOfTypeAll(_panelIl2);
+				if (found == null) return null;
+				for (int i = 0; i < found.Length; i++)
 				{
+					var o = found[i];
+					if (o == null) continue;
+					Panel p = null;
+					try { p = o.TryCast<Panel>(); } catch { continue; }
 					if (p == null) continue;
 					try { if (!p.gameObject.scene.IsValid()) continue; }
 					catch { continue; }

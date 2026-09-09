@@ -805,13 +805,38 @@ namespace VRChatArchiveMod.Modules
 			return false;
 		}
 
+		// NON-GENERIC, AND THAT IS THE WHOLE FIX (2026-09-08).
+		//
+		// This read Resources.FindObjectsOfTypeAll<Panel>() — a GENERIC il2cpp lookup, which returns
+		// an EMPTY array on this build. The loop therefore never ran a single iteration, FindPanel
+		// returned null every time, and this module has logged "still cannot find the avatar-menu
+		// panel (FindPanel returned null)" on every world load for weeks. Nothing was missing from
+		// the game: the query could not see it.
+		//
+		// The mod already documents this trap and already works around it elsewhere — see
+		// ObjectGravityModule, whose sweep carries "NON-GENERIC: FindObjectsOfType<VRC_Pickup>()
+		// returns nothing on this build". Il2CppType.Of<T>() with the non-generic overload and
+		// TryCast<T>() is the form that works here.
+		//
+		// The il2cpp Type is resolved once: Of<T>() walks the type system, and this is called on a
+		// timer for as long as the panel has not been found.
+		private static Il2CppSystem.Type _panelIl2;
+
 		private static Panel FindPanel()
 		{
 			try
 			{
-				foreach (var p in Resources.FindObjectsOfTypeAll<Panel>())
+				if (_panelIl2 == null) _panelIl2 = Il2CppType.Of<Panel>();
+				var found = Resources.FindObjectsOfTypeAll(_panelIl2);
+				if (found == null) return null;
+				for (int i = 0; i < found.Length; i++)
 				{
+					var o = found[i];
+					if (o == null) continue;
+					Panel p = null;
+					try { p = o.TryCast<Panel>(); } catch { continue; }
 					if (p == null) continue;
+					// Loaded assets and prefabs carry no valid scene: only a live menu object counts.
 					try { if (!p.gameObject.scene.IsValid()) continue; } catch { continue; }
 					return p;
 				}
