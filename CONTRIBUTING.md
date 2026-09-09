@@ -97,9 +97,9 @@ VRChat's property. Committing either would be redistributing code we have no rig
 `.gitignore` states this at the point of exclusion, and the rule is not negotiable — a pull request
 that adds files under `libs/` will be closed.
 
-### `ressources/` — 18 embedded files, about 16.0 MiB
+### `ressources/` — 19 embedded files, about 16.9 MiB
 
-The `.csproj` embeds 18 files from `ressources/` into the DLL, each with an explicit `<LogicalName>`
+The `.csproj` embeds 19 files from `ressources/` into the DLL, each with an explicit `<LogicalName>`
 that the code looks up at runtime (`Core/AssetLoader.cs` and callers of
 `Assembly.GetManifestResourceStream`).
 
@@ -108,6 +108,7 @@ that the code looks up at runtime (`Core/AssetLoader.cs` and callers of
 | `badapple.wav` | 9.2 MiB | `Core/BadAppleAudio.cs` — the object show's soundtrack, and its clock |
 | `spawn_darksquad.wav` | 2.1 MiB | `Modules/SpawnSoundModule.cs` — local spawn stinger |
 | `badapple_hd.frames.gz` | 1.9 MiB | `Modules/MarkModule.cs` — 64×48 object-art frames |
+| `spawn_te_op.wav` | 948 KiB | `Modules/SignatureSoundModule.cs` — one person's arrival clip; third-party music, supplied by the author |
 | `badapple.frames` | 775 KiB | `Modules/BadAppleModule.cs` — baked chatbox frames |
 | `menu_bg.png` | 455 KiB | `Core/AssetLoader.cs` — QuickMenu wallpaper |
 | `background.jpg` | 341 KiB | `Core/AssetLoader.cs` — overlay background |
