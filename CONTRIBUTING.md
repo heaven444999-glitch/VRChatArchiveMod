@@ -226,7 +226,6 @@ like — see [Commits and pull requests](#commits-and-pull-requests).
 src/Plugin.cs            entry point — 1 file
 src/Core/                infrastructure — 36 files
 src/Modules/             one feature per file — 63 files
-AssetBundlePatch.cs      at the repository root, not under src/
 tools/*.py               3 offline tools, no game dependency
 ```
 

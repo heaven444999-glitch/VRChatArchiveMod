@@ -79,7 +79,7 @@ something they do not control. Concretely:
 `PhotonGuardModule`, `AntiCrashModule`, `AntiBlockModule` and `NsfwFilterModule` are best-effort
 mitigations written against attacks that were actually observed, not a security boundary. This is a
 game mod, not a security product: it runs in-process with your full user privileges, it deliberately
-clears VRChat's asset-bundle cache encryption key (`AssetBundlePatch.cs`), and it loads a third-party
+patches parts of the game at runtime, and it loads a third-party
 tag database off the network. Running it is a decision you make with those facts in hand. "The mod did
 not stop a crasher" is a bug report worth filing; it is not a breach of a guarantee that was never
 made.
