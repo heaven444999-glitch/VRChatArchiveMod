@@ -1,8 +1,8 @@
-﻿# release.ps1 - cut a VRChat Archive Mod release from this machine, end to end.
+﻿# release.ps1 - cut a Killiorim release from this machine, end to end.
 #
 #   1. Guard  - clean tree, branch main, and the tag / .csproj / src/Plugin.cs versions all agreeing,
 #               with a matching CHANGELOG.md section. Offers to fix the two version strings for you.
-#   2. Build  - dotnet build -c Release, prove bin\Release\VRChatArchiveMod.dll was written by THIS
+#   2. Build  - dotnet build -c Release, prove bin\Release\Killiorim.dll was written by THIS
 #               run, and print its size and SHA256 so you can check what you are about to publish.
 #   3. Tag    - create and push the annotated tag v<Version>, which fires .github/workflows/release.yml
 #               and leaves a DRAFT release carrying that version's changelog section.
@@ -31,7 +31,7 @@ param(
 	# no push, no upload. Never prompts, so it is safe in a pipeline or a scheduled check.
 	[switch] $DryRun,
 
-	# Skip the build and use the bin\Release\VRChatArchiveMod.dll that is already there. For a
+	# Skip the build and use the bin\Release\Killiorim.dll that is already there. For a
 	# re-run after a build that already succeeded and an upload that did not.
 	[switch] $SkipBuild,
 
@@ -192,13 +192,13 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # the tag: a tag whose commit is on no branch is a confusing thing to leave on a remote.
 $branchNeedsPush = $false
 
-$csprojPath    = Join-Path $repoRoot 'VRChatArchiveMod.csproj'
+$csprojPath    = Join-Path $repoRoot 'Killiorim.csproj'
 $pluginPath    = Join-Path $repoRoot 'src\Plugin.cs'
 $changelogPath = Join-Path $repoRoot 'CHANGELOG.md'
-$dllPath       = Join-Path $repoRoot 'bin\Release\VRChatArchiveMod.dll'
+$dllPath       = Join-Path $repoRoot 'bin\Release\Killiorim.dll'
 
 Write-Host ''
-Write-Host "VRChat Archive Mod - release $tag" -ForegroundColor White
+Write-Host "Killiorim - release $tag" -ForegroundColor White
 if ($DryRun) {
 	Write-Note 'DRY RUN: nothing will be built, edited, committed, tagged, pushed or uploaded.'
 }
@@ -206,7 +206,7 @@ if ($DryRun) {
 Write-Step 'Checking the working directory and the tooling'
 
 if (-not (Test-Path -LiteralPath $csprojPath)) {
-	Stop-Release "VRChatArchiveMod.csproj was not found in $repoRoot." $EXIT_GUARD @(
+	Stop-Release "Killiorim.csproj was not found in $repoRoot." $EXIT_GUARD @(
 		'This script expects to live in tools\ inside the repository.'
 	)
 }
@@ -303,7 +303,7 @@ $csprojPattern = '(<Version>\s*)(\d+\.\d+\.\d+)(\s*</Version>)'
 $pluginPattern = '(public\s+const\s+string\s+Version\s*=\s*")(\d+\.\d+\.\d+)(")'
 
 $targets = @(
-	[pscustomobject]@{ Label = 'VRChatArchiveMod.csproj'; Path = $csprojPath; Pattern = $csprojPattern },
+	[pscustomobject]@{ Label = 'Killiorim.csproj'; Path = $csprojPath; Pattern = $csprojPattern },
 	[pscustomobject]@{ Label = 'src\Plugin.cs';           Path = $pluginPath; Pattern = $pluginPattern }
 )
 
@@ -457,7 +457,7 @@ if ($preview.Count -gt $previewCount) {
 # 4. Build, and prove the DLL came from this run
 # ---------------------------------------------------------------------------------------------
 
-Write-Step 'Building bin\Release\VRChatArchiveMod.dll'
+Write-Step 'Building bin\Release\Killiorim.dll'
 
 if ($DryRun) {
 	Write-Planned "would run: dotnet build `"$csprojPath`" -c Release --nologo"
@@ -472,7 +472,7 @@ if ($DryRun) {
 elseif ($SkipBuild) {
 	Write-Note '-SkipBuild: using the DLL that is already in bin\Release.'
 	if (-not (Test-Path -LiteralPath $dllPath)) {
-		Stop-Release 'bin\Release\VRChatArchiveMod.dll does not exist.' $EXIT_BUILD @(
+		Stop-Release 'bin\Release\Killiorim.dll does not exist.' $EXIT_BUILD @(
 			'-SkipBuild only makes sense when a build has already produced one. Drop the switch.'
 		)
 	}
@@ -499,7 +499,7 @@ else {
 		)
 	}
 	if (-not (Test-Path -LiteralPath $dllPath)) {
-		Stop-Release 'The build reported success but bin\Release\VRChatArchiveMod.dll is not there.' $EXIT_BUILD
+		Stop-Release 'The build reported success but bin\Release\Killiorim.dll is not there.' $EXIT_BUILD
 	}
 	$dllInfo = Get-Item -LiteralPath $dllPath
 	if ($dllInfo.LastWriteTime -lt $buildStart) {
@@ -571,13 +571,13 @@ if ($localTagCommit -ne '') {
 
 if ($needTagCreate) {
 	if ($DryRun) {
-		Write-Planned "would run: git tag -a $tag -m `"VRChat Archive Mod $tag`""
+		Write-Planned "would run: git tag -a $tag -m `"Killiorim $tag`""
 	}
 	else {
 		if ($localTagCommit -ne '') {
 			& git tag -d $tag | Out-Null
 		}
-		& git tag -a $tag -m "VRChat Archive Mod $tag"
+		& git tag -a $tag -m "Killiorim $tag"
 		if ($LASTEXITCODE -ne 0) {
 			Stop-Release 'git tag failed.' $EXIT_TAG
 		}
@@ -709,7 +709,7 @@ if ($LASTEXITCODE -ne 0) {
 		"The draft is still there. Retry with:  gh release upload $tag `"$dllPath`" --clobber"
 	)
 }
-Write-Good 'VRChatArchiveMod.dll attached.'
+Write-Good 'Killiorim.dll attached.'
 
 # Read the assets back rather than trusting the upload's own exit code.
 $assetView = Invoke-Quiet 'gh' @('release', 'view', $tag, '--json', 'assets')

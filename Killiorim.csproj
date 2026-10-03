@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>VRChatArchiveMod</AssemblyName>
-    <Product>VRCHAT ARCHIVE MOD</Product>
+    <AssemblyName>Killiorim</AssemblyName>
+    <Product>KILLIORIM</Product>
     <Version>3.9.58</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -16,6 +16,10 @@
     <!-- BepInEx and interop assemblies are provided by the game install; never copy them to output. -->
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="installer\**\*.cs" />
+  </ItemGroup>
 
   <!-- BepInEx 6 (IL2CPP) framework assemblies -->
   <ItemGroup>
@@ -32,7 +36,7 @@
   </ItemGroup>
 
   <!-- Client branding assets, embedded into the DLL and loaded at runtime (AssetLoader). -->
-  <ItemGroup>
+  <ItemGroup Condition="Exists('ressources\background.jpg')">
     <EmbeddedResource Include="ressources\background.jpg"><LogicalName>background.jpg</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\menu_bg.png"><LogicalName>menu_bg.png</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="ressources\sb_scary.wav"><LogicalName>sb_scary.wav</LogicalName></EmbeddedResource>
@@ -73,5 +77,35 @@
     <!-- Object-art Bad Apple: 64x48 at 100 ms, gzipped (tools/bake_badapple.py with width 64, height 48, interval 100 ms, fit stretch, sep none, max-chars 1000000). -->
     <EmbeddedResource Include="ressources\badapple_hd.frames.gz"><LogicalName>badapple_hd.frames.gz</LogicalName></EmbeddedResource>
   </ItemGroup>
+
+  <ItemGroup Condition="Exists('ressources')">
+    <Content Include="ressources\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>ressources\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="AutoInstallToBepInEx" AfterTargets="Build">
+    <PropertyGroup>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('$(ProgramFiles(x86))\Steam\steamapps\common\VRChat')">$(ProgramFiles(x86))\Steam\steamapps\common\VRChat</DetectedVrchatRoot>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('$(ProgramW6432)\Steam\steamapps\common\VRChat')">$(ProgramW6432)\Steam\steamapps\common\VRChat</DetectedVrchatRoot>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('$(USERPROFILE)\.steam\steam\steamapps\common\VRChat')">$(USERPROFILE)\.steam\steam\steamapps\common\VRChat</DetectedVrchatRoot>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('$(HOME)/.steam/steam/steamapps/common/VRChat')">$(HOME)/.steam/steam/steamapps/common/VRChat</DetectedVrchatRoot>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('/home/$(USERNAME)/.steam/steam/steamapps/common/VRChat')">/home/$(USERNAME)/.steam/steam/steamapps/common/VRChat</DetectedVrchatRoot>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('/mnt/g/SteamLibrary/steamapps/common/VRChat')">/mnt/g/SteamLibrary/steamapps/common/VRChat</DetectedVrchatRoot>
+      <DetectedVrchatRoot Condition="'$(DetectedVrchatRoot)' == '' and Exists('/usr/local/share/Steam/steamapps/common/VRChat')">/usr/local/share/Steam/steamapps/common/VRChat</DetectedVrchatRoot>
+      <DetectedBepInExPluginDir Condition="'$(DetectedVrchatRoot)' != ''">$(DetectedVrchatRoot)\BepInEx\plugins</DetectedBepInExPluginDir>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(DetectedBepInExPluginDir)' != ''">
+      <AutoInstallFiles Include="$(MSBuildThisFileDirectory)bin\Release\Killiorim.dll" />
+      <AutoInstallFiles Include="$(MSBuildThisFileDirectory)bin\Release\Killiorim.deps.json" />
+      <AutoInstallFiles Include="$(MSBuildThisFileDirectory)bin\Release\ressources\**\*" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(DetectedBepInExPluginDir)" Condition="'$(DetectedBepInExPluginDir)' != '' and !Exists('$(DetectedBepInExPluginDir)')" />
+    <Message Importance="High" Condition="'$(DetectedBepInExPluginDir)' != ''" Text="Auto-installing Killiorim to $(DetectedBepInExPluginDir)" />
+    <Copy SourceFiles="@(AutoInstallFiles)" DestinationFolder="$(DetectedBepInExPluginDir)" SkipUnchangedFiles="true" Condition="'$(DetectedBepInExPluginDir)' != ''" />
+  </Target>
 
 </Project>

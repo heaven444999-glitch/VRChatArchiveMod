@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **VRChat Archive Mod** are recorded here.
+All notable changes to **Killiorim** are recorded here.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project
 aims to follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
@@ -46,7 +46,7 @@ Nothing since 3.9.58.
   il2cpp field read anywhere in it.
 
 - Loading-screen artwork can be **overridden from disk**: a PNG in
-  `BepInEx\VRChatArchiveMod\loading\<key>.png` replaces that piece of the 2017 art with no rebuild, and
+  `BepInEx\Killiorim\loading\<key>.png` replaces that piece of the 2017 art with no rebuild, and
   an empty folder leaves the original in place (`Core/AssetLoader.EraTexture`). Keys are `l17_ringglow`,
   `l17_midring`, `l17_dashring`, `l17_diamond`, `l17_wave` and `logo`. Everything except the diamond and
   the logo is drawn `StretchToFill` against sizes transcribed from the original canvas, so art of a
@@ -77,7 +77,7 @@ Nothing since 3.9.58.
 ## [3.9.57] — 2026-09-08
 
 Set by the sync commit that brought the public tree up to the build shipping that day. `<Version>` in
-`VRChatArchiveMod.csproj` and `PluginInfo.Version` in `src/Plugin.cs` both read `3.9.57`.
+`Killiorim.csproj` and `PluginInfo.Version` in `src/Plugin.cs` both read `3.9.57`.
 
 **This is one squashed sync, not a release.** Versions 3.9.21 through 3.9.56 were built in the private
 tree and left no commit, tag or release here, so the per-version history between 3.9.20 and this point
@@ -168,7 +168,7 @@ is **unknown** to this repository. What follows is what the diff against `015302
 ## [3.9.20] — 2026-09-07
 
 Set by the commit *Sync public source with v3.9.20* (`0153028`), which brought the public tree up to the
-build that shipped that day. `<Version>` in `VRChatArchiveMod.csproj` and `PluginInfo.Version` in
+build that shipped that day. `<Version>` in `Killiorim.csproj` and `PluginInfo.Version` in
 `src/Plugin.cs` both read `3.9.20`.
 
 This is one squashed sync, not a release. The section below therefore describes **what the tree contains
@@ -350,7 +350,7 @@ them, because any such entry would be fabricated.
 ## [3.5.0] — 2026-08-30
 
 Initial public release (`5f08293`), 96 tracked files: `.gitignore`, `LICENSE`, `README.md`,
-`VRChatArchiveMod.csproj`, `AssetBundlePatch.cs`, `BADAPPLE_TEST.bat`, `DEPLOY.bat`, the three Python
+`Killiorim.csproj`, `AssetBundlePatch.cs`, `BADAPPLE_TEST.bat`, `DEPLOY.bat`, the three Python
 tools in `tools/`, and `src/` with `Plugin.cs`, 26 files in `src/Core/` and 59 in `src/Modules/`.
 
 ### Added
@@ -367,7 +367,7 @@ tools in `tools/`, and `src/` with `Plugin.cs`, 26 files in `src/Core/` and 59 i
 
 ### Note on the version number in this release
 
-At `5f08293` the two version strings disagreed: `VRChatArchiveMod.csproj` said `3.5.0` while
+At `5f08293` the two version strings disagreed: `Killiorim.csproj` said `3.5.0` while
 `src/Plugin.cs` still had `PluginInfo.Version = "3.4.0"`, so a build from that commit would have printed
 *v3.4.0* in the BepInEx log. The commit message and the csproj agree on 3.5.0, and this file follows
 them. `0153028` aligned both strings to 3.9.20. There was no 3.4.0 public release.
@@ -385,7 +385,7 @@ Every release from now on gets its own entry.
 
 - Work lands under **[Unreleased]** as it is merged.
 - When a release is ready, the version is bumped in **both** places that carry it —
-  `<Version>` in `VRChatArchiveMod.csproj` and `PluginInfo.Version` in `src/Plugin.cs` — and they must
+  `<Version>` in `Killiorim.csproj` and `PluginInfo.Version` in `src/Plugin.cs` — and they must
   match. The 3.5.0 note above is what happens when they do not.
 - The `[Unreleased]` block is renamed to the new version with the release date, and a fresh empty
   `[Unreleased]` is opened above it.
@@ -405,8 +405,8 @@ built from a fresh clone of this repository, by design — `libs/` (proprietary 
 reference assemblies) and `ressources/` (the 18 embedded media files the `.csproj` lists) are not
 redistributable and are not included. See the README's Building section.
 
-[Unreleased]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/v3.9.58...main
-[3.9.58]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/v3.9.57...v3.9.58
-[3.9.57]: https://github.com/kawaiistudio/VRChatArchiveMod/compare/0153028...v3.9.57
-[3.9.20]: https://github.com/kawaiistudio/VRChatArchiveMod/commit/0153028b767c5a1845c0729031011bceeb077cea
-[3.5.0]: https://github.com/kawaiistudio/VRChatArchiveMod/commit/5f0829345e3376f3de1fe8cd5f0fbd56036a7b09
+[Unreleased]: https://github.com/kawaiistudio/Killiorim/compare/v3.9.58...main
+[3.9.58]: https://github.com/kawaiistudio/Killiorim/compare/v3.9.57...v3.9.58
+[3.9.57]: https://github.com/kawaiistudio/Killiorim/compare/0153028...v3.9.57
+[3.9.20]: https://github.com/kawaiistudio/Killiorim/commit/0153028b767c5a1845c0729031011bceeb077cea
+[3.5.0]: https://github.com/kawaiistudio/Killiorim/commit/5f0829345e3376f3de1fe8cd5f0fbd56036a7b09

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Minimal 16-bit PCM WAV -> AudioClip decoder. This build's IL2CPP has no
 	// DownloadHandlerAudioClip(string, AudioType), so every embedded sound ships as a plain
@@ -48,7 +48,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[WavAudio] decode failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[WavAudio] decode failed: {e.Message}");
 				return null;
 			}
 		}

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// A SMALL, SHORT-LIVED STATUS PILL AT THE TOP OF THE SCREEN.
 	//

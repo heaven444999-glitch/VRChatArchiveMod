@@ -6,9 +6,9 @@ using System.Text.RegularExpressions;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Two on-screen panels that flank the screen like the menu wings:
 	//   LEFT  — live roster of everyone in the instance.
@@ -103,7 +103,7 @@ namespace VRChatArchiveMod.Modules
 
 		public override void OnInitialize()
 		{
-			VRChatArchiveModPlugin.Logger.LogInfo("[InstancePanels] ready — Right-Shift+L toggles the player list / instance log.");
+			Killiorim.Logger.LogInfo("[InstancePanels] ready — Right-Shift+L toggles the player list / instance log.");
 			try
 			{
 				// Threaded log listener to catch video-player URL resolutions the game logs.
@@ -111,7 +111,7 @@ namespace VRChatArchiveMod.Modules
 					(Action<string, string, LogType>)OnLog, "InstancePanels");
 				if (_logCallback != null) Application.add_logMessageReceivedThreaded(_logCallback);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[InstancePanels] video log hook failed: {Core.Unwrap.Describe(e)}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[InstancePanels] video log hook failed: {Core.Unwrap.Describe(e)}"); }
 		}
 
 		public override void OnShutdown()
@@ -159,7 +159,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[InstancePanels] update threw: {e}");
+				Killiorim.Logger.LogError($"[InstancePanels] update threw: {e}");
 			}
 		}
 
@@ -254,7 +254,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					_diagNext = now + 8f;
 					int take = Mathf.Min(14, diagNoPlat.Count);
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[InstancePanels] DIAG " + diagNoPlat.Count + "/" + order.Count + " players have NO platform in the roster the overlay reads: "
 						+ string.Join(", ", diagNoPlat.GetRange(0, take)) + (diagNoPlat.Count > take ? ", \u2026" : ""));
 				}
@@ -484,7 +484,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[InstancePanels] draw threw: {e}");
+				Killiorim.Logger.LogError($"[InstancePanels] draw threw: {e}");
 			}
 		}
 

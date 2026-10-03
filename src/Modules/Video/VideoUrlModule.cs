@@ -4,9 +4,9 @@ using System.Reflection;
 using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// PUT A URL IN THE WORLD'S VIDEO PLAYER.
 	//
@@ -51,7 +51,7 @@ namespace VRChatArchiveMod.Modules
 
 		public override void OnInitialize()
 		{
-			VRChatArchiveModPlugin.Logger.LogInfo("[VideoUrl] armed — URL injection into the world's video player.");
+			Killiorim.Logger.LogInfo("[VideoUrl] armed — URL injection into the world's video player.");
 		}
 
 		private static Type FindType(string full)
@@ -208,12 +208,12 @@ namespace VRChatArchiveMod.Modules
 				LastStatus = scripted + " player script(s) given the URL and told to play";
 			else
 				LastStatus = direct + " player(s) started directly (no script exposed a URL; local only)";
-			VRChatArchiveModPlugin.Logger.LogInfo("[VideoUrl] " + LastStatus + " :: " + url);
+			Killiorim.Logger.LogInfo("[VideoUrl] " + LastStatus + " :: " + url);
 			// Got here alive: the trail is marked COMPLETED, so the next run knows this attempt did
 			// not crash. Only an injection that never reaches this line leaves an unfinished trail.
 			Probe("done — " + scripted + " via script, " + direct + " direct");
 			if (_scanReadMs + _scanWriteMs > 60.0)
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[VideoUrl] injection cost: collect " + _scanCollectMs.ToString("0.#") + " ms, symbols "
 					+ _scanReadMs.ToString("0.#") + " ms over " + _scanSymbols + " symbol(s), write "
 					+ _scanWriteMs.ToString("0.#") + " ms — all on one frame.");
@@ -307,10 +307,10 @@ namespace VRChatArchiveMod.Modules
 						_loadUrl.Invoke(typed, new object[] { vrcUrl });
 						n++;
 					}
-					catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] LoadURL threw: " + Short(e.Message)); }
+					catch (Exception e) { Killiorim.Logger.LogWarning("[VideoUrl] LoadURL threw: " + Short(e.Message)); }
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] component path threw: " + Short(e.Message)); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[VideoUrl] component path threw: " + Short(e.Message)); }
 			return n;
 		}
 
@@ -325,14 +325,14 @@ namespace VRChatArchiveMod.Modules
 				if (_basePlayerType != null)
 				{
 					var players = UnityEngine.Object.FindObjectsOfType(Il2CppType.From(_basePlayerType));
-					VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] BaseVRCVideoPlayer count: " + (players?.Length ?? 0));
+					Killiorim.Logger.LogWarning("[VideoUrl] BaseVRCVideoPlayer count: " + (players?.Length ?? 0));
 				}
-				else VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] BaseVRCVideoPlayer TYPE not found in interop.");
+				else Killiorim.Logger.LogWarning("[VideoUrl] BaseVRCVideoPlayer TYPE not found in interop.");
 
 				var uAll = UnityEngine.Object.FindObjectsOfType(Il2CppType.From(_udonType));
-				VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] UdonBehaviour count: " + (uAll?.Length ?? 0));
+				Killiorim.Logger.LogWarning("[VideoUrl] UdonBehaviour count: " + (uAll?.Length ?? 0));
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] dump threw: " + Short(e.Message)); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[VideoUrl] dump threw: " + Short(e.Message)); }
 		}
 
 		// THE FIELD IS FOUND BY TYPE, NOT BY NAME. USharpVideo, ProTV and VideoTXL each call their
@@ -584,7 +584,7 @@ namespace VRChatArchiveMod.Modules
 						if (exported.Contains(ev)) { chosen = ev; break; }
 					if (chosen == null)
 					{
-						VRChatArchiveModPlugin.Logger.LogInfo("[VideoUrl] " + symbol + " set; the script exports none of the known play events (URL will apply on its next own load)");
+						Killiorim.Logger.LogInfo("[VideoUrl] " + symbol + " set; the script exports none of the known play events (URL will apply on its next own load)");
 						return true;   // the URL is in the synced variable; that alone is a reach
 					}
 				}
@@ -594,10 +594,10 @@ namespace VRChatArchiveMod.Modules
 				try { send.Invoke(ub, new object[] { chosen }); }
 				catch (Exception e)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] SendCustomEvent(" + chosen + ") threw: " + Short(e.Message));
+					Killiorim.Logger.LogWarning("[VideoUrl] SendCustomEvent(" + chosen + ") threw: " + Short(e.Message));
 					return false;
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo("[VideoUrl] " + symbol + " set, sent " + chosen + " locally");
+				Killiorim.Logger.LogInfo("[VideoUrl] " + symbol + " set, sent " + chosen + " locally");
 				return true;
 			}
 			catch { return false; }
@@ -613,7 +613,7 @@ namespace VRChatArchiveMod.Modules
 			// violation its last lines never reach disk — which is exactly how the 2026-09-01 crash
 			// managed to say nothing at all. CrashTrail forces every line out to disk before the call
 			// it describes runs, so the file's last line names what killed the game.
-			try { VRChatArchiveModPlugin.Logger.LogInfo("[VideoUrl] probe: " + step); } catch { }
+			try { Killiorim.Logger.LogInfo("[VideoUrl] probe: " + step); } catch { }
 			try { Core.CrashTrail.Step(step); } catch { }
 		}
 
@@ -635,7 +635,7 @@ namespace VRChatArchiveMod.Modules
 				if (string.IsNullOrEmpty(last)) return;
 				CrashedAt = last;
 				LastStatus = "the last video injection CRASHED the game at: " + last;
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[VideoUrl] THE PREVIOUS VIDEO INJECTION CRASHED THE GAME. It got as far as: " + last);
 			}
 			catch { }

@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 # This is deliberate. Please do not "fix" it by adding nuget or dotnet-sdk.
 #
-# nuget — VRChatArchiveMod.csproj contains ZERO <PackageReference> items. Every
+# nuget — Killiorim.csproj contains ZERO <PackageReference> items. Every
 #   dependency is a file-path <Reference> into libs/:
 #
 #       <Reference Include="$(MSBuildProjectDirectory)\libs\bepinex\*.dll" />

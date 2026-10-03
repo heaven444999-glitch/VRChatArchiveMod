@@ -5,9 +5,9 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Fun: plays Bad Apple!! in the VRChat chatbox as hanzi shadow-art, over OSC —
 	// same trick as the "Bad Apple in chinese characters" video: real, simple hanzi
@@ -82,7 +82,7 @@ namespace VRChatArchiveMod.Modules
 			_playing = true;
 			_thread = new Thread(PlaybackLoop) { IsBackground = true, Name = "BadAppleChatbox" };
 			_thread.Start();
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				$"[BadApple] playback started ({_frames.Length} frames). OSC must be enabled in-game (radial menu > Options > OSC).");
 		}
 
@@ -105,7 +105,7 @@ namespace VRChatArchiveMod.Modules
 					? Mathf.Max(100, ModConfig.BadAppleIntervalMs.Value)
 					: DefaultIntervalMs;
 				if (interval < 450)
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						$"[BadApple] cadence {interval} ms is below the ~500 ms the chatbox spam "
 						+ "filter tolerates — viewers' bubbles may stop updating.");
 
@@ -135,13 +135,13 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[BadApple] playback thread threw: {e}");
+				Killiorim.Logger.LogError($"[BadApple] playback thread threw: {e}");
 			}
 			finally
 			{
 				try { udp?.Close(); } catch { }
 				_playing = false;
-				VRChatArchiveModPlugin.Logger.LogInfo("[BadApple] playback stopped.");
+				Killiorim.Logger.LogInfo("[BadApple] playback stopped.");
 			}
 		}
 
@@ -211,7 +211,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[BadApple] failed to load embedded frames: {e}");
+				Killiorim.Logger.LogError($"[BadApple] failed to load embedded frames: {e}");
 				_frames = null;
 				return false;
 			}

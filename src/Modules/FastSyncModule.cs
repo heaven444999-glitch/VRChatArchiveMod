@@ -2,9 +2,9 @@ using System;
 using System.Reflection;
 using Il2CppInterop.Runtime;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FAST SYNC — ask VRChat to serialise YOU at its fast rate.
 	//
@@ -89,11 +89,11 @@ namespace VRChatArchiveMod.Modules
 				{
 					_lastWanted = want;
 					if (after == want)
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							"[FastSync] RequireFastRate = " + want + " — verified by read-back. VRChat's own "
 							+ "serialiser rate, so its own throttling still applies.");
 					else
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[FastSync] wrote RequireFastRate = " + want + " but read back " + after
 							+ " — the game refused it. Not retrying in a loop.");
 				}
@@ -119,18 +119,18 @@ namespace VRChatArchiveMod.Modules
 					}
 					if (_serType == null)
 					{
-						if (!_resolveLogged) { _resolveLogged = true; VRChatArchiveModPlugin.Logger.LogWarning("[FastSync] FlatBufferNetworkSerializer is not present on this build — fast sync unavailable."); }
+						if (!_resolveLogged) { _resolveLogged = true; Killiorim.Logger.LogWarning("[FastSync] FlatBufferNetworkSerializer is not present on this build — fast sync unavailable."); }
 						return null;
 					}
 					try { _serIl2 = Il2CppType.From(_serType); } catch { }
 					_fastRateProp = _serType.GetProperty("RequireFastRate", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 					if (_serIl2 == null || _fastRateProp == null)
 					{
-						if (!_resolveLogged) { _resolveLogged = true; VRChatArchiveModPlugin.Logger.LogWarning("[FastSync] RequireFastRate not found on FlatBufferNetworkSerializer — fast sync unavailable."); }
+						if (!_resolveLogged) { _resolveLogged = true; Killiorim.Logger.LogWarning("[FastSync] RequireFastRate not found on FlatBufferNetworkSerializer — fast sync unavailable."); }
 						_serType = null;
 						return null;
 					}
-					if (!_resolveLogged) { _resolveLogged = true; VRChatArchiveModPlugin.Logger.LogInfo("[FastSync] armed — FlatBufferNetworkSerializer.RequireFastRate resolved."); }
+					if (!_resolveLogged) { _resolveLogged = true; Killiorim.Logger.LogInfo("[FastSync] armed — FlatBufferNetworkSerializer.RequireFastRate resolved."); }
 				}
 
 				// PlayerRef, not prop_Player_0 directly: that property answers from the first frame

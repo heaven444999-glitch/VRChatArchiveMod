@@ -2,7 +2,7 @@ using System;
 using HarmonyLib;
 using VRC.Core;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// VRC+ STATUS, LOCALLY. The client's own "am I a subscriber" flag reads true, so the features it
 	// gates in the UI open up on this machine.
@@ -36,24 +36,24 @@ namespace VRChatArchiveMod.Core
 				if (getter == null)
 				{
 					Status = "VRCPlusStatus.prop_ReactiveProperty_1_Boolean_0 has no getter on this build";
-					VRChatArchiveModPlugin.Logger.LogWarning("[VRCPlus] " + Status);
+					Killiorim.Logger.LogWarning("[VRCPlus] " + Status);
 					return;
 				}
 
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(
+				Killiorim.HarmonyInstance.Patch(
 					getter,
 					postfix: new HarmonyMethod(typeof(VRCPlusSpoof), nameof(PfStatus)));
 
 				Armed = true;
 				Status = "armed";
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[VRCPlus] armed — the client's own VRC+ flag reads true. Local only: this is the UI's "
 					+ "reactive property, never APIUser, so nothing is sent to VRChat.");
 			}
 			catch (Exception e)
 			{
 				Status = "could not patch: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[VRCPlus] " + Status);
+				Killiorim.Logger.LogWarning("[VRCPlus] " + Status);
 			}
 		}
 

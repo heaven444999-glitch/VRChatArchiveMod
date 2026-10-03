@@ -15,7 +15,7 @@
 # analysis needs references — which this repository does not have and never
 # will:
 #
-#   * VRChatArchiveMod.csproj references libs/bepinex/*.dll (8 BepInEx 6
+#   * Killiorim.csproj references libs/bepinex/*.dll (8 BepInEx 6
 #     IL2CPP assemblies) and libs/interop/*.dll (248 assemblies generated from
 #     a local VRChat install). Those are Unity's and VRChat's property, they
 #     are not redistributable, and libs/ is gitignored.
@@ -170,7 +170,7 @@ jobs:
                   }
 
                   // LanguageVersion.Latest, to match <LangVersion>latest</LangVersion>
-                  // in VRChatArchiveMod.csproj. DocumentationMode.None because the
+                  // in Killiorim.csproj. DocumentationMode.None because the
                   // /// blocks are prose for humans, not a doc-XML build, and their
                   // contents must not produce diagnostics. No preprocessor symbols
                   // are defined: the tracked sources contain no #if at all.

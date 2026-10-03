@@ -1,8 +1,8 @@
 ﻿using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// WALK / RUN / STRAFE / JUMP — your own locomotion, through VRChat's own setters.
 	//

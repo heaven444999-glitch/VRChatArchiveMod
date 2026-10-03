@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// SIGNATURE SOUNDS — a clip that belongs to a PERSON, played the moment they arrive in your
 	// instance. One entry per user id, embedded in this DLL like every other sound the mod owns.
@@ -85,7 +85,7 @@ namespace VRChatArchiveMod.Modules
 
 		public override void OnInitialize()
 		{
-			VRChatArchiveModPlugin.Logger.LogInfo("[SignatureSound] armed — " + Table.Length + " signature(s) registered.");
+			Killiorim.Logger.LogInfo("[SignatureSound] armed — " + Table.Length + " signature(s) registered.");
 		}
 
 		public override void OnSceneLoaded(int buildIndex)
@@ -145,13 +145,13 @@ namespace VRChatArchiveMod.Modules
 					byte[] wav = AssetLoader.RawBytes(sig.Resource);
 					if (wav == null)
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning("[SignatureSound] embedded resource missing: " + sig.Resource);
+						Killiorim.Logger.LogWarning("[SignatureSound] embedded resource missing: " + sig.Resource);
 						return;
 					}
 					sig.Clip = WavAudio.Decode(wav, "ArchiveSignature_" + sig.Label);
 					if (sig.Clip == null)
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning("[SignatureSound] " + sig.Resource
+						Killiorim.Logger.LogWarning("[SignatureSound] " + sig.Resource
 							+ " did not decode — it must be 16-bit PCM WAV.");
 						return;
 					}
@@ -175,12 +175,12 @@ namespace VRChatArchiveMod.Modules
 				_src.Stop();
 				_src.PlayOneShot(sig.Clip, _src.volume);
 				LastPlayed = sig.Label;
-				VRChatArchiveModPlugin.Logger.LogInfo("[SignatureSound] " + sig.Label + " arrived ("
+				Killiorim.Logger.LogInfo("[SignatureSound] " + sig.Label + " arrived ("
 					+ (string.IsNullOrEmpty(who) ? sig.Uid : who) + ") — playing " + sig.Resource + ".");
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[SignatureSound] play failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[SignatureSound] play failed: " + e.Message);
 			}
 		}
 

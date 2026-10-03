@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using VRC.Core;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VRCHAT ARCHIVE — an EXTRA world favourites list, added beside VRChat's own.
 	//
@@ -84,7 +84,7 @@ namespace VRChatArchiveMod.Modules
 					if (_trial && Time.realtimeSinceStartup > _trialUntil)
 					{
 						DisarmTrial();
-						VRChatArchiveModPlugin.Logger.LogInfo("[" + Name + "] forced section survived — it works.");
+						Killiorim.Logger.LogInfo("[" + Name + "] forced section survived — it works.");
 						Status = "forced section accepted";
 					}
 
@@ -95,7 +95,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				Status = "failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[" + Name + "] " + e.Message);
+				Killiorim.Logger.LogWarning("[" + Name + "] " + e.Message);
 			}
 		}
 
@@ -209,12 +209,12 @@ namespace VRChatArchiveMod.Modules
 				if (_watch != null) UnityEngine.Application.add_logMessageReceived(_watch);
 
 				Status = "forced section added — watching for errors";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[{Name}] FORCED a new section into {Kind}; watchdog armed for 8s.");
+				Killiorim.Logger.LogInfo($"[{Name}] FORCED a new section into {Kind}; watchdog armed for 8s.");
 			}
 			catch (Exception e)
 			{
 				Status = "forced inject failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[" + Name + "] forced inject: " + e);
+				Killiorim.Logger.LogWarning("[" + Name + "] forced inject: " + e);
 			}
 		}
 
@@ -228,10 +228,10 @@ namespace VRChatArchiveMod.Modules
 				if (type != UnityEngine.LogType.Exception && type != UnityEngine.LogType.Error) return;
 
 				_lastFailure = condition;
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[" + Name + "] the forced section threw — pulling it back out. REASON: " + condition);
 				if (!string.IsNullOrEmpty(stack))
-					VRChatArchiveModPlugin.Logger.LogWarning("[" + Name + "] at: " + stack);
+					Killiorim.Logger.LogWarning("[" + Name + "] at: " + stack);
 
 				DisarmTrial();
 				Remove();
@@ -284,7 +284,7 @@ namespace VRChatArchiveMod.Modules
 				Set(t, m, "_FieldsMissingFromOriginalResponse_k__BackingField",
 					new Il2CppSystem.Collections.Generic.HashSet<string>());
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[FavList] fresh collections: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[FavList] fresh collections: " + e.Message); }
 		}
 
 		private static void Set(Type t, object on, string prop, object value)
@@ -382,7 +382,7 @@ namespace VRChatArchiveMod.Modules
 				if (pick == null)
 				{
 					Status = "slot " + slot + " does not exist (" + list.Count + " list(s))";
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						$"[{Name}] slot {slot} out of range. Slots present: {string.Join(", ", names)}");
 					return;
 				}
@@ -398,13 +398,13 @@ namespace VRChatArchiveMod.Modules
 				_lastRev = -1;
 
 				Status = "borrowed '" + _origName + "'";
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[{Name}] borrowed VRChat's own empty list '{_origName}' (id {_borrowedId}) and renamed it '{DisplayName}'.");
 			}
 			catch (Exception e)
 			{
 				Status = "could not borrow a list: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[" + Name + "] borrow failed: " + e);
+				Killiorim.Logger.LogWarning("[" + Name + "] borrow failed: " + e);
 			}
 		}
 
@@ -428,14 +428,14 @@ namespace VRChatArchiveMod.Modules
 				Status = ids.Count + " item(s)";
 				// The real number, and where it came from — so an empty section is unambiguous:
 				// 0 here means the SOURCE is empty (the client relay), not the injection.
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[" + Name + "] filled with " + members.Count + " member(s) from " + ids.Count
 					+ " id(s). If 0, the client bridge returned nothing for this kind.");
 			}
 			catch (Exception e)
 			{
 				Status = "could not fill the list: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[" + Name + "] fill: " + e.Message);
+				Killiorim.Logger.LogWarning("[" + Name + "] fill: " + e.Message);
 			}
 		}
 

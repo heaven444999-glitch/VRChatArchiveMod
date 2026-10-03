@@ -7,9 +7,9 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// ADD TO ARCHIVE FAVORITES — our own button, next to VRChat's star.
 	//
@@ -124,7 +124,7 @@ namespace VRChatArchiveMod.Modules
 				// couple of colour writes twice a second.
 				KeepViolet(_metaBtn);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveFavBtn] " + e.Message); }
 		}
 
 		private void KeepViolet(Transform t)
@@ -246,12 +246,12 @@ namespace VRChatArchiveMod.Modules
 				_metaBtn = CloneButton(donor, "VA_GetMeta", "Get metadata", ArchiveViolet, GetMetadata);
 				if (_metaBtn != null) _metaBtn.SetSiblingIndex(t.GetSiblingIndex() + 1);
 
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] buttons added to the avatar detail pane.");
+				Killiorim.Logger.LogInfo("[ArchiveFavBtn] buttons added to the avatar detail pane.");
 			}
 			catch (Exception e)
 			{
 				Status = "could not add the button: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] build failed: " + e);
+				Killiorim.Logger.LogWarning("[ArchiveFavBtn] build failed: " + e);
 			}
 		}
 
@@ -301,7 +301,7 @@ namespace VRChatArchiveMod.Modules
 				go.SetActive(true);
 				return t;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] clone '" + name + "': " + e.Message); return null; }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveFavBtn] clone '" + name + "': " + e.Message); return null; }
 		}
 
 		private void CopyId()
@@ -313,7 +313,7 @@ namespace VRChatArchiveMod.Modules
 				GUIUtility.systemCopyBuffer = id;
 				Status = "copied " + id;
 				Core.Toast.Show(Status);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] copied id " + id);
+				Killiorim.Logger.LogInfo("[ArchiveFavBtn] copied id " + id);
 			}
 			catch (Exception e) { Status = "copy failed: " + e.Message; Core.Toast.Show(Status); }
 		}
@@ -357,7 +357,7 @@ namespace VRChatArchiveMod.Modules
 				GUIUtility.systemCopyBuffer = sb.ToString();
 				Status = "metadata copied to clipboard";
 				Core.Toast.Show(Status);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] metadata copied:\n" + sb);
+				Killiorim.Logger.LogInfo("[ArchiveFavBtn] metadata copied:\n" + sb);
 			}
 			catch (Exception e) { Status = "metadata failed: " + e.Message; Core.Toast.Show(Status); }
 		}
@@ -443,7 +443,7 @@ namespace VRChatArchiveMod.Modules
 					catch { }
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] unfade: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveFavBtn] unfade: " + e.Message); }
 		}
 
 		private void Retitle()
@@ -473,7 +473,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					Status = "could not tell which avatar is shown";
 					Core.Toast.Show(Status);
-					VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] no avatar id found on the detail pane.");
+					Killiorim.Logger.LogWarning("[ArchiveFavBtn] no avatar id found on the detail pane.");
 					return;
 				}
 
@@ -482,7 +482,7 @@ namespace VRChatArchiveMod.Modules
 				Retitle();
 				_ = Run(has);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] click: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveFavBtn] click: " + e.Message); }
 		}
 
 		private async System.Threading.Tasks.Task Run(bool remove)
@@ -495,7 +495,7 @@ namespace VRChatArchiveMod.Modules
 				Status = ok
 					? (remove ? "removed from your Archive favourites" : "added to your Archive favourites")
 					: FavoritesModule.LastStatus;
-				VRChatArchiveModPlugin.Logger.LogInfo($"[ArchiveFavBtn] {(remove ? "remove" : "add")} {_id} -> {ok}");
+				Killiorim.Logger.LogInfo($"[ArchiveFavBtn] {(remove ? "remove" : "add")} {_id} -> {ok}");
 			}
 			catch (Exception e) { Status = "failed: " + e.Message; }
 			finally
@@ -541,9 +541,9 @@ namespace VRChatArchiveMod.Modules
 				// is willing to act.
 				Core.UiClick.AddClick(btn, OnApply);
 				_applyHookedId = id;
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] Apply hooked (asks the select endpoint when the client declines).");
+				Killiorim.Logger.LogInfo("[ArchiveFavBtn] Apply hooked (asks the select endpoint when the client declines).");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] Apply hook: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveFavBtn] Apply hook: " + e.Message); }
 		}
 
 		private void OnApply()
@@ -575,14 +575,14 @@ namespace VRChatArchiveMod.Modules
 				// the mod's own WEAR button uses, which is what "make Apply do what WEAR does" means.
 				Status = "switching…";
 				Core.Toast.Show(Status);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] apply -> WearById " + id);
+				Killiorim.Logger.LogInfo("[ArchiveFavBtn] apply -> WearById " + id);
 				try { VaTagsModule.WearById(id, _seenName); }
 				catch (Exception we) { Status = "wear failed: " + we.Message; Core.Toast.Show(Status); }
 			}
 			catch (Exception e)
 			{
 				Status = "apply failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFavBtn] apply: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveFavBtn] apply: " + e.Message);
 			}
 		}
 
@@ -614,7 +614,7 @@ namespace VRChatArchiveMod.Modules
 				Scan(root, 0, ref hit);
 				if (!string.IsNullOrEmpty(hit))
 				{
-					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] resolved avatar id " + hit);
+					Killiorim.Logger.LogInfo("[ArchiveFavBtn] resolved avatar id " + hit);
 					return hit;
 				}
 				// THE AVATAR YOU ARE WEARING. When the pane shows the avatar you already have on,
@@ -624,7 +624,7 @@ namespace VRChatArchiveMod.Modules
 				// the shown avatar IS the worn one, whose id the local player knows.
 				string worn = WornIdIfPaneShowsIt();
 				if (!string.IsNullOrEmpty(worn))
-					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFavBtn] pane shows the worn avatar -> " + worn);
+					Killiorim.Logger.LogInfo("[ArchiveFavBtn] pane shows the worn avatar -> " + worn);
 				return worn ?? "";
 			}
 			catch { return ""; }
@@ -716,7 +716,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 			_typeIndex = idx;
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				"[ArchiveFavBtn] type index built: " + idx.Count + " type(s) in "
 				+ ((Time.realtimeSinceStartup - t0) * 1000f).ToString("0") + " ms (once per session).");
 			return _typeIndex;

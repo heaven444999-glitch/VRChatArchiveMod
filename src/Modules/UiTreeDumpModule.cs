@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// READ VRCHAT'S MENU AS IT IS TODAY, instead of guessing at it.
 	//
@@ -53,7 +53,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				Status = "menu tree failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[UiTree] " + Status);
+				Killiorim.Logger.LogWarning("[UiTree] " + Status);
 			}
 		}
 
@@ -93,7 +93,7 @@ namespace VRChatArchiveMod.Modules
 			File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
 
 			string msg = "menu tree written: " + path + " (" + nodes + " nodes)";
-			VRChatArchiveModPlugin.Logger.LogInfo("[UiTree] " + msg);
+			Killiorim.Logger.LogInfo("[UiTree] " + msg);
 			return msg;
 		}
 

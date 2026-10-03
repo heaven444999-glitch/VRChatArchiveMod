@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// THE OBJECTS WE CLONE, RESOLVED ONCE.
 	//
@@ -169,7 +169,7 @@ namespace VRChatArchiveMod.Core
 					return _rootByType;
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] type lookup: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[MenuDonor] type lookup: " + e.Message); }
 			return null;
 		}
 
@@ -204,7 +204,7 @@ namespace VRChatArchiveMod.Core
 				{
 					// Worth saying out loud: the first choice moved, which is the early warning that a
 					// VRChat update has reshaped the menu.
-					VRChatArchiveModPlugin.Logger.LogInfo("[MenuDonor] " + s.Label + ": fell back to candidate "
+					Killiorim.Logger.LogInfo("[MenuDonor] " + s.Label + ": fell back to candidate "
 						+ (i + 1) + "/" + s.Paths.Length + " (" + s.Paths[i] + ")");
 				}
 				return s.T;
@@ -213,7 +213,7 @@ namespace VRChatArchiveMod.Core
 			if (!s.Complained)
 			{
 				s.Complained = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] " + s.Label + ": none of the "
+				Killiorim.Logger.LogWarning("[MenuDonor] " + s.Label + ": none of the "
 					+ s.Paths.Length + " known paths exist on this build — the feature that clones it will be skipped, "
 					+ "not broken. Run DUMP MENU TREE and add the current path.");
 			}
@@ -254,7 +254,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] limbo: " + e.Message);
+				Killiorim.Logger.LogWarning("[MenuDonor] limbo: " + e.Message);
 				return null;
 			}
 		}
@@ -275,7 +275,7 @@ namespace VRChatArchiveMod.Core
 			{
 				// Unknown beats zero here: a caller that cannot count pages must not be told there are
 				// none, because "none" is the answer that lets a clone reach the menu.
-				VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] page count: " + e.Message);
+				Killiorim.Logger.LogWarning("[MenuDonor] page count: " + e.Message);
 				return -1;
 			}
 		}
@@ -296,7 +296,7 @@ namespace VRChatArchiveMod.Core
 					try { UnityEngine.Object.DestroyImmediate(comps[i]); n++; } catch { }
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] strip pages: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[MenuDonor] strip pages: " + e.Message); }
 			return n;
 		}
 
@@ -325,7 +325,7 @@ namespace VRChatArchiveMod.Core
 				// way it would sail past the check and break the menu again.
 				if (stripped <= 0 || left != 0)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] " + name + ": "
+					Killiorim.Logger.LogWarning("[MenuDonor] " + name + ": "
 						+ (stripped <= 0
 							? "found no UIPage to strip — the type lookup failed, because a page donor always has one"
 							: stripped + " UIPage(s) stripped but " + (left < 0 ? "the recount failed" : left + " remain"))
@@ -336,13 +336,13 @@ namespace VRChatArchiveMod.Core
 
 				// worldPositionStays: false — this is UI, the anchors decide where it lands.
 				go.transform.SetParent(parent, false);
-				VRChatArchiveModPlugin.Logger.LogInfo("[MenuDonor] " + name + ": inert clone ready ("
+				Killiorim.Logger.LogInfo("[MenuDonor] " + name + ": inert clone ready ("
 					+ stripped + " UIPage(s) removed).");
 				return go.transform;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] inert clone of " + name + " failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[MenuDonor] inert clone of " + name + " failed: " + e.Message);
 				try { if (go != null) UnityEngine.Object.DestroyImmediate(go); } catch { }
 				return null;
 			}
@@ -365,7 +365,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[MenuDonor] clone of " + name + " failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[MenuDonor] clone of " + name + " failed: " + e.Message);
 				return null;
 			}
 		}

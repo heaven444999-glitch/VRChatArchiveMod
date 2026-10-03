@@ -3,7 +3,7 @@ using System.Reflection;
 using HarmonyLib;
 using Il2CppInterop.Runtime;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// THE ONE BUG BEHIND BOTH CRASHES.
 	//
@@ -60,7 +60,7 @@ namespace VRChatArchiveMod.Core
 				IntPtr klass = IL2CPP.GetIl2CppClass("mscorlib.dll", "System", "Delegate");
 				if (klass == IntPtr.Zero)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[FieldOffsetFix] System.Delegate not found — cannot verify, leaving field offsets alone.");
 					return;
 				}
@@ -71,7 +71,7 @@ namespace VRChatArchiveMod.Core
 					fields[i] = IL2CPP.il2cpp_class_get_field_from_name(klass, Known[i].Name);
 					if (fields[i] == IntPtr.Zero || !NativeGuard.IsReadable(fields[i], 0x30))
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[FieldOffsetFix] cannot read FieldInfo for " + Known[i].Name + " — leaving field offsets alone.");
 						return;
 					}
@@ -87,7 +87,7 @@ namespace VRChatArchiveMod.Core
 					if (!all) continue;
 					if (found >= 0)
 					{
-						VRChatArchiveModFallback("[FieldOffsetFix] ambiguous: slots 0x" + found.ToString("X")
+						KilliorimFallback("[FieldOffsetFix] ambiguous: slots 0x" + found.ToString("X")
 							+ " and 0x" + slot.ToString("X") + " both fit. Refusing to guess.");
 						return;
 					}
@@ -96,7 +96,7 @@ namespace VRChatArchiveMod.Core
 
 				if (found < 0)
 				{
-					VRChatArchiveModFallback("[FieldOffsetFix] no FieldInfo slot holds the expected offsets. "
+					KilliorimFallback("[FieldOffsetFix] no FieldInfo slot holds the expected offsets. "
 						+ "The layout changed again; field access stays broken rather than made worse.");
 					return;
 				}
@@ -104,7 +104,7 @@ namespace VRChatArchiveMod.Core
 				uint stock = *(uint*)((byte*)fields[0] + 0x08);
 				if (found == 0x08)
 				{
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[FieldOffsetFix] field offsets already correct (slot 0x08) — nothing to patch.");
 					_slot = found;
 					return;
@@ -115,15 +115,15 @@ namespace VRChatArchiveMod.Core
 					null, new[] { typeof(IntPtr) }, null);
 				if (target == null)
 				{
-					VRChatArchiveModFallback("[FieldOffsetFix] IL2CPP.il2cpp_field_get_offset not found.");
+					KilliorimFallback("[FieldOffsetFix] IL2CPP.il2cpp_field_get_offset not found.");
 					return;
 				}
 
 				_slot = found;
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(target, prefix: new HarmonyMethod(
+				Killiorim.HarmonyInstance.Patch(target, prefix: new HarmonyMethod(
 					typeof(FieldOffsetFix).GetMethod(nameof(Prefix), BindingFlags.Static | BindingFlags.NonPublic)));
 
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[FieldOffsetFix] field offsets repaired: read from FieldInfo+0x" + found.ToString("X")
 					+ ", not +0x08 (which holds the metadata token 0x" + stock.ToString("X")
 					+ "). All four System.Delegate fields agree.");
@@ -134,7 +134,7 @@ namespace VRChatArchiveMod.Core
 			catch (Exception e)
 			{
 				_slot = -1;
-				VRChatArchiveModPlugin.Logger.LogError("[FieldOffsetFix] install failed: " + Unwrap.Describe(e));
+				Killiorim.Logger.LogError("[FieldOffsetFix] install failed: " + Unwrap.Describe(e));
 			}
 		}
 
@@ -174,7 +174,7 @@ namespace VRChatArchiveMod.Core
 
 				if (classSlot < 0 || typeSlot < 0)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[FieldOffsetFix] static-field layout not verified (class=" + classSlot + ", type=" + typeSlot
 						+ ") — static reads left as-is. The mod is unaffected; UnityExplorer static fields stay broken.");
 					return;
@@ -183,7 +183,7 @@ namespace VRChatArchiveMod.Core
 				_classSlot = classSlot; _typeSlot = typeSlot;
 				PatchStatic("il2cpp_field_static_get_value", nameof(StaticGetPrefix));
 				PatchStatic("il2cpp_field_static_set_value", nameof(StaticSetPrefix));
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[FieldOffsetFix] static-field access repaired: class@0x" + classSlot.ToString("X")
 					+ ", type@0x" + typeSlot.ToString("X") + ", offset@0x" + _slot.ToString("X")
 					+ ". UnityExplorer static reads should work now.");
@@ -191,7 +191,7 @@ namespace VRChatArchiveMod.Core
 			catch (Exception e)
 			{
 				_classSlot = -1; _typeSlot = -1;
-				VRChatArchiveModPlugin.Logger.LogWarning("[FieldOffsetFix] static-field fix skipped: " + Unwrap.Describe(e));
+				Killiorim.Logger.LogWarning("[FieldOffsetFix] static-field fix skipped: " + Unwrap.Describe(e));
 			}
 		}
 
@@ -201,7 +201,7 @@ namespace VRChatArchiveMod.Core
 				BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
 				null, new[] { typeof(IntPtr), typeof(void).MakePointerType() }, null);
 			if (target == null) throw new MissingMethodException("IL2CPP." + method + " not found");
-			VRChatArchiveModPlugin.HarmonyInstance.Patch(target, prefix: new HarmonyMethod(
+			Killiorim.HarmonyInstance.Patch(target, prefix: new HarmonyMethod(
 				typeof(FieldOffsetFix).GetMethod(prefix, BindingFlags.Static | BindingFlags.NonPublic)));
 		}
 
@@ -269,8 +269,8 @@ namespace VRChatArchiveMod.Core
 			return false;
 		}
 
-		private static void VRChatArchiveModFallback(string msg)
-			=> VRChatArchiveModPlugin.Logger.LogWarning(msg);
+		private static void KilliorimFallback(string msg)
+			=> Killiorim.Logger.LogWarning(msg);
 
 		// Runs for every field access in the process, so it does exactly one load and nothing else.
 		// The pointer comes from il2cpp itself; validating it here would cost a syscall per access.

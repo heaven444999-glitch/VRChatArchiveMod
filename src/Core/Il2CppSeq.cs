@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// READ A SEQUENCE OF STRINGS OUT OF WHATEVER SHAPE IL2CPP HANDED US.
 	//

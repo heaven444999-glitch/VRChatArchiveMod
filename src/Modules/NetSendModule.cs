@@ -4,9 +4,9 @@ using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// NET SEND — what THIS client pushes onto the wire, counted per second and per event code.
 	//
@@ -90,7 +90,7 @@ namespace VRChatArchiveMod.Modules
 			if (_history.Count > HistoryLen) _history.RemoveAt(0);
 
 			if (total >= WarnPerSec)
-				VRChatArchiveModPlugin.Logger.LogWarning("[NetSend] " + total + " event(s) sent this second (" + LastTop + ").");
+				Killiorim.Logger.LogWarning("[NetSend] " + total + " event(s) sent this second (" + LastTop + ").");
 		}
 
 		// The last 15 s of outbound traffic, oldest first. Printed on scene change, i.e. right after
@@ -111,7 +111,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				VRChatArchiveModPlugin.Logger.LogInfo("[NetSend] outbound per second before this scene change (oldest first): " + HistoryLine()
+				Killiorim.Logger.LogInfo("[NetSend] outbound per second before this scene change (oldest first): " + HistoryLine()
 					+ " — peak " + PeakPerSec + "/s. Hook: " + HookInfo);
 			}
 			catch { }
@@ -142,7 +142,7 @@ namespace VRChatArchiveMod.Modules
 						try
 						{
 							var post = new HarmonyMethod(typeof(NetSendModule).GetMethod(nameof(RaisePostfix), BindingFlags.Static | BindingFlags.NonPublic));
-							VRChatArchiveModPlugin.HarmonyInstance.Patch(m, postfix: post);
+							Killiorim.HarmonyInstance.Patch(m, postfix: post);
 							patched++;
 							notes.Append(t.Name).Append('.').Append(m.Name).Append(' ');
 						}
@@ -152,17 +152,17 @@ namespace VRChatArchiveMod.Modules
 				if (patched == 0)
 				{
 					HookInfo = "no (byte, object, RaiseEventOptions, SendOptions) method found" + (notes.Length > 0 ? " " + notes : "");
-					if (_attempts <= 1) VRChatArchiveModPlugin.Logger.LogWarning("[NetSend] " + HookInfo + " (will retry).");
+					if (_attempts <= 1) Killiorim.Logger.LogWarning("[NetSend] " + HookInfo + " (will retry).");
 					return;
 				}
 				_hooked = true;
 				HookInfo = "postfix on " + notes.ToString().Trim();
-				VRChatArchiveModPlugin.Logger.LogInfo("[NetSend] armed — counting outbound Photon events (" + HookInfo + ").");
+				Killiorim.Logger.LogInfo("[NetSend] armed — counting outbound Photon events (" + HookInfo + ").");
 			}
 			catch (Exception e)
 			{
 				HookInfo = "install failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogError("[NetSend] hook install failed: " + e);
+				Killiorim.Logger.LogError("[NetSend] hook install failed: " + e);
 			}
 		}
 

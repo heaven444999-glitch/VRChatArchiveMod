@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using VRC.Core;
 using VRC.DataModel;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
 using Category  = ObjectPublicStBo1BoILSt1NuBoInUnique;
 using Panel     = MonoBehaviourPublicOb_aGa_c_aOb_sGa_e_lUnique;
 using Il2IList  = Il2CppSystem.Collections.IList;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VRCHAT ARCHIVE — a real category in VRChat's own avatar menu.
 	//
@@ -106,7 +106,7 @@ namespace VRChatArchiveMod.Modules
 				if (nameObs != null)
 					ours.field_Public_InterfacePublicAbstractIDisposableVoAc1ObVoAc1ObUnique_1_String_0 = nameObs;
 				else
-					VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] name observable cast failed — the row will keep the donor's title.");
+					Killiorim.Logger.LogWarning("[ArchiveCat] name observable cast failed — the row will keep the donor's title.");
 
 				Il2IList avatars = BuildAvatars(ids);
 				if (avatars == null) { Status = "could not build the avatar list"; return; }
@@ -138,13 +138,13 @@ namespace VRChatArchiveMod.Modules
 				Published = true;
 				LastAvatars = avatars;
 				Status = ids.Count + " avatar(s) in the VRCHAT ARCHIVE category";
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[ArchiveCat] published: {copy.Count} categories, {ids.Count} avatars in ours.");
 			}
 			catch (Exception e)
 			{
 				Status = "failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] " + e);
+				Killiorim.Logger.LogWarning("[ArchiveCat] " + e);
 			}
 		}
 
@@ -174,7 +174,7 @@ namespace VRChatArchiveMod.Modules
 					| System.Reflection.BindingFlags.Instance);
 				if (sel == null)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] selection handler not found — the grid will not fill.");
+					Killiorim.Logger.LogWarning("[ArchiveCat] selection handler not found — the grid will not fill.");
 					_hooked = true;    // do not retry every 2s
 					return;
 				}
@@ -182,15 +182,15 @@ namespace VRChatArchiveMod.Modules
 				var post = new HarmonyLib.HarmonyMethod(typeof(ArchiveCategoryModule).GetMethod(
 					nameof(OnCategorySelected),
 					System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic));
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(sel, postfix: post);
+				Killiorim.HarmonyInstance.Patch(sel, postfix: post);
 
 				_hooked = true;
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveCat] hooked the category selection handler.");
+				Killiorim.Logger.LogInfo("[ArchiveCat] hooked the category selection handler.");
 			}
 			catch (Exception e)
 			{
 				_hooked = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] hook failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveCat] hook failed: " + e.Message);
 			}
 		}
 
@@ -207,12 +207,12 @@ namespace VRChatArchiveMod.Modules
 
 				var src = new ReactiveProperty<Il2IList>(LastAvatars)
 					.TryCast<InterfacePublicAbstractIDisposableVoAc1ObVoAc1ObUnique<Il2IList>>();
-				if (src == null) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] grid source cast failed."); return; }
+				if (src == null) { Killiorim.Logger.LogWarning("[ArchiveCat] grid source cast failed."); return; }
 
 				view.Method_Public_Void_InterfacePublicAbstractIDisposableVoAc1ObVoAc1ObUnique_1_IList_Boolean_0(src, false);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveCat] grid filled from the Archive category.");
+				Killiorim.Logger.LogInfo("[ArchiveCat] grid filled from the Archive category.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] fill: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveCat] fill: " + e.Message); }
 		}
 
 		private static int IndexOfOurs(Il2CppSystem.Collections.Generic.List<Category> live)
@@ -273,14 +273,14 @@ namespace VRChatArchiveMod.Modules
 
 				if (made == 0)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] no IAvatar could be built — the DataModel cast failed.");
+					Killiorim.Logger.LogWarning("[ArchiveCat] no IAvatar could be built — the DataModel cast failed.");
 					return null;
 				}
 				return list.TryCast<Il2IList>();
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] BuildAvatars: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveCat] BuildAvatars: " + e.Message);
 				return null;
 			}
 		}
@@ -315,7 +315,7 @@ namespace VRChatArchiveMod.Modules
 					return p;
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveCat] FindPanel: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveCat] FindPanel: " + e.Message); }
 			return null;
 		}
 	}

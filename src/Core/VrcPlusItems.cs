@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using Il2CppInterop.Runtime;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// VRC+ COSMETICS — loading screens, props, emojis and the rest of that family.
 	//
@@ -88,7 +88,7 @@ namespace VRChatArchiveMod.Core
 				if (targets.Count == 0)
 				{
 					Status = "no type declaring " + GetterName + " found on this build";
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[VRCPlusItems] " + Status + " — VRChat has probably moved it. Nothing patched, "
 						+ "which is deliberate: a wrong target here is worse than no feature.");
 					return;
@@ -97,10 +97,10 @@ namespace VRChatArchiveMod.Core
 				int ok = 0;
 				foreach (MethodInfo m in targets)
 				{
-					try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: new HarmonyMethod(prefix)); ok++; }
+					try { Killiorim.HarmonyInstance.Patch(m, prefix: new HarmonyMethod(prefix)); ok++; }
 					catch (Exception e)
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[VRCPlusItems] could not patch " + (m.DeclaringType != null ? m.DeclaringType.Name : "?") + ": " + e.Message);
 					}
 				}
@@ -113,17 +113,17 @@ namespace VRChatArchiveMod.Core
 					var names = new List<string>();
 					for (int i = 0; i < targets.Count && i < 6; i++)
 						if (targets[i].DeclaringType != null) names.Add(targets[i].DeclaringType.Name);
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[VRCPlusItems] armed on " + ok + " " + GetterName + " implementation(s): "
 						+ string.Join(", ", names) + (targets.Count > 6 ? ", …" : "")
 						+ ". Client-side only — nothing is sent to VRChat.");
 				}
-				else VRChatArchiveModPlugin.Logger.LogWarning("[VRCPlusItems] " + Status);
+				else Killiorim.Logger.LogWarning("[VRCPlusItems] " + Status);
 			}
 			catch (Exception e)
 			{
 				Status = "could not patch: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[VRCPlusItems] " + Status);
+				Killiorim.Logger.LogWarning("[VRCPlusItems] " + Status);
 			}
 		}
 

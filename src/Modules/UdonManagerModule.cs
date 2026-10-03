@@ -6,9 +6,9 @@ using System.Reflection;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// UDON MANAGER — switch a world's scripts off, one at a time, on YOUR client.
 	//
@@ -137,12 +137,12 @@ namespace VRChatArchiveMod.Modules
 
 				lock (Gate) { Items.Clear(); Items.AddRange(list); }
 				Status = list.Count + " Udon behaviour(s) in this world";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] {list.Count} behaviour(s) found.");
+				Killiorim.Logger.LogInfo($"[UdonManager] {list.Count} behaviour(s) found.");
 			}
 			catch (Exception e)
 			{
 				Status = "scan failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[UdonManager] " + e.Message);
+				Killiorim.Logger.LogWarning("[UdonManager] " + e.Message);
 			}
 		}
 
@@ -160,7 +160,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				e.OffByUs = !on;
 				Status = (on ? "re-enabled " : "disabled ") + Trunc(e.Short, 40);
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] {(on ? "enabled" : "disabled")} {e.Path}");
+				Killiorim.Logger.LogInfo($"[UdonManager] {(on ? "enabled" : "disabled")} {e.Path}");
 			}
 			catch (Exception ex) { Status = "could not change it: " + ex.Message; }
 		}
@@ -182,7 +182,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 			Status = n > 0 ? ("restored " + n + " behaviour(s)") : "nothing of ours was off";
-			VRChatArchiveModPlugin.Logger.LogInfo("[UdonManager] " + Status);
+			Killiorim.Logger.LogInfo("[UdonManager] " + Status);
 		}
 
 		// Bulk switch for everything currently listed by the filter — the case where one prefab is
@@ -282,7 +282,7 @@ namespace VRChatArchiveMod.Modules
 				if (mi == null) { Status = "SendCustomEvent not found"; return false; }
 				mi.Invoke(e.B, new object[] { ev });
 				Status = "ran " + Trunc(ev, 32) + " locally";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] local SendCustomEvent '{ev}' on {e.Path}");
+				Killiorim.Logger.LogInfo($"[UdonManager] local SendCustomEvent '{ev}' on {e.Path}");
 				return true;
 			}
 			catch (Exception ex)
@@ -410,7 +410,7 @@ namespace VRChatArchiveMod.Modules
 				VRC.SDKBase.Networking.SetOwner(me, go);
 				RefreshOwner(e);
 				Status = (e.Mine ? "you now own " : "ownership requested for ") + Trunc(e.Short, 28);
-				VRChatArchiveModPlugin.Logger.LogInfo("[UdonManager] SetOwner -> local on " + e.Path + " (mine=" + e.Mine + ")");
+				Killiorim.Logger.LogInfo("[UdonManager] SetOwner -> local on " + e.Path + " (mine=" + e.Mine + ")");
 				return true;
 			}
 			catch (Exception ex) { Status = "take ownership failed: " + ex.Message; return false; }
@@ -468,7 +468,7 @@ namespace VRChatArchiveMod.Modules
 				_sendNet.Invoke(e.B, new object[] { owner, ev });
 				string who = string.IsNullOrEmpty(e.Owner) ? "the owner" : e.Owner;
 				Status = "sent " + Trunc(ev, 26) + " to " + who;
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] OWNER SendCustomNetworkEvent '{ev}' on {e.Path} (owner: {who})");
+				Killiorim.Logger.LogInfo($"[UdonManager] OWNER SendCustomNetworkEvent '{ev}' on {e.Path} (owner: {who})");
 				return true;
 			}
 			catch (Exception ex)
@@ -494,7 +494,7 @@ namespace VRChatArchiveMod.Modules
 
 				_sendNet.Invoke(e.B, new object[] { all, ev });
 				Status = "sent " + Trunc(ev, 26) + " to EVERYONE";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] GLOBAL SendCustomNetworkEvent '{ev}' on {e.Path}");
+				Killiorim.Logger.LogInfo($"[UdonManager] GLOBAL SendCustomNetworkEvent '{ev}' on {e.Path}");
 				return true;
 			}
 			catch (Exception ex)
@@ -655,7 +655,7 @@ namespace VRChatArchiveMod.Modules
 				Status = ok
 					? "sent " + Trunc(string.Equals(scope, "interact", StringComparison.OrdinalIgnoreCase) ? "interact" : ev, 20) + " to " + Trunc(displayName, 16) + " via " + Trunc(best.Short, 20) + " (" + bestD.ToString("0.0", CultureInfo.InvariantCulture) + " m)"
 					: "found " + Trunc(best.Short, 20) + " for " + Trunc(displayName, 16) + " but the event did not fire";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] player event {scope} '{ev}' -> {displayName} via {best.Short} at {bestD:0.0} m (by {by})");
+				Killiorim.Logger.LogInfo($"[UdonManager] player event {scope} '{ev}' -> {displayName} via {best.Short} at {bestD:0.0} m (by {by})");
 				return ok ? 1 : 0;
 			}
 			catch (Exception ex) { Status = "player event failed: " + ex.Message; return 0; }
@@ -673,13 +673,13 @@ namespace VRChatArchiveMod.Modules
 			if (string.IsNullOrEmpty(byVar))
 			{
 				Status = "this action says by:var but names no variable (byVar) — nothing sent";
-				VRChatArchiveModPlugin.Logger.LogWarning("[UdonManager] by:var with no byVar — nothing sent.");
+				Killiorim.Logger.LogWarning("[UdonManager] by:var with no byVar — nothing sent.");
 				return 0;
 			}
 			if (playerId < 0)
 			{
 				Status = "no actor number for " + Trunc(displayName, 18) + " yet — try again in a second";
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[UdonManager] by:var: no actor number for " + displayName + " (PlayerEntry.PlayerId is -1) "
 					+ "— VRCPlayerApi.playerId never read. Nothing sent.");
 				return 0;
@@ -705,7 +705,7 @@ namespace VRChatArchiveMod.Modules
 			if (getVar == null)
 			{
 				Status = "cannot read Udon variables on this build — nothing sent";
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[UdonManager] by:var: GetProgramVariable(string) not found on UdonBehaviour — nothing sent.");
 				return 0;
 			}
@@ -745,7 +745,7 @@ namespace VRChatArchiveMod.Modules
 			// single run: whether the world's variable holds VRChat's ACTOR NUMBER or its own 0..N
 			// seat index. Small dense values against a large target id means a seat index, and no
 			// dump can reveal that — every node reads -1 while nobody is playing.
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				"[UdonManager] by:var " + byVar + " looking for " + playerId + " (" + Trunc(displayName, 18) + "): "
 				+ looked + " candidate(s), " + asleep + " not started, " + readable + " readable, values ["
 				+ string.Join(",", seen.ToArray()) + "]" + (hit != null ? " -> MATCHED " + hit.Short : " -> NO MATCH"));
@@ -760,7 +760,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					Status = "all " + asleep + " '" + Trunc(pattern.Length > 0 ? pattern : "script", 16)
 						+ "' are switched off right now — this world only wakes them during a round";
-					VRChatArchiveModPlugin.Logger.LogWarning("[UdonManager] by:var: " + Status);
+					Killiorim.Logger.LogWarning("[UdonManager] by:var: " + Status);
 					return 0;
 				}
 				Status = readable == 0
@@ -781,7 +781,7 @@ namespace VRChatArchiveMod.Modules
 			Status = ok
 				? "sent " + Trunc(ev, 20) + " to " + Trunc(displayName, 16) + " via " + Trunc(hit.Short, 20) + " (" + byVar + "=" + playerId + ")"
 				: "found " + Trunc(hit.Short, 20) + " for " + Trunc(displayName, 16) + " but the event did not fire";
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				$"[UdonManager] player event {scope} '{ev}' -> {displayName} via {hit.Short} matched on {byVar}={playerId}");
 			return ok ? 1 : 0;
 		}
@@ -871,7 +871,7 @@ namespace VRChatArchiveMod.Modules
 							if (c == null) continue;
 							try { names += (MenuCard.Il2CppNameOf(c) ?? c.GetType().Name) + " "; } catch { }
 						}
-					VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] INTERACT {e.Path} :: components = {names}");
+					Killiorim.Logger.LogInfo($"[UdonManager] INTERACT {e.Path} :: components = {names}");
 				}
 				catch { }
 
@@ -885,14 +885,14 @@ namespace VRChatArchiveMod.Modules
 					var btn = go.GetComponent<UnityEngine.UI.Button>();
 					if (btn != null && btn.onClick != null)
 					{
-						if (!btn.interactable) VRChatArchiveModPlugin.Logger.LogWarning($"[UdonManager] Button on {e.Path} is not interactable; clicking anyway.");
+						if (!btn.interactable) Killiorim.Logger.LogWarning($"[UdonManager] Button on {e.Path} is not interactable; clicking anyway.");
 						btn.onClick.Invoke();
 						Status = "clicked UI button " + Trunc(e.Short, 28);
-						VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] uGUI Button.onClick.Invoke() on {e.Path}");
+						Killiorim.Logger.LogInfo($"[UdonManager] uGUI Button.onClick.Invoke() on {e.Path}");
 						return true;
 					}
 				}
-				catch (Exception bex) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonManager] Button click failed on {e.Path}: {bex.Message}"); }
+				catch (Exception bex) { Killiorim.Logger.LogWarning($"[UdonManager] Button click failed on {e.Path}: {bex.Message}"); }
 
 				// 2) ANY uGUI BUTTON WIRED TO THIS SCRIPT. The usual layout is a Button on a menu
 				//    object whose onClick targets an UdonBehaviour living SOMEWHERE ELSE in the
@@ -925,10 +925,10 @@ namespace VRChatArchiveMod.Modules
 								{
 									var target = ev.GetPersistentTarget(k);
 									if (target == null || target.GetInstanceID() != e.Id) continue;
-									if (!btn.interactable) VRChatArchiveModPlugin.Logger.LogWarning($"[UdonManager] Button {PathOf(btn.transform)} is not interactable; clicking anyway.");
+									if (!btn.interactable) Killiorim.Logger.LogWarning($"[UdonManager] Button {PathOf(btn.transform)} is not interactable; clicking anyway.");
 									btn.onClick.Invoke();
 									clicked++;
-									VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] uGUI Button {PathOf(btn.transform)} \u2192 {ev.GetPersistentMethodName(k)} on {e.Path}");
+									Killiorim.Logger.LogInfo($"[UdonManager] uGUI Button {PathOf(btn.transform)} \u2192 {ev.GetPersistentMethodName(k)} on {e.Path}");
 									break;
 								}
 							}
@@ -940,7 +940,7 @@ namespace VRChatArchiveMod.Modules
 						return true;
 					}
 				}
-				catch (Exception sex) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonManager] button scan failed for {e.Path}: {sex.Message}"); }
+				catch (Exception sex) { Killiorim.Logger.LogWarning($"[UdonManager] button scan failed for {e.Path}: {sex.Message}"); }
 
 				// 3) WORLD-SPACE interactable (_interact) \u2014 doors, levers, pickups. Interact() only
 				//    fires a script's _interact entry point, so when the export list is readable and
@@ -956,27 +956,27 @@ namespace VRChatArchiveMod.Modules
 				if (_interactMi == null)
 				{
 					Status = "no UI Button here, and Interact() not found";
-					VRChatArchiveModPlugin.Logger.LogWarning($"[UdonManager] {e.Path}: no uGUI Button and no Interact() method.");
+					Killiorim.Logger.LogWarning($"[UdonManager] {e.Path}: no uGUI Button and no Interact() method.");
 					return false;
 				}
 				var eps = EntryPoints(e);
 				if (eps.Count > 0 && !eps.Contains("_interact"))
 				{
 					Status = Trunc(e.Short, 24) + " has no _interact and no UI button drives it \u2014 nothing to press";
-					VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] {e.Path}: no _interact entry point, no wired button.");
+					Killiorim.Logger.LogInfo($"[UdonManager] {e.Path}: no _interact entry point, no wired button.");
 					return false;
 				}
 				_interactMi.Invoke(e.B, null);
 				Status = eps.Count == 0
 					? "tried Interact() on " + Trunc(e.Short, 24) + " (entry points unknown)"
 					: "interacted with " + Trunc(e.Short, 32);
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] Interact() on {e.Path}");
+				Killiorim.Logger.LogInfo($"[UdonManager] Interact() on {e.Path}");
 				return true;
 			}
 			catch (Exception ex)
 			{
 				Status = "interact failed: " + ex.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning($"[UdonManager] interact threw on {e?.Path}: {ex.Message}");
+				Killiorim.Logger.LogWarning($"[UdonManager] interact threw on {e?.Path}: {ex.Message}");
 				return false;
 			}
 		}
@@ -1152,7 +1152,7 @@ namespace VRChatArchiveMod.Modules
 				Probe("set ok");
 
 				Status = "set " + Trunc(name, 28) + " = " + Trunc(text, 24);
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UdonManager] set {name} = {text} on {e.Path}");
+				Killiorim.Logger.LogInfo($"[UdonManager] set {name} = {text} on {e.Path}");
 
 				// SET & SYNC: make the write the one VRChat keeps. Ownership first (a synced variable belongs
 				// to the owner; anybody else's write is undone on the owner's next tick), then a serialization
@@ -1188,7 +1188,7 @@ namespace VRChatArchiveMod.Modules
 		// the last log line. Emitted on user-triggered paths only, never on the scan.
 		private static void Probe(string step)
 		{
-			try { VRChatArchiveModPlugin.Logger.LogInfo("[UdonManager] probe: " + step); } catch { }
+			try { Killiorim.Logger.LogInfo("[UdonManager] probe: " + step); } catch { }
 		}
 
 		private static bool _setterResolved;

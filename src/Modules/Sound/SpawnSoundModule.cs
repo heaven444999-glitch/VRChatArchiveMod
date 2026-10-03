@@ -1,8 +1,8 @@
 ﻿using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// SPAWN STINGER — plays "The Spawn Dark Squad" once each time you finish loading into an
 	// instance. Strictly a local, one-shot 2D AudioSource — nothing is sent anywhere and no game
@@ -31,7 +31,7 @@ namespace VRChatArchiveMod.Modules
 		public override void OnInitialize()
 		{
 			RequestClip();
-			VRChatArchiveModPlugin.Logger.LogInfo("[SpawnSound] armed.");
+			Killiorim.Logger.LogInfo("[SpawnSound] armed.");
 		}
 
 		public override void OnUpdate()
@@ -97,9 +97,9 @@ namespace VRChatArchiveMod.Modules
 				_src.volume = Mathf.Clamp01(ModConfig.SpawnSoundVolume.Value);
 				_src.Stop();
 				_src.Play();
-				VRChatArchiveModPlugin.Logger.LogInfo("[SpawnSound] spawn stinger played.");
+				Killiorim.Logger.LogInfo("[SpawnSound] spawn stinger played.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[SpawnSound] play failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[SpawnSound] play failed: {e.Message}"); }
 		}
 
 		// Preview from the Settings "Test" button, without having to rejoin an instance.
@@ -118,15 +118,15 @@ namespace VRChatArchiveMod.Modules
 			{
 				using (var res = typeof(SpawnSoundModule).Assembly.GetManifestResourceStream("spawn_darksquad.wav"))
 				{
-					if (res == null) { VRChatArchiveModPlugin.Logger.LogWarning("[SpawnSound] embedded wav missing."); return; }
+					if (res == null) { Killiorim.Logger.LogWarning("[SpawnSound] embedded wav missing."); return; }
 					var wav = new byte[res.Length];
 					int off = 0, n;
 					while (off < wav.Length && (n = res.Read(wav, off, wav.Length - off)) > 0) off += n;
 					_clip = WavAudio.Decode(wav, "ArchiveSpawnSound");
-					VRChatArchiveModPlugin.Logger.LogInfo(_clip != null ? "[SpawnSound] clip decoded." : "[SpawnSound] clip decode failed.");
+					Killiorim.Logger.LogInfo(_clip != null ? "[SpawnSound] clip decoded." : "[SpawnSound] clip decode failed.");
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[SpawnSound] clip load failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[SpawnSound] clip load failed: {e.Message}"); }
 		}
 	}
 }

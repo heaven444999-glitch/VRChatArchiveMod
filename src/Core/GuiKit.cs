@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Immediate-mode (IMGUI) drawing kit for the on-screen menu. This is the polished
 	// "glow box" style — dark panels, an animated accent edge, ON/OFF toggles and custom
@@ -13,15 +13,15 @@ namespace VRChatArchiveMod.Core
 	// mod's features.
 	public static class GuiKit
 	{
-		// Accent color (set once by the menu). Cyan by default to match the mod's brand.
-		public static Color Accent = new Color(0.22f, 0.78f, 0.96f, 1f);
+		// White accent over a black-and-white base, shared by the in-game overlay controls.
+		public static Color Accent = new Color(0.92f, 0.92f, 0.92f, 1f);
 		public static Color Neon => new Color(
 			Mathf.Min(Accent.r * 1.4f, 1f),
 			Mathf.Min(Accent.g * 1.4f, 1f),
 			Mathf.Min(Accent.b * 1.4f, 1f), 1f);
 
-		private static readonly Color DarkBox = new Color(0.03f, 0.035f, 0.05f, 0.98f);
-		private static readonly Color OffGray = new Color(0.18f, 0.19f, 0.22f, 1f);
+		private static readonly Color DarkBox = new Color(0.025f, 0.025f, 0.032f, 0.98f);
+		private static readonly Color OffGray = new Color(0.20f, 0.20f, 0.22f, 1f);
 
 		private static Texture2D _tex;
 		public static Texture2D Pixel
@@ -123,12 +123,11 @@ namespace VRChatArchiveMod.Core
 			float glow = active ? (hovered ? 0.20f : 0.12f) : (hovered ? 0.08f : 0f);
 			if (glow > 0f) SoftGlow(rect, accent, radius, glow);
 
-			// Body: a soft dark pill, tinted toward the accent when active. The inactive body is a
-			// violet-biased neutral rather than a blue-grey one, so an OFF control sits on the same
-			// palette as the redesigned violet chrome instead of reading as a different UI.
+			// Body: a soft black pill, tinted toward the white accent when active; inactive controls
+			// stay neutral charcoal so the monochrome background remains the visual anchor.
 			Color body = active
 				? new Color(accent.r * 0.28f + 0.05f, accent.g * 0.28f + 0.06f, accent.b * 0.28f + 0.08f, 0.94f)
-				: new Color(0.118f, 0.094f, 0.176f, 0.94f);
+				: new Color(0.075f, 0.075f, 0.085f, 0.96f);
 			if (hovered)
 				body = new Color(body.r + 0.05f, body.g + 0.05f, body.b + 0.06f, body.a);
 

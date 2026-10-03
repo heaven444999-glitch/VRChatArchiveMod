@@ -9,9 +9,9 @@ using UnityEngine.Animations;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Dynamics.PhysBone.Components;
 using VRC.SDK3.Dynamics.Contact.Components;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Avatar anti-crash: scans loaded avatars and switches off components that are in
 	// genuine "crasher" territory (particle bombs, thousands of lights / audio
@@ -153,10 +153,10 @@ namespace VRChatArchiveMod.Modules
 			_assetHookInfo = "disabled (engine icall detour crashed the game at load)";
 			if (!ModConfig.AntiCrashEnabled.Value)
 			{
-				VRChatArchiveModPlugin.Logger.LogInfo("[AntiCrash] disabled by config (switch it on to start clamping; switching off again releases every clamp).");
+				Killiorim.Logger.LogInfo("[AntiCrash] disabled by config (switch it on to start clamping; switching off again releases every clamp).");
 				return;
 			}
-			VRChatArchiveModPlugin.Logger.LogInfo("[AntiCrash] armed (VRCAvatarDescriptor poll every " + ModConfig.ScanIntervalFrames.Value + " frame(s), undo journal on; pre-load hook " + _assetHookInfo + ").");
+			Killiorim.Logger.LogInfo("[AntiCrash] armed (VRCAvatarDescriptor poll every " + ModConfig.ScanIntervalFrames.Value + " frame(s), undo journal on; pre-load hook " + _assetHookInfo + ").");
 		}
 
 		// ===================================================================================
@@ -182,21 +182,21 @@ namespace VRChatArchiveMod.Modules
 				try
 				{
 					var getter = typeof(AssetBundleRequest).GetProperty("asset", BindingFlags.Instance | BindingFlags.Public)?.GetGetMethod();
-					if (getter != null) { VRChatArchiveModPlugin.HarmonyInstance.Patch(getter, postfix: post); patched++; notes.Append("AssetBundleRequest.asset "); }
+					if (getter != null) { Killiorim.HarmonyInstance.Patch(getter, postfix: post); patched++; notes.Append("AssetBundleRequest.asset "); }
 				}
 				catch (Exception e) { notes.Append("[asset getter failed: ").Append(e.Message).Append("] "); }
 				foreach (var m in typeof(AssetBundle).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
 				{
 					if (m.Name != "LoadAsset" || m.IsGenericMethod) continue;
 					if (m.ReturnType != typeof(UnityEngine.Object)) continue;
-					try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, postfix: post); patched++; notes.Append("AssetBundle.LoadAsset/").Append(m.GetParameters().Length).Append(' '); }
+					try { Killiorim.HarmonyInstance.Patch(m, postfix: post); patched++; notes.Append("AssetBundle.LoadAsset/").Append(m.GetParameters().Length).Append(' '); }
 					catch (Exception e) { notes.Append("[LoadAsset failed: ").Append(e.Message).Append("] "); }
 				}
 			}
 			catch (Exception e) { notes.Append("[hook failed: ").Append(e.Message).Append("] "); }
 			_assetHooked = patched > 0;
 			_assetHookInfo = patched > 0 ? "postfix on " + notes.ToString().Trim() : "no method patched " + notes;
-			VRChatArchiveModPlugin.Logger.LogInfo("[AntiCrash] pre-load hook: " + _assetHookInfo);
+			Killiorim.Logger.LogInfo("[AntiCrash] pre-load hook: " + _assetHookInfo);
 		}
 
 		// One cheap check per loaded asset: only GameObjects that carry an avatar descriptor go on.
@@ -214,9 +214,9 @@ namespace VRChatArchiveMod.Modules
 				try { id = go.GetInstanceID(); } catch { return; }
 				if (!_processed.Add(id)) return;   // the same asset is read back several times
 				ScanAndClamp(go, prefab: true);
-				VRChatArchiveModPlugin.Logger.LogInfo("[AntiCrash] pre-load: clamped prefab '" + SafeName(go) + "' before its first frame.");
+				Killiorim.Logger.LogInfo("[AntiCrash] pre-load: clamped prefab '" + SafeName(go) + "' before its first frame.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[AntiCrash] pre-load hook: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[AntiCrash] pre-load hook: " + e.Message); }
 		}
 
 		public override void OnUpdate()
@@ -239,13 +239,13 @@ namespace VRChatArchiveMod.Modules
 				{
 					int undone = RestoreAll(out int irreversible);
 					_processed.Clear();
-					VRChatArchiveModPlugin.Logger.LogInfo($"[AntiCrash] master OFF — {undone} clamp(s) undone"
+					Killiorim.Logger.LogInfo($"[AntiCrash] master OFF — {undone} clamp(s) undone"
 						+ (irreversible > 0 ? $" ({irreversible} destroyed component(s) cannot come back until the avatar reloads)" : "") + ".");
 				}
 				else
 				{
 					_processed.Clear();
-					VRChatArchiveModPlugin.Logger.LogInfo("[AntiCrash] master ON — rescanning.");
+					Killiorim.Logger.LogInfo("[AntiCrash] master ON — rescanning.");
 				}
 			}
 
@@ -260,20 +260,20 @@ namespace VRChatArchiveMod.Modules
 				if (!v)
 				{
 					int undone = RestoreVector(vt.Tag, out int irreversible);
-					VRChatArchiveModPlugin.Logger.LogInfo($"[AntiCrash] {vt.Tag} OFF — {undone} clamp(s) undone"
+					Killiorim.Logger.LogInfo($"[AntiCrash] {vt.Tag} OFF — {undone} clamp(s) undone"
 						+ (irreversible > 0 ? $" ({irreversible} irreversible)" : "") + ".");
 				}
 				else
 				{
 					_processed.Clear();
-					VRChatArchiveModPlugin.Logger.LogInfo($"[AntiCrash] {vt.Tag} ON — " + (master ? "rescanning." : "will apply once the master is on."));
+					Killiorim.Logger.LogInfo($"[AntiCrash] {vt.Tag} ON — " + (master ? "rescanning." : "will apply once the master is on."));
 				}
 			}
 
 			if (rescan)
 			{
 				_processed.Clear();
-				VRChatArchiveModPlugin.Logger.LogInfo("[AntiCrash] rescan requested — re-checking all loaded avatars" + (master ? "." : " once the master is on."));
+				Killiorim.Logger.LogInfo("[AntiCrash] rescan requested — re-checking all loaded avatars" + (master ? "." : " once the master is on."));
 			}
 
 			if (!master) return;
@@ -292,7 +292,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[AntiCrash] re-assert pass threw: {e.Message}");
+				Killiorim.Logger.LogError($"[AntiCrash] re-assert pass threw: {e.Message}");
 			}
 
 			int interval = ModConfig.ScanIntervalFrames.Value;
@@ -337,7 +337,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[AntiCrash] scan pass threw: {e}");
+				Killiorim.Logger.LogError($"[AntiCrash] scan pass threw: {e}");
 			}
 		}
 
@@ -352,7 +352,7 @@ namespace VRChatArchiveMod.Modules
 			_journal.Clear();
 			_journaled.Clear();
 			if (n > 0)
-				VRChatArchiveModPlugin.Logger.LogInfo($"[AntiCrash] scene changed — dropped {n} journal entr{(n == 1 ? "y" : "ies")} (targets unloaded with the world).");
+				Killiorim.Logger.LogInfo($"[AntiCrash] scene changed — dropped {n} journal entr{(n == 1 ? "y" : "ies")} (targets unloaded with the world).");
 		}
 
 		// The game is going down (or the plugin is): leave every avatar the way we found it.
@@ -362,12 +362,12 @@ namespace VRChatArchiveMod.Modules
 			{
 				int undone = RestoreAll(out int irreversible);
 				if (undone > 0 || irreversible > 0)
-					VRChatArchiveModPlugin.Logger.LogInfo($"[AntiCrash] shutdown — {undone} clamp(s) undone"
+					Killiorim.Logger.LogInfo($"[AntiCrash] shutdown — {undone} clamp(s) undone"
 						+ (irreversible > 0 ? $" ({irreversible} irreversible)" : "") + ".");
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[AntiCrash] shutdown restore threw: {e.Message}");
+				Killiorim.Logger.LogError($"[AntiCrash] shutdown restore threw: {e.Message}");
 			}
 		}
 
@@ -416,7 +416,7 @@ namespace VRChatArchiveMod.Modules
 				if (c.Irreversible) { irreversible++; continue; }
 				if (!Live(c.Target)) continue;
 				try { c.Undo(); undone++; }
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogDebug($"[AntiCrash] undo {c.Vector}/{c.Kind} threw: {e.Message}"); }
+				catch (Exception e) { Killiorim.Logger.LogDebug($"[AntiCrash] undo {c.Vector}/{c.Kind} threw: {e.Message}"); }
 			}
 			_journal.Clear();
 			_journaled.Clear();
@@ -436,7 +436,7 @@ namespace VRChatArchiveMod.Modules
 				else if (Live(c.Target))
 				{
 					try { c.Undo(); undone++; }
-					catch (Exception e) { VRChatArchiveModPlugin.Logger.LogDebug($"[AntiCrash] undo {c.Vector}/{c.Kind} threw: {e.Message}"); }
+					catch (Exception e) { Killiorim.Logger.LogDebug($"[AntiCrash] undo {c.Vector}/{c.Kind} threw: {e.Message}"); }
 				}
 				Forget(i);
 			}
@@ -456,7 +456,7 @@ namespace VRChatArchiveMod.Modules
 				catch { }
 			}
 			if (reapplied > 0 || dropped > 0)
-				VRChatArchiveModPlugin.Logger.LogDebug($"[AntiCrash] re-assert: {reapplied} clamp(s) re-imposed, {dropped} dead entr{(dropped == 1 ? "y" : "ies")} dropped, {_journal.Count} held.");
+				Killiorim.Logger.LogDebug($"[AntiCrash] re-assert: {reapplied} clamp(s) re-imposed, {dropped} dead entr{(dropped == 1 ? "y" : "ies")} dropped, {_journal.Count} held.");
 		}
 
 		// ---- the reversible mutations (each captures its original before writing) ----
@@ -615,7 +615,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					NeutralizedTotal += removed;
 					LastAvatar = avatar;
-					VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] neutralized {removed} crasher-tier item(s) on '{avatar}' ({tripped.Count} categor{(tripped.Count == 1 ? "y" : "ies")}: {string.Join(", ", tripped)}).");
+					Killiorim.Logger.LogWarning($"[AntiCrash] neutralized {removed} crasher-tier item(s) on '{avatar}' ({tripped.Count} categor{(tripped.Count == 1 ? "y" : "ies")}: {string.Join(", ", tripped)}).");
 				}
 
 				// ---- over budget: hide the whole avatar ----
@@ -635,17 +635,17 @@ namespace VRChatArchiveMod.Modules
 							() => { root.SetActive(wasActive); },
 							() => { if (!root.activeSelf) return false; root.SetActive(false); return true; });
 						LastAvatar = avatar;
-						VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] HIDDEN '{avatar}': {tripped.Count} categories tripped (limit {ModConfig.HideAvatarTrips.Value}) — {string.Join(", ", tripped)}.");
+						Killiorim.Logger.LogWarning($"[AntiCrash] HIDDEN '{avatar}': {tripped.Count} categories tripped (limit {ModConfig.HideAvatarTrips.Value}) — {string.Join(", ", tripped)}.");
 					}
 					catch (Exception e)
 					{
-						VRChatArchiveModPlugin.Logger.LogError($"[AntiCrash] could not hide '{avatar}': {e.Message}");
+						Killiorim.Logger.LogError($"[AntiCrash] could not hide '{avatar}': {e.Message}");
 					}
 				}
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[AntiCrash] ScanAndClamp threw on '{avatar}': {e}");
+				Killiorim.Logger.LogError($"[AntiCrash] ScanAndClamp threw on '{avatar}': {e}");
 			}
 		}
 
@@ -657,7 +657,7 @@ namespace VRChatArchiveMod.Modules
 			try { n = vector(); }
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[AntiCrash] {category} pass threw on '{avatar}': {e.Message}");
+				Killiorim.Logger.LogError($"[AntiCrash] {category} pass threw on '{avatar}': {e.Message}");
 				return 0;
 			}
 			if (n > 0) tripped.Add(category);
@@ -685,7 +685,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			int n = disabled + destroyed;
 			if (n > 0)
-				VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' {label}: {total} found, switched off {disabled} over limit {max}"
+				Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' {label}: {total} found, switched off {disabled} over limit {max}"
 					+ (destroyed > 0 ? $" ({destroyed} had no enabled flag and were destroyed — irreversible)" : "") + ".");
 			return n;
 		}
@@ -803,7 +803,7 @@ namespace VRChatArchiveMod.Modules
 
 			int n = capped + rateCapped + stopped;
 			if (n > 0)
-				VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' particles: {systems.Length} systems, {total} max particles total — capped {capped} over {perSystemCap}/system, {rateCapped} over rate {rateCap}, stopped {stopped} past budget {totalCap}.");
+				Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' particles: {systems.Length} systems, {total} max particles total — capped {capped} over {perSystemCap}/system, {rateCapped} over rate {rateCap}, stopped {stopped} past budget {totalCap}.");
 			return n;
 		}
 
@@ -881,7 +881,7 @@ namespace VRChatArchiveMod.Modules
 						total += tris;
 						if (Amplified(smr.sharedMesh, tris, out int sv, out long sr))
 						{
-							VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' amplified mesh '{MeshName(smr.sharedMesh)}': {tris} triangles from {sv} vertices ({sr}:1) — renderer disabled.");
+							Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' amplified mesh '{MeshName(smr.sharedMesh)}': {tris} triangles from {sv} vertices ({sr}:1) — renderer disabled.");
 							DisableRenderer(smr, VMeshes); amplified++;
 						}
 						else if (tris > perMesh) { DisableRenderer(smr, VMeshes); overMesh++; }
@@ -907,7 +907,7 @@ namespace VRChatArchiveMod.Modules
 						total += tris;
 						if (Amplified(mf.sharedMesh, tris, out int mv, out long mr))
 						{
-							VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' amplified mesh '{MeshName(mf.sharedMesh)}': {tris} triangles from {mv} vertices ({mr}:1) — renderer disabled.");
+							Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' amplified mesh '{MeshName(mf.sharedMesh)}': {tris} triangles from {mv} vertices ({mr}:1) — renderer disabled.");
 							DisableRenderer(r, VMeshes); amplified++;
 						}
 						else if (tris > perMesh) { DisableRenderer(r, VMeshes); overMesh++; }
@@ -919,7 +919,7 @@ namespace VRChatArchiveMod.Modules
 
 			int n = overMesh + overBudget + amplified;
 			if (n > 0)
-				VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' meshes: {meshes} meshes, {total} triangles — disabled {overMesh} over {perMesh}/mesh, {overBudget} past budget {budget}, {amplified} amplified (triangles ≫ vertices).");
+				Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' meshes: {meshes} meshes, {total} triangles — disabled {overMesh} over {perMesh}/mesh, {overBudget} past budget {budget}, {amplified} amplified (triangles ≫ vertices).");
 			return n;
 		}
 
@@ -980,7 +980,7 @@ namespace VRChatArchiveMod.Modules
 
 			int n = off + trimmed + swapped;
 			if (n > 0)
-				VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' materials: {rends.Length} renderers, {slots} slots — trimmed {trimmed} renderer(s) with more slots than sub-meshes, swapped {swapped} tiny-mesh renderer(s) off an unknown shader, disabled {off} past budget {cap}.");
+				Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' materials: {rends.Length} renderers, {slots} slots — trimmed {trimmed} renderer(s) with more slots than sub-meshes, swapped {swapped} tiny-mesh renderer(s) off an unknown shader, disabled {off} past budget {cap}.");
 			return n;
 		}
 
@@ -1114,7 +1114,7 @@ namespace VRChatArchiveMod.Modules
 
 			int n = cams + projs;
 			if (n > 0)
-				VRChatArchiveModPlugin.Logger.LogWarning($"[AntiCrash] '{avatar}' cameras: disabled {cams} Camera(s) and {projs} Projector(s).");
+				Killiorim.Logger.LogWarning($"[AntiCrash] '{avatar}' cameras: disabled {cams} Camera(s) and {projs} Projector(s).");
 			return n;
 		}
 

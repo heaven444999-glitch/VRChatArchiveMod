@@ -1,6 +1,6 @@
 using System;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// "Exception has been thrown by the target of an invocation." names the messenger, never the
 	// message. Anything reached by reflection — and in an IL2CPP mod that is most of it — arrives

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Central registry + dispatcher for feature modules.
 	// Every dispatch is guarded so one misbehaving module can never take down the others
@@ -194,12 +194,12 @@ namespace VRChatArchiveMod.Core
 				else
 				{
 					if (r.Suppressed > 0)
-						VRChatArchiveModPlugin.Logger?.LogError($"[{module?.Name ?? "?"}] {phase}: {r.Suppressed} identical error(s) suppressed in the last {now - r.At:F0}s.");
+						Killiorim.Logger?.LogError($"[{module?.Name ?? "?"}] {phase}: {r.Suppressed} identical error(s) suppressed in the last {now - r.At:F0}s.");
 					r.At = now; r.Suppressed = 0;
 				}
 			}
 			catch { }
-			VRChatArchiveModPlugin.Logger?.LogError($"[{module?.Name ?? "?"}] {phase} threw: {e}");
+			Killiorim.Logger?.LogError($"[{module?.Name ?? "?"}] {phase} threw: {e}");
 		}
 	}
 }

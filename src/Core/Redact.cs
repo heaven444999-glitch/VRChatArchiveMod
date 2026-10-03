@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Strips secrets out of anything the mod writes to a file a user will hand to somebody else.
 	//

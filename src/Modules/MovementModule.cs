@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Local, self-only movement: desktop fly + noclip with arrow-key rotation. This only
 	// moves the player's OWN avatar client-side — it does not touch, target, or affect
@@ -87,7 +87,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[Movement] update threw: {e}");
+				Killiorim.Logger.LogError($"[Movement] update threw: {e}");
 			}
 		}
 
@@ -103,7 +103,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[Movement] late update threw: {e}");
+				Killiorim.Logger.LogError($"[Movement] late update threw: {e}");
 			}
 		}
 
@@ -133,12 +133,12 @@ namespace VRChatArchiveMod.Modules
 					player.transform.position = dest;
 					if (_flying) { _holdPos = dest; _hasHold = true; }
 					PlayerRef.ZeroVelocity(player);
-					VRChatArchiveModPlugin.Logger.LogInfo($"[Movement] click-teleport to {dest} ({hit.distance:F1}m).");
+					Killiorim.Logger.LogInfo($"[Movement] click-teleport to {dest} ({hit.distance:F1}m).");
 				}
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[Movement] click-teleport failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[Movement] click-teleport failed: {e.Message}");
 			}
 		}
 
@@ -177,14 +177,14 @@ namespace VRChatArchiveMod.Modules
 			var api = PlayerRef.LocalApi();
 			if (api == null)
 			{
-				if (!_rotLogged) { _rotLogged = true; VRChatArchiveModPlugin.Logger.LogWarning("[Movement] rotate: no local VRCPlayerApi — turning unavailable."); }
+				if (!_rotLogged) { _rotLogged = true; Killiorim.Logger.LogWarning("[Movement] rotate: no local VRCPlayerApi — turning unavailable."); }
 				return;
 			}
 
 			Quaternion before;
 			Vector3 pos;
 			try { before = api.GetRotation(); pos = api.GetPosition(); }
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[Movement] rotate: read failed: {e.Message}"); return; }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[Movement] rotate: read failed: {e.Message}"); return; }
 
 			// pure heading change: drop any pitch/roll the rig carries
 			Vector3 fwd = before * Vector3.forward;
@@ -206,14 +206,14 @@ namespace VRChatArchiveMod.Modules
 				if (nowP >= _nextRotProbe)
 				{
 					_nextRotProbe = nowP + 1f;
-					VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate probe: method #" + m + " asked " + yaw.ToString("F2") + " deg, heading " + before.eulerAngles.y.ToString("F1") + " -> " + after.eulerAngles.y.ToString("F1") + (moved ? "" : " (NO CHANGE)"));
+					Killiorim.Logger.LogInfo("[Movement] rotate probe: method #" + m + " asked " + yaw.ToString("F2") + " deg, heading " + before.eulerAngles.y.ToString("F1") + " -> " + after.eulerAngles.y.ToString("F1") + (moved ? "" : " (NO CHANGE)"));
 				}
 				if (moved || _rotMethod >= 0)
 				{
 					if (_rotMethod < 0)
 					{
 						_rotMethod = m;
-						VRChatArchiveModPlugin.Logger.LogInfo($"[Movement] rotate: using method #{m}.");
+						Killiorim.Logger.LogInfo($"[Movement] rotate: using method #{m}.");
 					}
 					_holdPos = pos; _hasHold = true;
 					return;
@@ -223,7 +223,7 @@ namespace VRChatArchiveMod.Modules
 			if (_rotMethod < 0 && !_rotLogged)
 			{
 				_rotLogged = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[Movement] rotate: none of the 5 methods changed GetRotation() — turning unavailable on this build.");
+				Killiorim.Logger.LogWarning("[Movement] rotate: none of the 5 methods changed GetRotation() — turning unavailable on this build.");
 			}
 		}
 
@@ -276,7 +276,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[Movement] rotate method #{method} threw: {e.Message}");
+				Killiorim.Logger.LogWarning($"[Movement] rotate method #{method} threw: {e.Message}");
 				return false;
 			}
 		}
@@ -315,14 +315,14 @@ namespace VRChatArchiveMod.Modules
 						ctl = tryCast.Invoke(b, null);
 						break;
 					}
-					if (ctl == null) { VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate: no GamelikeInputController on the local player (VR, or renamed)."); return false; }
+					if (ctl == null) { Killiorim.Logger.LogInfo("[Movement] rotate: no GamelikeInputController on the local player (VR, or renamed)."); return false; }
 					foreach (var pi in ctl.GetType().GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
 					{
 						if (pi.PropertyType.Name != "NeckMouseRotator") continue;
 						try { _neck = pi.GetValue(ctl); } catch { }
 						if (_neck != null) break;
 					}
-					if (_neck == null) { VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate: GamelikeInputController has no NeckMouseRotator member."); return false; }
+					if (_neck == null) { Killiorim.Logger.LogInfo("[Movement] rotate: GamelikeInputController has no NeckMouseRotator member."); return false; }
 					foreach (var mi in _neck.GetType().GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
 					{
 						var ps = mi.GetParameters();
@@ -334,7 +334,7 @@ namespace VRChatArchiveMod.Modules
 							var ps = mi.GetParameters();
 							if (ps.Length == 1 && ps[0].ParameterType == typeof(Vector3) && mi.ReturnType == typeof(void)) { _neckTurn = mi; break; }
 						}
-					VRChatArchiveModPlugin.Logger.LogInfo("[Movement] rotate: NeckMouseRotator " + (_neckTurn != null ? "reached via " + _neckTurn.Name : "has no (Vector3) method"));
+					Killiorim.Logger.LogInfo("[Movement] rotate: NeckMouseRotator " + (_neckTurn != null ? "reached via " + _neckTurn.Name : "has no (Vector3) method"));
 				}
 				if (_neck == null || _neckTurn == null) return false;
 				_neckTurn.Invoke(_neck, new object[] { new Vector3(0f, yawDegrees, 0f) });
@@ -342,7 +342,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[Movement] rotate: neck path threw: " + e.Message);
+				Killiorim.Logger.LogWarning("[Movement] rotate: neck path threw: " + e.Message);
 				_neckTurn = null;
 				return false;
 			}
@@ -404,7 +404,7 @@ namespace VRChatArchiveMod.Modules
 				// Leaving fly must also drop noclip so collision comes back.
 				if (_noclip) SetNoclip(false);
 			}
-			VRChatArchiveModPlugin.Logger.LogInfo($"[Movement] fly {(value ? "ON" : "OFF")}.");
+			Killiorim.Logger.LogInfo($"[Movement] fly {(value ? "ON" : "OFF")}.");
 		}
 
 		// Noclip on/off: disables the local player's solid colliders so you pass through world
@@ -420,7 +420,7 @@ namespace VRChatArchiveMod.Modules
 					_disabled.Clear();
 					CollectPlayerColliders(_disabled);
 					DisableAll(_disabled);
-					VRChatArchiveModPlugin.Logger.LogInfo($"[Movement] noclip ON — disabled {_disabled.Count} collider(s)"
+					Killiorim.Logger.LogInfo($"[Movement] noclip ON — disabled {_disabled.Count} collider(s)"
 						+ (_disabled.Count == 0 ? " (NONE FOUND — noclip won't work; tell me)" : "") + ".");
 				}
 				else
@@ -431,12 +431,12 @@ namespace VRChatArchiveMod.Modules
 						try { if (_disabled[i] != null) { _disabled[i].enabled = true; restored++; } } catch { }
 					}
 					_disabled.Clear();
-					VRChatArchiveModPlugin.Logger.LogInfo($"[Movement] noclip OFF — restored {restored} collider(s).");
+					Killiorim.Logger.LogInfo($"[Movement] noclip OFF — restored {restored} collider(s).");
 				}
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[Movement] noclip toggle failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[Movement] noclip toggle failed: {e.Message}");
 			}
 
 			_noclip = value;
@@ -496,7 +496,7 @@ namespace VRChatArchiveMod.Modules
 				while (root.parent != null && guard++ < 32) root = root.parent;
 				var sb = new System.Text.StringBuilder("[Movement] local player rig from root:\n");
 				Walk(root, 0, sb);
-				VRChatArchiveModPlugin.Logger.LogInfo(sb.ToString());
+				Killiorim.Logger.LogInfo(sb.ToString());
 			}
 			catch { }
 		}

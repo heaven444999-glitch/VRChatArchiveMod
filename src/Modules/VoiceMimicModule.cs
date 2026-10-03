@@ -5,9 +5,9 @@ using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VOICE MIMIC — your outgoing voice BECOMES the target's voice stream. Nothing else moves.
 	//
@@ -76,7 +76,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				Status = "voice relay unavailable: " + HookInfo;
 				Toast.Show("voice mimic: " + Status);
-				VRChatArchiveModPlugin.Logger.LogWarning("[VoiceMimic] " + Status);
+				Killiorim.Logger.LogWarning("[VoiceMimic] " + Status);
 				return;
 			}
 
@@ -91,13 +91,13 @@ namespace VRChatArchiveMod.Modules
 
 			Status = "relaying voice of " + TargetName;
 			Toast.Show("voice mimic: " + TargetName);
-			VRChatArchiveModPlugin.Logger.LogInfo("[VoiceMimic] relay ON: target " + TargetName + " (actor " + _targetActor + ") -> us (actor " + _localActor + ") on Photon code " + _code + ". MuteSelf=" + MuteSelf + " (off = stay muted yourself).");
+			Killiorim.Logger.LogInfo("[VoiceMimic] relay ON: target " + TargetName + " (actor " + _targetActor + ") -> us (actor " + _localActor + ") on Photon code " + _code + ". MuteSelf=" + MuteSelf + " (off = stay muted yourself).");
 		}
 
 		public static void Stop(string why)
 		{
 			if (!Active) return;
-			VRChatArchiveModPlugin.Logger.LogInfo("[VoiceMimic] relay OFF (" + why + "): relayed " + _relayed + " packet(s) from " + TargetName
+			Killiorim.Logger.LogInfo("[VoiceMimic] relay OFF (" + why + "): relayed " + _relayed + " packet(s) from " + TargetName
 				+ ", dropped " + _droppedOwn + " of our own, header patched " + _headerPatched + " / left " + _headerLeft + ".");
 			TargetUid = ""; TargetName = ""; _targetActor = -1;
 			Status = why;
@@ -176,7 +176,7 @@ namespace VRChatArchiveMod.Modules
 					}
 				if (target != null)
 				{
-					VRChatArchiveModPlugin.HarmonyInstance.Patch(target, postfix: new HarmonyMethod(typeof(VoiceMimicModule).GetMethod(nameof(OnEventPostfix), BindingFlags.Static | BindingFlags.NonPublic)));
+					Killiorim.HarmonyInstance.Patch(target, postfix: new HarmonyMethod(typeof(VoiceMimicModule).GetMethod(nameof(OnEventPostfix), BindingFlags.Static | BindingFlags.NonPublic)));
 					_recvHooked = true; notes.Append("recv=VRCNetworkingClient.OnEvent ");
 				}
 				else notes.Append("recv=OnEvent(EventData) not found ");
@@ -196,7 +196,7 @@ namespace VRChatArchiveMod.Modules
 						if (ps.Length != 4 || ps[0].ParameterType != typeof(byte)) continue;
 						if (ps[2].ParameterType.Name.IndexOf("RaiseEventOptions", StringComparison.Ordinal) < 0) continue;
 						if (ps[3].ParameterType.Name.IndexOf("SendOptions", StringComparison.Ordinal) < 0) continue;
-						VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: new HarmonyMethod(typeof(VoiceMimicModule).GetMethod(nameof(RaisePrefix), BindingFlags.Static | BindingFlags.NonPublic)));
+						Killiorim.HarmonyInstance.Patch(m, prefix: new HarmonyMethod(typeof(VoiceMimicModule).GetMethod(nameof(RaisePrefix), BindingFlags.Static | BindingFlags.NonPublic)));
 						if (_raise == null) { _raise = m; _optType = ps[2].ParameterType; _sendOptType = ps[3].ParameterType; }
 						_sendHooked = true; notes.Append("send=").Append(t.Name).Append('.').Append(m.Name).Append(' ');
 					}
@@ -206,7 +206,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e) { notes.Append("send failed: ").Append(e.Message).Append(' '); }
 
 			HookInfo = notes.ToString().Trim();
-			VRChatArchiveModPlugin.Logger.LogInfo("[VoiceMimic] hooks: " + HookInfo);
+			Killiorim.Logger.LogInfo("[VoiceMimic] hooks: " + HookInfo);
 		}
 
 		// SEND PREFIX. Two jobs: remember the client instance we must call OpRaiseEvent on, and drop
@@ -239,7 +239,7 @@ namespace VRChatArchiveMod.Modules
 
 				object data = _pCustom.GetValue(__0);
 				var arr = (data as Il2CppObjectBase)?.TryCast<Il2CppStructArray<byte>>();
-				if (arr == null) { if (!_firstLogged) { _firstLogged = true; VRChatArchiveModPlugin.Logger.LogWarning("[VoiceMimic] voice payload is not a byte[] (" + (data?.GetType().Name ?? "null") + ") - cannot relay on this build."); } return; }
+				if (arr == null) { if (!_firstLogged) { _firstLogged = true; Killiorim.Logger.LogWarning("[VoiceMimic] voice payload is not a byte[] (" + (data?.GetType().Name ?? "null") + ") - cannot relay on this build."); } return; }
 
 				int n = arr.Length;
 				if (n <= 0) return;
@@ -261,7 +261,7 @@ namespace VRChatArchiveMod.Modules
 					_firstLogged = true;
 					var hex = new StringBuilder();
 					for (int i = 0; i < Math.Min(12, n); i++) hex.Append(arr[i].ToString("x2")).Append(' ');
-					VRChatArchiveModPlugin.Logger.LogInfo("[VoiceMimic] first voice packet from actor " + _targetActor + ": " + n + " bytes, head " + hex.ToString().Trim()
+					Killiorim.Logger.LogInfo("[VoiceMimic] first voice packet from actor " + _targetActor + ": " + n + " bytes, head " + hex.ToString().Trim()
 						+ (patched ? " (actor header patched to " + _localActor + ")" : " (no actor header recognised; sent as-is)"));
 				}
 
@@ -269,7 +269,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				if (!_firstLogged) { _firstLogged = true; VRChatArchiveModPlugin.Logger.LogWarning("[VoiceMimic] relay read failed: " + e.Message); }
+				if (!_firstLogged) { _firstLogged = true; Killiorim.Logger.LogWarning("[VoiceMimic] relay read failed: " + e.Message); }
 			}
 		}
 
@@ -292,7 +292,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				if (_relayed == 0) { VRChatArchiveModPlugin.Logger.LogWarning("[VoiceMimic] relay send failed: " + e.Message); Stop("send failed - " + Short(e.Message)); }
+				if (_relayed == 0) { Killiorim.Logger.LogWarning("[VoiceMimic] relay send failed: " + e.Message); Stop("send failed - " + Short(e.Message)); }
 			}
 		}
 

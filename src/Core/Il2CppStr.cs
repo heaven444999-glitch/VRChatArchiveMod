@@ -1,7 +1,7 @@
 using System;
 using Il2CppInterop.Runtime;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// READING AN IL2CPP STRING WITHOUT BETTING THE PROCESS ON IT.
 	//
@@ -12,7 +12,7 @@ namespace VRChatArchiveMod.Core
 	//        at System.String.Ctor(Char*, Int32, Int32)
 	//        at Il2CppInterop.Runtime.IL2CPP.Il2CppStringToManaged(IntPtr)
 	//        at VRC.SDKBase.VRCPlayerApi.get_displayName()
-	//        at VRChatArchiveMod.Modules.SpoofModule.OnUpdate()
+	//        at Killiorim.Modules.SpoofModule.OnUpdate()
 	//
 	// Il2CppStringToManaged does no validation at all: it takes the pointer, reads the length out of
 	// it, and hands both to String.Ctor, which memmoves. Feed it a stale pointer and the fault lands

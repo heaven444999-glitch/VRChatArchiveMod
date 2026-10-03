@@ -6,9 +6,9 @@ using System.Text;
 using System.Text.Json;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FAVOURITES OF ANY KIND — worlds, users and groups — resolved to name + thumbnail.
 	//
@@ -307,7 +307,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				get
 				{
-					string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "thumbs");
+					string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "thumbs");
 					try { Directory.CreateDirectory(d); } catch { }
 					return d;
 				}

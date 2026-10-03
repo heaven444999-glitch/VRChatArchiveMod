@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// EVERY SETTING THE MOD HAS, as one list.
 	//
@@ -56,7 +56,7 @@ namespace VRChatArchiveMod.Core
 					return c != 0 ? c : string.Compare(x.Key, y.Key, StringComparison.OrdinalIgnoreCase);
 				});
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ConfigRegistry] scan: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ConfigRegistry] scan: " + e.Message); }
 			_entries = list;
 			return _entries;
 		}

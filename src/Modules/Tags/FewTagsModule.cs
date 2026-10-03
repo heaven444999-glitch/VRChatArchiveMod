@@ -9,9 +9,9 @@ using Il2CppInterop.Runtime;
 using TMPro;
 using UnityEngine;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FewTags integration: downloads the community tag database published by Fewdys
 	// (github.com/Fewdys/FewTags) and renders each tagged user's tags above their
@@ -100,15 +100,15 @@ namespace VRChatArchiveMod.Modules
 				if (ModConfig.FewTagsSpacing.Value > 60f) { fixes.Append(" Spacing ").Append(ModConfig.FewTagsSpacing.Value).Append("->0(auto)"); ModConfig.FewTagsSpacing.Value = 0f; }
 				if (ModConfig.FewTagsBaseYExpanded.Value > 400f) { fixes.Append(" BaseYExpanded ").Append(ModConfig.FewTagsBaseYExpanded.Value).Append("->205"); ModConfig.FewTagsBaseYExpanded.Value = 205f; }
 				if (ModConfig.FewTagsBaseY.Value > 250f) { fixes.Append(" BaseY ").Append(ModConfig.FewTagsBaseY.Value).Append("->119"); ModConfig.FewTagsBaseY.Value = 119.05f; }
-				if (fixes.Length > 0) VRChatArchiveModPlugin.Logger.LogWarning("[FewTags] layout values reset to sane ones:" + fixes);
+				if (fixes.Length > 0) Killiorim.Logger.LogWarning("[FewTags] layout values reset to sane ones:" + fixes);
 			}
 			catch { }
 			if (!ModConfig.FewTagsEnabled.Value)
 			{
-				VRChatArchiveModPlugin.Logger.LogInfo("[FewTags] disabled by config.");
+				Killiorim.Logger.LogInfo("[FewTags] disabled by config.");
 				return;
 			}
-			VRChatArchiveModPlugin.Logger.LogInfo("[FewTags] armed — community tag DB by Fewdys, plates via nameplate quickStats clone.");
+			Killiorim.Logger.LogInfo("[FewTags] armed — community tag DB by Fewdys, plates via nameplate quickStats clone.");
 		}
 
 		public override void OnUpdate()
@@ -127,7 +127,7 @@ namespace VRChatArchiveMod.Modules
 				_db = pending;
 				_dbVersion++;
 				RecordsLoaded = _db.Count;
-				VRChatArchiveModPlugin.Logger.LogInfo($"[FewTags] database applied: {_db.Count} active record(s).");
+				Killiorim.Logger.LogInfo($"[FewTags] database applied: {_db.Count} active record(s).");
 			}
 
 			// Periodic refresh + the menu's "Update DB now" button.
@@ -156,7 +156,7 @@ namespace VRChatArchiveMod.Modules
 		private static HttpClient CreateClient()
 		{
 			var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-			c.DefaultRequestHeaders.Add("User-Agent", "VRChatArchiveMod-FewTags/1.0");
+			c.DefaultRequestHeaders.Add("User-Agent", "Killiorim-FewTags/1.0");
 			return c;
 		}
 
@@ -177,7 +177,7 @@ namespace VRChatArchiveMod.Modules
 				catch (Exception e)
 				{
 					LastFetchInfo = "fetch failed: " + e.Message;
-					VRChatArchiveModPlugin.Logger.LogWarning($"[FewTags] DB fetch failed: {e.Message}");
+					Killiorim.Logger.LogWarning($"[FewTags] DB fetch failed: {e.Message}");
 				}
 				finally
 				{
@@ -275,7 +275,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[FewTags] apply pass threw: {e}");
+				Killiorim.Logger.LogError($"[FewTags] apply pass threw: {e}");
 			}
 			TaggedHere = taggedHere;
 			PruneDead();
@@ -330,7 +330,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_loggedFirstBuild)
 				{
 					_loggedFirstBuild = true;
-					VRChatArchiveModPlugin.Logger.LogWarning($"[FewTags] could not resolve nameplate for a tagged user ({rec.Tags.Length} tag(s)) — quickStats/contents not found.");
+					Killiorim.Logger.LogWarning($"[FewTags] could not resolve nameplate for a tagged user ({rec.Tags.Length} tag(s)) — quickStats/contents not found.");
 				}
 				return;
 			}
@@ -373,7 +373,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_loggedFirstBuild)
 				{
 					_loggedFirstBuild = true;
-					VRChatArchiveModPlugin.Logger.LogInfo($"[FewTags] rendered {applied.Clones.Count} plate(s) for a tagged user (baseY={baseY}, spacing={spacing}).");
+					Killiorim.Logger.LogInfo($"[FewTags] rendered {applied.Clones.Count} plate(s) for a tagged user (baseY={baseY}, spacing={spacing}).");
 				}
 			}
 		}
@@ -434,7 +434,7 @@ namespace VRChatArchiveMod.Modules
 		private static int Depth(Transform t, Transform root) { int d=0; while (t!=null && t!=root && d<10) { d++; t=t.parent; } return d; }
 
 
-		private static bool Log(string msg) { try { VRChatArchiveModPlugin.Logger.LogWarning(msg); } catch { } return true; }
+		private static bool Log(string msg) { try { Killiorim.Logger.LogWarning(msg); } catch { } return true; }
 
 		internal static string LastAnchorName { get; private set; } = "Trust Text";
 
@@ -638,7 +638,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[FewTags] plate build failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[FewTags] plate build failed: {e.Message}");
 				return null;
 			}
 		}
@@ -696,16 +696,16 @@ namespace VRChatArchiveMod.Modules
 					break;
 				}
 				if (_nameplateIl2cppType == null)
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[FewTags] PlayerNameplate type not resolvable by name on this build — "
 						+ "plates will be anchored structurally instead.");
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[FewTags] type resolve failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[FewTags] type resolve failed: {e.Message}");
 			}
 			if (_playerType == null || _tryCastPlayer == null)
-				VRChatArchiveModPlugin.Logger.LogWarning("[FewTags] VRC.Player type unavailable — tags cannot render this build.");
+				Killiorim.Logger.LogWarning("[FewTags] VRC.Player type unavailable — tags cannot render this build.");
 		}
 
 		// Enumerate players via the SDK-stable VRCPlayerApi.AllPlayers (same source as ESP),
@@ -807,7 +807,7 @@ namespace VRChatArchiveMod.Modules
 			if (_loggedFailure != why)
 			{
 				_loggedFailure = why;
-				try { VRChatArchiveModPlugin.Logger.LogWarning("[Nameplate] resolve failed: " + why); } catch { }
+				try { Killiorim.Logger.LogWarning("[Nameplate] resolve failed: " + why); } catch { }
 			}
 			return false;
 		}
@@ -926,11 +926,11 @@ namespace VRChatArchiveMod.Modules
 				}
 
 				if (found == 0) sb.Append("  nothing in the scene is named *Nameplate*.\n");
-				VRChatArchiveModPlugin.Logger.LogWarning(sb.ToString());
+				Killiorim.Logger.LogWarning(sb.ToString());
 			}
 			catch (Exception e)
 			{
-				try { VRChatArchiveModPlugin.Logger.LogWarning("[Nameplate] probe failed: " + e.Message); } catch { }
+				try { Killiorim.Logger.LogWarning("[Nameplate] probe failed: " + e.Message); } catch { }
 			}
 		}
 
@@ -1047,7 +1047,7 @@ namespace VRChatArchiveMod.Modules
 					_plateShapeLogged = true;
 					try
 					{
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							"[Nameplate] container='NameplateContainer' | panel='" + panel.name
 							+ "' | anchor='" + LastAnchorName + "' fontSize=" + AnchorFontSize.ToString("0.#")
 							+ " | spacing=" + EffectiveSpacing().ToString("0.#"));
@@ -1149,7 +1149,7 @@ namespace VRChatArchiveMod.Modules
 				if (seen != null)
 				{
 					_fieldsDumped = true;
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[Nameplate] VRCPlayer GameObject fields seen: "
 						+ (seen.Count == 0 ? "(none)" : string.Join(", ", seen)));
 				}

@@ -4,15 +4,15 @@ using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using Il2CppInterop.Runtime.Injection;
 using UnityEngine;
-using VRChatArchiveMod.Core;
-using VRChatArchiveMod.Modules;
+using Killiorim.Core;
+using Killiorim.Modules;
 
-namespace VRChatArchiveMod
+namespace Killiorim
 {
-	// Entry point for VRCHAT ARCHIVE MOD as a BepInEx 6 (IL2CPP) plugin.
+	// Entry point for KILLIORIM as a BepInEx 6 (IL2CPP) plugin.
 	// Ported from the MelonLoader-based Munchen client to run on current VRChat.
 	[BepInPlugin(PluginInfo.Guid, PluginInfo.Name, PluginInfo.Version)]
-	public class VRChatArchiveModPlugin : BasePlugin
+	public class Killiorim : BasePlugin
 	{
 		internal static ManualLogSource Logger;
 		internal static Harmony HarmonyInstance;
@@ -49,6 +49,7 @@ namespace VRChatArchiveMod
 		{
 			// Registered first: it subscribes to the log so it captures every module below.
 			ModuleManager.Register(new DiagnosticsModule());
+			ModuleManager.Register(new QMConsoleModule());
 			// Instruments only � the spike hunter costs one float compare per frame when idle.
 			ModuleManager.Register(new AntiCrashModule());
 			// SELF HIDE: your own avatar not drawn on your screen (AntiCrash/SelfHide).
@@ -74,7 +75,6 @@ namespace VRChatArchiveMod
 			// MENU BACKGROUNDS: the VRC+ backgrounds (parallax included) shown locally. Flips one bool
 			// on the game's own BackgroundOption assets — no API model is touched, nothing is sent.
 			ModuleManager.Register(new VrcPlusBackgroundsModule());
-			ModuleManager.Register(new LaunchpadConsoleModule());
 			ModuleManager.Register(new CacheWatchModule());
 			// WHO BLOCKED ME: fills the sets the player lists tag with. Draws nothing, asks once.
 			ModuleManager.Register(new BlockedByProbeModule());
@@ -179,10 +179,12 @@ namespace VRChatArchiveMod
 			ModuleManager.Register(new CapsuleEspModule());
 			ModuleManager.Register(new HighlightEspModule());
 			ModuleManager.Register(new EraLoadingModule());
+			// The paired custom wing panels share one switch: roster on the left, local avatar on the right.
+			ModuleManager.Register(new WingPlayersModule());
+			ModuleManager.Register(new WingLogModule());
+			ModuleManager.Register(new LaunchpadConsoleModule());
 			ModuleManager.Register(new SpawnSoundModule());
 			ModuleManager.Register(new SignatureSoundModule());
-			ModuleManager.Register(new RadarModule());
-			ModuleManager.Register(new InstancePanelsModule());
 			ModuleManager.Register(new VaTagsModule());
 			ModuleManager.Register(new VideoUrlModule());
 			ModuleManager.Register(new WatchlistModule());
@@ -197,9 +199,6 @@ namespace VRChatArchiveMod
 			// inside the headset is the one piece of UI the desktop client cannot replace.
 			ModuleManager.Register(new QuickMenuTabModule());
 			ModuleManager.Register(new UserMenuModule());
-			ModuleManager.Register(new WingPlayersModule());
-			// The other half of the pair: players in the LEFT wing, the instance log in the RIGHT one.
-			ModuleManager.Register(new WingLogModule());
 			// DUMP MENU TREE. Registered because it MUST be: its Request() only raises a flag, and the
 			// walk happens in OnUpdate — which the manager never calls for a module it does not hold.
 			// Unregistered, the button reported success (the client toasts on send, not on completion)
@@ -215,7 +214,7 @@ namespace VRChatArchiveMod
 			try
 			{
 				ClassInjector.RegisterTypeInIl2Cpp<ModRunner>();
-				var host = new GameObject("VRChatArchiveMod");
+				var host = new GameObject("Killiorim");
 				host.hideFlags = HideFlags.HideAndDontSave;
 				Object.DontDestroyOnLoad(host);
 				host.AddComponent<ModRunner>();
@@ -231,7 +230,7 @@ namespace VRChatArchiveMod
 	internal static class PluginInfo
 	{
 		public const string Guid = "org.vrchatarchive.mod";
-		public const string Name = "VRCHAT ARCHIVE MOD";
+		public const string Name = "KILLIORIUM";
 		public const string Version = "3.9.58";
 	}
 }

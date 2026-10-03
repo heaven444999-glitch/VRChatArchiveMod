@@ -6,7 +6,7 @@ using UnityEngine;
 using VRC.Core;
 using VRC.SDKBase;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Shared, cached VRCPlayerApi -> APIUser resolver.
 	//
@@ -102,7 +102,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[ApiUsers] trust reflection unavailable: {e.Message}");
+				Killiorim.Logger.LogWarning($"[ApiUsers] trust reflection unavailable: {e.Message}");
 			}
 		}
 
@@ -180,10 +180,10 @@ namespace VRChatArchiveMod.Core
 				_pAgeVerified = Find(t, "ageVerified", "isAgeVerified");
 				_pAgeStatus   = Find(t, "ageVerificationStatus");
 				_pPlatform    = Find(t, "last_platform", "platform");
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[ApiUsers] badges: vrc+={_pSupporter != null} 18+={_pAgeVerified != null}/{_pAgeStatus != null} platform={_pPlatform != null}");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[ApiUsers] badge reflection failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[ApiUsers] badge reflection failed: {e.Message}"); }
 		}
 
 		private static PropertyInfo Find(Type t, params string[] names)

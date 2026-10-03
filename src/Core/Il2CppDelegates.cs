@@ -2,7 +2,7 @@
 using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// ONE GATE IN FRONT OF A CALL THAT KILLS THE GAME.
 	//
@@ -45,7 +45,7 @@ namespace VRChatArchiveMod.Core
 			try { return DelegateSupport.ConvertDelegate<T>(managed); }
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[" + who + "] il2cpp delegate conversion failed: " + Unwrap.Describe(e));
 				return null;
 			}
@@ -55,11 +55,11 @@ namespace VRChatArchiveMod.Core
 		{
 			if (_explained)
 			{
-				VRChatArchiveModPlugin.Logger.LogInfo("[" + who + "] off: il2cpp delegates disabled.");
+				Killiorim.Logger.LogInfo("[" + who + "] off: il2cpp delegates disabled.");
 				return;
 			}
 			_explained = true;
-			VRChatArchiveModPlugin.Logger.LogWarning(
+			Killiorim.Logger.LogWarning(
 				"[" + who + "] off: Il2CppInterop's ConvertDelegate crashes this VRChat build (access "
 				+ "violation in Il2CppSystem.Delegate.set_method_ptr), so features built on it are "
 				+ "held back. Re-enable with [Compatibility] AllowIl2CppDelegates = true.");

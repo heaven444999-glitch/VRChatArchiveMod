@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FLOAT OBJECTS — a TOGGLE that removes gravity from every pickup in the world.
 	//
@@ -114,7 +114,7 @@ namespace VRChatArchiveMod.Modules
 				Status = "object gravity removed — scanning…";
 			}
 			VaTagsModule.LastStatus = Status;
-			VRChatArchiveModPlugin.Logger.LogInfo("[ObjectGravity] " + Status);
+			Killiorim.Logger.LogInfo("[ObjectGravity] " + Status);
 		}
 
 		// EVERY ENTRY, WITH THE LIVENESS PROOF CACHED. Called ten times a second by OnFixedUpdate,
@@ -182,7 +182,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				_scan = null;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ObjectGravity] query: " + e.Message);
+				Killiorim.Logger.LogWarning("[ObjectGravity] query: " + e.Message);
 			}
 			sw.Stop();
 			_queryMs = sw.Elapsed.TotalMilliseconds;
@@ -248,7 +248,7 @@ namespace VRChatArchiveMod.Modules
 			if (_scanAdded > 0)
 				Status = "object gravity removed — " + _bodies.Count + " pickup(s) floating";
 			if (_queryMs + _scanMs > 40.0 || _scanAdded > 0)
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[ObjectGravity] sweep: " + n + " pickup(s) seen, +" + _scanAdded + " taken, "
 					+ _scanSkipped + " skipped (no ObjectSync), " + _bodies.Count + " floating — query "
 					+ _queryMs.ToString("0.#") + " ms, walk " + _scanMs.ToString("0.#") + " ms spread over "

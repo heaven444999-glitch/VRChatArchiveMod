@@ -9,9 +9,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VRChatArchive player tagging: community tags keyed by VRChat user id, stored in the
 	// site's DATA/va_tags_db.jsonl and served through /api/va-tags on vrchatarchive.org.
@@ -98,11 +98,11 @@ namespace VRChatArchiveMod.Modules
 
 		// --- VRChat Archive membership -------------------------------------------------
 		// Every mod user self-tags with this on first sync. It is the badge that marks a
-		// member across the whole ecosystem: pink→violet gradient name in the roster, a
-		// gradient plate over their head, and an RGB banner when one joins your instance.
+		// member across the whole ecosystem: white→grey gradient name in the roster, a
+		// neutral plate over their head, and a monochrome banner when one joins your instance.
 		public const string MemberTagText = "VRChat Archive Member";
-		private const string MemberPink = "#FF6AD5";
-		private const string MemberViolet = "#8143E6";
+		private const string MemberPink = "#F4F4F4";
+		private const string MemberViolet = "#707070";
 		private static bool _memberTagChecked;
 
 		public static bool IsMember(string uid)
@@ -112,11 +112,11 @@ namespace VRChatArchiveMod.Modules
 			return false;
 		}
 
-		// Per-character pink→violet gradient as TMP/IMGUI rich text.
+		// Per-character white→grey gradient as TMP/IMGUI rich text.
 		public static string Gradient(string text, string fromHex = MemberPink, string toHex = MemberViolet)
 		{
 			if (string.IsNullOrEmpty(text)) return "";
-			Color a = ParseColor(fromHex, Color.magenta), b = ParseColor(toHex, Color.blue);
+			Color a = ParseColor(fromHex, Color.white), b = ParseColor(toHex, Color.gray);
 			string[] g = Glyphs(text);          // per glyph, so an emoji is not split in half
 			var sb = new StringBuilder(g.Length * 20);
 			for (int i = 0; i < g.Length; i++)
@@ -163,7 +163,7 @@ namespace VRChatArchiveMod.Modules
 		public VaTagsModule() { Instance = this; }
 
 		public override void OnInitialize()
-			=> VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] armed — community tags via " + ModConfig.VaTagsApiBase.Value);
+			=> Killiorim.Logger.LogInfo("[VaTags] armed — community tags via " + ModConfig.VaTagsApiBase.Value);
 
 		public override void OnUpdate()
 		{
@@ -171,7 +171,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				while (MainThreadQueue.TryDequeue(out Action act))
 				{
-					try { act(); } catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[VaTags] queued action threw: {e.Message}"); }
+					try { act(); } catch (Exception e) { Killiorim.Logger.LogWarning($"[VaTags] queued action threw: {e.Message}"); }
 				}
 
 				// THE ROSTER IS SHARED INFRASTRUCTURE, not a VaTags feature.
@@ -228,7 +228,7 @@ namespace VRChatArchiveMod.Modules
 				if (vaOn && ModConfig.VaTagsShowPlates.Value) ApplyPlates();
 				else if (_plates.Count > 0) RemoveAllPlates();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[VaTags] update threw: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[VaTags] update threw: {e}"); }
 		}
 
 		// Animate effect plates (rainbow/blink/wave/glow), throttled to 15 Hz.
@@ -331,7 +331,7 @@ namespace VRChatArchiveMod.Modules
 				if (targetApiAvatar == null)
 				{
 					LastStatus = "clone failed: target's ApiAvatar not readable" + (string.IsNullOrEmpty(avId) ? "" : " (id copied)");
-					VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: target ApiAvatar null for " + entry.Name);
+					Killiorim.Logger.LogWarning("[VaTags] clone: target ApiAvatar null for " + entry.Name);
 					return;
 				}
 
@@ -345,7 +345,7 @@ namespace VRChatArchiveMod.Modules
 				if (string.IsNullOrEmpty(avId))
 				{
 					LastStatus = "clone failed: their avatar id isn't readable yet — wait for their avatar to load and retry";
-					VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: target avatar id empty, refusing to fire blind.");
+					Killiorim.Logger.LogWarning("[VaTags] clone: target avatar id empty, refusing to fire blind.");
 					return;
 				}
 
@@ -353,11 +353,11 @@ namespace VRChatArchiveMod.Modules
 				if (strategies.Count == 0)
 				{
 					LastStatus = "clone unavailable on this build (id copied)";
-					VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: no strategy available.");
+					Killiorim.Logger.LogWarning("[VaTags] clone: no strategy available.");
 					return;
 				}
 
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[VaTags] clone: target={avId ?? "?"} ({avName}) mine={mine ?? "?"} — {strategies.Count} strategy(ies).");
 				_clone = new CloneAttempt { Strategies = strategies, Index = -1, TargetId = avId, TargetName = avName };
 				TryNextCloneCandidate();
@@ -365,7 +365,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				LastStatus = "clone failed: " + Short(e.Message);
-				VRChatArchiveModPlugin.Logger.LogError("[VaTags] clone threw: " + e);
+				Killiorim.Logger.LogError("[VaTags] clone threw: " + e);
 			}
 		}
 
@@ -407,7 +407,7 @@ namespace VRChatArchiveMod.Modules
 					return;
 				}
 
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[VaTags] wear: {avatarId} ({avatarName}) — {strategies.Count} strategy(ies).");
 				_clone = new CloneAttempt { Strategies = strategies, Index = -1, TargetId = avatarId, TargetName = avatarName };
 				TryNextCloneCandidate();
@@ -415,7 +415,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				LastStatus = "wear failed: " + Short(e.Message);
-				VRChatArchiveModPlugin.Logger.LogError("[VaTags] wear threw: " + e);
+				Killiorim.Logger.LogError("[VaTags] wear threw: " + e);
 			}
 		}
 
@@ -466,14 +466,14 @@ namespace VRChatArchiveMod.Modules
 							try
 							{
 								var fetched = c?.Model?.TryCast<VRC.Core.ApiAvatar>();
-								if (fetched == null) { VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: fetch returned no avatar model."); return; }
+								if (fetched == null) { Killiorim.Logger.LogWarning("[VaTags] clone: fetch returned no avatar model."); return; }
 								change.Invoke(null, new object[] { fetched, "" });
-								VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] clone: fetched model, requested change.");
+								Killiorim.Logger.LogInfo("[VaTags] clone: fetched model, requested change.");
 							}
-							catch (Exception ex) { VRChatArchiveModPlugin.Logger.LogWarning($"[VaTags] clone: fetched-change threw: {Short(ex.Message)}"); }
+							catch (Exception ex) { Killiorim.Logger.LogWarning($"[VaTags] clone: fetched-change threw: {Short(ex.Message)}"); }
 						};
 						Action<VRC.Core.ApiContainer> onErr = c =>
-							VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: avatar fetch failed — it is probably private.");
+							Killiorim.Logger.LogWarning("[VaTags] clone: avatar fetch failed — it is probably private.");
 
 						object priority = Activator.CreateInstance(gps[4].ParameterType);   // enum default
 						get.Invoke(fresh, new object[]
@@ -507,7 +507,7 @@ namespace VRChatArchiveMod.Modules
 						}
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[VaTags] clone strategy build failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[VaTags] clone strategy build failed: {e.Message}"); }
 
 			// FETCH BEFORE BLIND. 'PageAvatar+fresh' hands the game an ApiAvatar carrying nothing
 			// but an id and asks it to wear it. That is fine for a public avatar, which the game
@@ -562,12 +562,12 @@ namespace VRChatArchiveMod.Modules
 					var p = cur.GetProperty("id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
 					if (p?.SetMethod != null) { p.SetValue(av, avatarId); return av; }
 				}
-				VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: ApiAvatar has no writable 'id'.");
+				Killiorim.Logger.LogWarning("[VaTags] clone: ApiAvatar has no writable 'id'.");
 				return null;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[VaTags] clone: ApiAvatar build failed: {Short(e.Message)}");
+				Killiorim.Logger.LogWarning($"[VaTags] clone: ApiAvatar build failed: {Short(e.Message)}");
 				return null;
 			}
 		}
@@ -584,7 +584,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					LastStatus = "clone failed: nothing switched the avatar — it is probably private "
 						+ "(only public/cloneable avatars can be cloned). Id copied.";
-					VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] clone: all strategies exhausted without a swap.");
+					Killiorim.Logger.LogWarning("[VaTags] clone: all strategies exhausted without a swap.");
 					_clone = null;
 					return;
 				}
@@ -595,12 +595,12 @@ namespace VRChatArchiveMod.Modules
 					c.DeadlineAt = Time.realtimeSinceStartup + CloneTimeoutSec;
 					LastStatus = $"cloning{(string.IsNullOrEmpty(c.TargetName) ? "" : " " + c.TargetName)}… "
 						+ $"(try {c.Index + 1}/{c.Strategies.Count})";
-					VRChatArchiveModPlugin.Logger.LogInfo($"[VaTags] clone: ran '{label}', waiting for the swap…");
+					Killiorim.Logger.LogInfo($"[VaTags] clone: ran '{label}', waiting for the swap…");
 					return;
 				}
 				catch (Exception ie)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						$"[VaTags] clone: '{label}' threw ({Short(ie.InnerException?.Message ?? ie.Message)}), next…");
 				}
 			}
@@ -615,7 +615,7 @@ namespace VRChatArchiveMod.Modules
 			if (!string.IsNullOrEmpty(c.TargetId) && mine == c.TargetId)
 			{
 				LastStatus = $"✓ cloned{(string.IsNullOrEmpty(c.TargetName) ? "" : " " + c.TargetName)}";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[VaTags] clone: SUCCESS via '{c.Strategies[c.Index].Label}'.");
+				Killiorim.Logger.LogInfo($"[VaTags] clone: SUCCESS via '{c.Strategies[c.Index].Label}'.");
 				_clone = null;
 				return;
 			}
@@ -631,7 +631,7 @@ namespace VRChatArchiveMod.Modules
 				return;
 			}
 
-			VRChatArchiveModPlugin.Logger.LogWarning(
+			Killiorim.Logger.LogWarning(
 				$"[VaTags] clone: '{c.Strategies[c.Index].Label}' did not change the avatar in {CloneTimeoutSec}s, next…");
 			TryNextCloneCandidate();
 		}
@@ -644,7 +644,7 @@ namespace VRChatArchiveMod.Modules
 			if (string.IsNullOrEmpty(me)) return;      // not spawned yet — try again next sync
 			_memberTagChecked = true;
 			if (IsMember(me)) return;
-			VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] registering this account as a VRChat Archive member.");
+			Killiorim.Logger.LogInfo("[VaTags] registering this account as a VRChat Archive member.");
 			AddTag(me, new VaTag { Text = MemberTagText, Color = MemberPink, B = true, Fx = "grad" });
 		}
 
@@ -782,7 +782,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				if (!IsRankTag(t.Text) && !IsLooseLegacyRank(t.Text)) continue;
 				if (wantText != null && string.Equals(t.Text, wantText, StringComparison.OrdinalIgnoreCase)) continue;
-				VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] rank badge '" + t.Text + "' no longer earned (level " + level + ") — removing.");
+				Killiorim.Logger.LogInfo("[VaTags] rank badge '" + t.Text + "' no longer earned (level " + level + ") — removing.");
 				WriteTag("/api/va-tags/remove", me, new VaTag { Text = t.Text }, "rank badge removed");
 			}
 
@@ -790,7 +790,7 @@ namespace VRChatArchiveMod.Modules
 			foreach (var t in TagsOf(me))
 				if (string.Equals(t.Text, wantText, StringComparison.OrdinalIgnoreCase)) { _rankApplied = wantText; return; }
 
-			VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] rank badge '" + wantText + "' earned (level " + level + (admin ? ", admin" : "") + ") — adding.");
+			Killiorim.Logger.LogInfo("[VaTags] rank badge '" + wantText + "' earned (level " + level + (admin ? ", admin" : "") + ") — adding.");
 			AddTag(me, new VaTag
 			{
 				Text = wantText,
@@ -991,7 +991,7 @@ namespace VRChatArchiveMod.Modules
 				});
 				foreach (var m in all) if (!list.Contains(m)) list.Add(m);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[VaTags] clone candidate scan failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[VaTags] clone candidate scan failed: {e.Message}"); }
 			return list;
 		}
 
@@ -1017,7 +1017,7 @@ namespace VRChatArchiveMod.Modules
 			// Browser-like UA: Cloudflare in front of vrchatarchive.org 403s non-browser
 			// user agents, which would kill every tag fetch/write in-game.
 			c.DefaultRequestHeaders.Add("User-Agent",
-				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 VRChatArchiveMod/3.3");
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 Killiorim/3.3");
 			return c;
 		}
 
@@ -1050,7 +1050,7 @@ namespace VRChatArchiveMod.Modules
 					_pendingDb = db; _pendingLocks = locks;
 					LastFetchInfo = $"{db.Count} tagged user(s) @ {DateTime.Now:HH:mm:ss}";
 					int tagTotal = 0; foreach (var v in db.Values) tagTotal += v.Length;
-					MainThreadQueue.Enqueue(() => VRChatArchiveModPlugin.Logger.LogInfo(
+					MainThreadQueue.Enqueue(() => Killiorim.Logger.LogInfo(
 						$"[VaTags] database loaded: {db.Count} tagged user(s), {tagTotal} tag(s) from the server."));
 				}
 				catch (Exception e)
@@ -1070,7 +1070,7 @@ namespace VRChatArchiveMod.Modules
 						LastStatus = refused
 							? "the tag server refused the request — tags are unavailable this session"
 							: "unable to contact the VRChatArchive tag server";
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[VaTags] tag database NOT loaded — " + why
 							+ (refused
 								? ". The server refused an anonymous read, so no tags can be shown."
@@ -1490,7 +1490,7 @@ namespace VRChatArchiveMod.Modules
 			if (_db.Count == 0)
 			{
 				if (_plates.Count > 0) RemoveAllPlates();
-				if (!_emptyDbLogged) { _emptyDbLogged = true; VRChatArchiveModPlugin.Logger.LogInfo("[VaTags] no tags to show yet — database is empty (fetch not landed or 0 records)."); }
+				if (!_emptyDbLogged) { _emptyDbLogged = true; Killiorim.Logger.LogInfo("[VaTags] no tags to show yet — database is empty (fetch not landed or 0 records)."); }
 				return;
 			}
 			_emptyDbLogged = false;
@@ -1542,7 +1542,7 @@ namespace VRChatArchiveMod.Modules
 					{
 						// Nothing to animate and nothing tracking this clone — destroy it rather
 						// than leave an untracked plate behind on every pass.
-						VRChatArchiveModPlugin.Logger.LogWarning("[VaTags] plate built but no TMP label found — tag will not animate.");
+						Killiorim.Logger.LogWarning("[VaTags] plate built but no TMP label found — tag will not animate.");
 						UnityEngine.Object.Destroy(go);
 						continue;
 					}
@@ -1574,7 +1574,7 @@ namespace VRChatArchiveMod.Modules
 				if (shape != _lastShape)
 				{
 					_lastShape = shape;
-					VRChatArchiveModPlugin.Logger.LogInfo($"[VaTags] plates: roster={Roster.Count}, db={_db.Count}, "
+					Killiorim.Logger.LogInfo($"[VaTags] plates: roster={Roster.Count}, db={_db.Count}, "
 						+ $"tagged-in-range={_wantPlates}, nameplate-resolve-failed={_resolveFail}, "
 						+ $"live-plate-sets={_plates.Count}. {FewTagsModule.LastResolveFailure}");
 				}

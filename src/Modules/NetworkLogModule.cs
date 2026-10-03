@@ -5,9 +5,9 @@ using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// NETWORK EVENT LOG — a passive record of the Photon events this client RECEIVES.
 	//
@@ -111,7 +111,7 @@ namespace VRChatArchiveMod.Modules
 				if (client == null)
 				{
 					HookInfo = "VRCNetworkingClient not found";
-					VRChatArchiveModPlugin.Logger.LogWarning("[NetworkLog] VRCNetworkingClient not found — no network events will be seen.");
+					Killiorim.Logger.LogWarning("[NetworkLog] VRCNetworkingClient not found — no network events will be seen.");
 					return;
 				}
 
@@ -127,22 +127,22 @@ namespace VRChatArchiveMod.Modules
 				if (target == null)
 				{
 					HookInfo = "OnEvent(EventData) not found on VRCNetworkingClient";
-					VRChatArchiveModPlugin.Logger.LogWarning("[NetworkLog] " + HookInfo);
+					Killiorim.Logger.LogWarning("[NetworkLog] " + HookInfo);
 					return;
 				}
 
 				var post = new HarmonyMethod(typeof(NetworkLogModule)
 					.GetMethod(nameof(OnEventPostfix), BindingFlags.Static | BindingFlags.NonPublic));
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(target, postfix: post);
+				Killiorim.HarmonyInstance.Patch(target, postfix: post);
 
 				_hooked = true;
 				HookInfo = "postfix on VRCNetworkingClient.OnEvent";
-				VRChatArchiveModPlugin.Logger.LogInfo("[NetworkLog] armed — listening on VRCNetworkingClient.OnEvent (receive only).");
+				Killiorim.Logger.LogInfo("[NetworkLog] armed — listening on VRCNetworkingClient.OnEvent (receive only).");
 			}
 			catch (Exception e)
 			{
 				HookInfo = "install failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogError($"[NetworkLog] hook install failed: {e}");
+				Killiorim.Logger.LogError($"[NetworkLog] hook install failed: {e}");
 			}
 		}
 
@@ -216,7 +216,7 @@ namespace VRChatArchiveMod.Modules
 			if (_resolutionLogged || _mCode == null && _mSender == null) return;
 			if (_mCode == null || _mSender == null) return;   // wait until both have been attempted
 			_resolutionLogged = true;
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				"[NetworkLog] event shape on " + t.Name + ": Code=" + Describe(_mCode)
 				+ ", Sender=" + Describe(_mSender) + ".");
 		}
@@ -258,15 +258,15 @@ namespace VRChatArchiveMod.Modules
 			try
 			{
 				if (!ModConfig.NetworkLogToFile.Value && !DiagnosticsModule.Debug) return;
-				string dir = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "network");
+				string dir = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "network");
 				Directory.CreateDirectory(dir);
 				string path = Path.Combine(dir, "net_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".log");
 				_sink = new StreamWriter(new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = false };
-				_sink.WriteLine("VRCHAT ARCHIVE MOD — inbound Photon events (receive only, nothing is ever sent)");
+				_sink.WriteLine("KILLIORIM — inbound Photon events (receive only, nothing is ever sent)");
 				_sink.WriteLine("time      code  sender  repeats");
-				VRChatArchiveModPlugin.Logger.LogInfo("[NetworkLog] writing to " + path);
+				Killiorim.Logger.LogInfo("[NetworkLog] writing to " + path);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[NetworkLog] sink failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[NetworkLog] sink failed: {e.Message}"); }
 		}
 
 		// Called under Gate. Buffered writer, flushed once a second from OnUpdate — an event storm

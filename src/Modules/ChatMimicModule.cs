@@ -4,9 +4,9 @@ using System.Reflection;
 using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// MIMIC CHATBOX — repeat what a chosen player types, into your own chatbox.
 	//
@@ -103,13 +103,13 @@ namespace VRChatArchiveMod.Modules
 			_lastSeen = ""; _bubble = null; _bubbleId = 0; _nextPoll = 0f; _nextSearch = 0f; _noneLogged = false; _viaContainerLogged = false;
 			lock (Gate) _pending.Clear();
 			Status = "mimicking " + TargetName + "'s chatbox";
-			VRChatArchiveModPlugin.Logger.LogInfo("[ChatMimic] watching " + TargetName + " (" + TargetUid + ")");
+			Killiorim.Logger.LogInfo("[ChatMimic] watching " + TargetName + " (" + TargetUid + ")");
 		}
 
 		public static void Stop(string why)
 		{
 			if (!Active) return;
-			VRChatArchiveModPlugin.Logger.LogInfo("[ChatMimic] " + why + " (was " + TargetName + ")");
+			Killiorim.Logger.LogInfo("[ChatMimic] " + why + " (was " + TargetName + ")");
 			TargetUid = ""; TargetName = "";
 			_lastSeen = ""; _bubble = null; _bubbleId = 0;
 			lock (Gate) _pending.Clear();
@@ -125,7 +125,7 @@ namespace VRChatArchiveMod.Modules
 					_armChecked = true;
 					try { Armed = FieldOffsetFix.Verified; } catch { Armed = false; }
 					if (!Armed)
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[ChatMimic] NOT ARMED — FieldOffsetFix could not verify the offset slot, so reading the "
 							+ "chat bubble's text field would land outside the object. Chatbox mimic is off this session.");
 				}
@@ -168,7 +168,7 @@ namespace VRChatArchiveMod.Modules
 				_pending.Enqueue(text);
 			}
 			Status = "mimicking " + TargetName + " — last: " + (text.Length > 40 ? text.Substring(0, 40) + "…" : text);
-			VRChatArchiveModPlugin.Logger.LogInfo("[ChatMimic] " + TargetName + ": " + text);
+			Killiorim.Logger.LogInfo("[ChatMimic] " + TargetName + ": " + text);
 		}
 
 		// THE BUBBLE IS NOT UNDER THE PLAYER. This used to do
@@ -206,12 +206,12 @@ namespace VRChatArchiveMod.Modules
 					}
 					if (_bubbleType == null)
 					{
-						if (!_typeLogged) { _typeLogged = true; VRChatArchiveModPlugin.Logger.LogWarning("[ChatMimic] BaseChatBubbleDisplay is not present on this build — chatbox mimic unavailable."); }
+						if (!_typeLogged) { _typeLogged = true; Killiorim.Logger.LogWarning("[ChatMimic] BaseChatBubbleDisplay is not present on this build — chatbox mimic unavailable."); }
 						return null;
 					}
 					try { _bubbleIl2 = Il2CppType.From(_bubbleType); } catch { }
 					if (_bubbleIl2 == null) return null;
-					if (!_typeLogged) { _typeLogged = true; VRChatArchiveModPlugin.Logger.LogInfo("[ChatMimic] resolved " + _bubbleType.Name + " by type."); }
+					if (!_typeLogged) { _typeLogged = true; Killiorim.Logger.LogInfo("[ChatMimic] resolved " + _bubbleType.Name + " by type."); }
 				}
 
 				Transform want = e.Transform;
@@ -254,7 +254,7 @@ namespace VRChatArchiveMod.Modules
 							if (!_viaContainerLogged)
 							{
 								_viaContainerLogged = true;
-								VRChatArchiveModPlugin.Logger.LogInfo("[ChatMimic] found the bubble through the player's own NameplateContainer.");
+								Killiorim.Logger.LogInfo("[ChatMimic] found the bubble through the player's own NameplateContainer.");
 							}
 							return c;
 						}
@@ -289,7 +289,7 @@ namespace VRChatArchiveMod.Modules
 					if (OwnerRootOf(c) != wantRoot) continue;
 					_bubble = c;
 					try { _bubbleId = c.GetInstanceID(); } catch { _bubbleId = 0; }
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[ChatMimic] matched " + TargetName + "'s bubble (" + seen + " of " + all.Count + " in the scene).");
 					return c;
 				}
@@ -299,7 +299,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_noneLogged)
 				{
 					_noneLogged = true;
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[ChatMimic] " + TargetName + " has no NameplateContainer bubble, and none of the " + all.Count
 						+ " bubble(s) in the scene name them either. Either they have not been given one yet, or "
 						+ "VRChat has moved both the NameplateContainer field and the VRCPlayer member.");
@@ -377,7 +377,7 @@ namespace VRChatArchiveMod.Modules
 						if (!_fallbackLogged)
 						{
 							_fallbackLogged = true;
-							VRChatArchiveModPlugin.Logger.LogWarning(
+							Killiorim.Logger.LogWarning(
 								"[ChatMimic] no _chatText member on " + mt.Name + " — reading the bubble's TMP text instead.");
 						}
 						return ReadTextByChild(bubble);

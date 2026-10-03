@@ -1,9 +1,9 @@
 ﻿using System;
 using UnityEngine;
 using VRC.Core;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VRCHAT ARCHIVE — a category of our own inside VRChat's OWN avatar menu.
 	//
@@ -66,7 +66,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				Status = "failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFav] " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveFav] " + e.Message);
 			}
 		}
 
@@ -129,13 +129,13 @@ namespace VRChatArchiveMod.Modules
 				Sync(force: true);
 
 				Status = "category added to VRChat's avatar menu";
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[ArchiveFav] injected '{DisplayName}' into API.Favorites._avatars (now {list.Count} list(s)).");
 			}
 			catch (Exception e)
 			{
 				Status = "could not add the category: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFav] inject failed: " + e);
+				Killiorim.Logger.LogWarning("[ArchiveFav] inject failed: " + e);
 			}
 		}
 
@@ -180,12 +180,12 @@ namespace VRChatArchiveMod.Modules
 				_model.ReplaceFavoritesIndexed(members);
 				Injected = ids.Count;
 				Status = Injected + " avatar(s) in the VRCHAT ARCHIVE category";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[ArchiveFav] category now holds {Injected} avatar(s).");
+				Killiorim.Logger.LogInfo($"[ArchiveFav] category now holds {Injected} avatar(s).");
 			}
 			catch (Exception e)
 			{
 				Status = "could not fill the category: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFav] sync failed: " + e);
+				Killiorim.Logger.LogWarning("[ArchiveFav] sync failed: " + e);
 			}
 		}
 
@@ -205,12 +205,12 @@ namespace VRChatArchiveMod.Modules
 						if (m != null && string.Equals(m.id, ListId, StringComparison.Ordinal))
 						{
 							list.RemoveAt(i);
-							VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveFav] category removed.");
+							Killiorim.Logger.LogInfo("[ArchiveFav] category removed.");
 						}
 					}
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveFav] remove failed: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveFav] remove failed: " + e.Message); }
 			_on = false;
 			_model = null;
 			_lastCount = -1;

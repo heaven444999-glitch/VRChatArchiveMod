@@ -4,9 +4,9 @@ using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// UDON CONSOLE — a live log of the Udon events happening around you.
 	//
@@ -123,7 +123,7 @@ namespace VRChatArchiveMod.Modules
 			if (n < FloodPerSecond) return false;
 
 			_muted[ev] = now + 30f;                    // muted for half a minute, then re-evaluated
-			VRChatArchiveModPlugin.Logger.LogInfo($"[UdonLog] '{ev}' fired {n}x in a second — muted for 30s (per-frame pump).");
+			Killiorim.Logger.LogInfo($"[UdonLog] '{ev}' fired {n}x in a second — muted for 30s (per-frame pump).");
 			return true;
 		}
 
@@ -150,7 +150,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				Hook();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[UdonLog] init failed: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[UdonLog] init failed: {e}"); }
 		}
 
 		private static void Hook()
@@ -163,7 +163,7 @@ namespace VRChatArchiveMod.Modules
 				          ?? FindType("VRC.Udon.UdonBehaviour");
 				if (ub == null)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[UdonLog] UdonBehaviour type not found — the console will stay empty (report so we can re-target).");
+					Killiorim.Logger.LogWarning("[UdonLog] UdonBehaviour type not found — the console will stay empty (report so we can re-target).");
 					return;
 				}
 
@@ -199,13 +199,13 @@ namespace VRChatArchiveMod.Modules
 						if (!seen.Add(m.DeclaringType?.FullName + "::" + m.ToString())) continue;   // one type can surface a base method twice
 						if (ps[0].ParameterType == typeof(string))
 						{
-							try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: pre, postfix: post); patched++; }
-							catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonLog] could not patch RunProgram(string): {e.Message}"); }
+							try { Killiorim.HarmonyInstance.Patch(m, prefix: pre, postfix: post); patched++; }
+							catch (Exception e) { Killiorim.Logger.LogWarning($"[UdonLog] could not patch RunProgram(string): {e.Message}"); }
 						}
 						else if (ps[0].ParameterType == typeof(uint))
 						{
-							try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: preU); patchedUint++; }
-							catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[UdonLog] could not patch RunProgram(uint): {e.Message}"); }
+							try { Killiorim.HarmonyInstance.Patch(m, prefix: preU); patchedUint++; }
+							catch (Exception e) { Killiorim.Logger.LogWarning($"[UdonLog] could not patch RunProgram(uint): {e.Message}"); }
 						}
 					}
 				}
@@ -213,13 +213,13 @@ namespace VRChatArchiveMod.Modules
 				// name list live. The uint overload only matters for PANIC and is reported on its own so a
 				// build where it went missing is visible in the log instead of silently weakening BlockAll.
 				_hooked = patched > 0;
-				VRChatArchiveModPlugin.Logger.LogInfo(_hooked
+				Killiorim.Logger.LogInfo(_hooked
 					? $"[UdonLog] armed — hooked {patched} RunProgram(string) and {patchedUint} RunProgram(uint) entry point(s)."
 					: $"[UdonLog] no RunProgram(string) entry point patched ({patchedUint} uint) — the console will stay empty.");
 				if (_hooked && patchedUint == 0)
-					VRChatArchiveModPlugin.Logger.LogWarning("[UdonLog] RunProgram(uint) not found — PANIC (BlockAll) will not stop cached/lifecycle entry points on this build.");
+					Killiorim.Logger.LogWarning("[UdonLog] RunProgram(uint) not found — PANIC (BlockAll) will not stop cached/lifecycle entry points on this build.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[UdonLog] hook install failed: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[UdonLog] hook install failed: {e}"); }
 		}
 
 		// ---------------------------------------------------------------- anti-udon
@@ -301,7 +301,7 @@ namespace VRChatArchiveMod.Modules
 				if (n.Length > 0) BlockNames.Add(n);
 			}
 			_fNames = BlockNames.Count > 0;
-			VRChatArchiveModPlugin.Logger.LogInfo($"[UdonLog] block list: {BlockNames.Count} event name(s).");
+			Killiorim.Logger.LogInfo($"[UdonLog] block list: {BlockNames.Count} event name(s).");
 		}
 
 		private static bool ShouldBlock(string ev)
@@ -339,7 +339,7 @@ namespace VRChatArchiveMod.Modules
 					if (++_floodCount >= ceiling)
 					{
 						_floodUntil = now + 5f;
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[UdonLog] GLOBAL FLOOD — " + _floodCount + " Udon events in one second (ceiling " + ceiling
 							+ "). Suspending non-lifecycle events for 5s.");
 						Blocked(ev);
@@ -361,7 +361,7 @@ namespace VRChatArchiveMod.Modules
 
 				// Crasher-tier rate: suspend this ONE event for a while, not the whole world.
 				_guardUntil[ev] = now + 10f;
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					$"[UdonLog] BLOCKED '{ev}' — {n} calls in one second (crasher-tier). Suspended 10s.");
 				Blocked(ev);
 				return true;
@@ -532,7 +532,7 @@ namespace VRChatArchiveMod.Modules
 					if (!_hooked && _hookAttempts >= MaxHookAttempts && !_gaveUpLogged)
 					{
 						_gaveUpLogged = true;
-						VRChatArchiveModPlugin.Logger.LogError(
+						Killiorim.Logger.LogError(
 							"[UdonLog] RunProgram never attached after " + MaxHookAttempts + " tries — the Udon "
 							+ "console, crasher guard and Udon Manager events are all inert on this build. The "
 							+ "method was renamed or moved; report so we can re-target it.");

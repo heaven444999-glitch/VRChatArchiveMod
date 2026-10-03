@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FORCE GRAB — aim at an object, take it, keep it in your hands, use it.
 	//
@@ -196,7 +196,7 @@ namespace VRChatArchiveMod.Modules
 					}
 					catch { }
 					if (best != null)
-						VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] no ray hit; nearest to crosshair at {bestAngle:F1}deg.");
+						Killiorim.Logger.LogInfo($"[ForceGrab] no ray hit; nearest to crosshair at {bestAngle:F1}deg.");
 				}
 
 				if (best == null)
@@ -207,7 +207,7 @@ namespace VRChatArchiveMod.Modules
 					if (anyObj && GrabRaw(ray, range)) return;
 
 					Status = "nothing grabbable under your crosshair (within " + range.ToString("F0") + "m)";
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						$"[ForceGrab] miss — {(hits == null ? 0 : hits.Length)} collider(s) on the ray, no VRC_Pickup within {range:F0}m of the crosshair.");
 					return;
 				}
@@ -219,7 +219,7 @@ namespace VRChatArchiveMod.Modules
 					if (lp != null && !VRC.SDKBase.Networking.IsOwner(lp, go))
 						VRC.SDKBase.Networking.SetOwner(lp, go);
 				}
-				catch (Exception oe) { VRChatArchiveModPlugin.Logger.LogWarning("[ForceGrab] ownership: " + oe.Message); }
+				catch (Exception oe) { Killiorim.Logger.LogWarning("[ForceGrab] ownership: " + oe.Message); }
 
 				_held = best;
 				HeldName = go.name;
@@ -237,12 +237,12 @@ namespace VRChatArchiveMod.Modules
 
 				Fire(EvPickup);
 				Status = "holding " + Trunc(HeldName, 30) + "  ·  click to use, press the client button to drop";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] grabbed {HeldName} at {bestD:F1}m");
+				Killiorim.Logger.LogInfo($"[ForceGrab] grabbed {HeldName} at {bestD:F1}m");
 			}
 			catch (Exception e)
 			{
 				Status = "grab failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ForceGrab] " + e.Message);
+				Killiorim.Logger.LogWarning("[ForceGrab] " + e.Message);
 			}
 		}
 
@@ -287,7 +287,7 @@ namespace VRChatArchiveMod.Modules
 				_rawBody = chosen.collider.attachedRigidbody;
 				if (_rawBody != null) { _rawWasKinematic = _rawBody.isKinematic; _rawBody.isKinematic = true; }
 				Status = "holding " + Trunc(HeldName, 30) + " (locked \u2014 local carry)  \u00b7  press the client button to drop";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[ForceGrab] raw-grabbed {HeldName} at {bestD:F1}m (local carry, no networking).");
+				Killiorim.Logger.LogInfo($"[ForceGrab] raw-grabbed {HeldName} at {bestD:F1}m (local carry, no networking).");
 				return true;
 			}
 			catch (Exception e) { Status = "raw grab failed: " + e.Message; return false; }
@@ -300,7 +300,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				try { if (_rawBody != null) { _rawBody.isKinematic = _rawWasKinematic; _rawBody.velocity = Vector3.zero; } } catch { }
 				Status = "dropped " + Trunc(HeldName, 30);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ForceGrab] dropped (raw) " + HeldName);
+				Killiorim.Logger.LogInfo("[ForceGrab] dropped (raw) " + HeldName);
 				_heldRaw = null; _rawBody = null; HeldName = "";
 				return;
 			}
@@ -322,7 +322,7 @@ namespace VRChatArchiveMod.Modules
 					catch { }
 				}
 				Status = "dropped " + Trunc(HeldName, 30);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ForceGrab] dropped " + HeldName);
+				Killiorim.Logger.LogInfo("[ForceGrab] dropped " + HeldName);
 			}
 			catch { }
 			finally { _held = null; _heldBody = null; HeldName = ""; }

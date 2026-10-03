@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Finding VRChat's menus, ONCE.
 	//

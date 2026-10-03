@@ -4,7 +4,7 @@ using Il2CppInterop.Runtime;
 using UnityEngine;
 using VRC.Core;
 using VRC.DataModel;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
 using Category = ObjectPublicStBo1BoILSt1NuBoInUnique;
 using Panel    = MonoBehaviourPublicOb_aGa_c_aOb_sGa_e_lUnique;
@@ -12,7 +12,7 @@ using Section  = MonoBehaviour1PublicGr_lGa_pCa_fILBoInBoUnique;
 using DmBase   = ObjectPublicAbstractObStStObObUnique<VRC.Core.ApiAvatar>;
 using Il2IList = Il2CppSystem.Collections.IList;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VRCHAT ARCHIVE — by TAKING OVER an existing avatar category instead of inventing one.
 	//
@@ -95,10 +95,10 @@ namespace VRChatArchiveMod.Modules
 					Status = "waiting for the avatar menu";
 					// Said once every ~30s while stuck: the difference between "you haven't opened the
 					// avatar menu yet" and "the panel type no longer resolves on this game build".
-					if (now - _lastWaitLog > 30f) { _lastWaitLog = now; VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] still cannot find the avatar-menu panel (FindPanel returned null)."); }
+					if (now - _lastWaitLog > 30f) { _lastWaitLog = now; Killiorim.Logger.LogWarning("[ArchiveHijack] still cannot find the avatar-menu panel (FindPanel returned null)."); }
 					return;
 				}
-				if (!_panelLogged) { _panelLogged = true; VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] avatar-menu panel found."); }
+				if (!_panelLogged) { _panelLogged = true; Killiorim.Logger.LogInfo("[ArchiveHijack] avatar-menu panel found."); }
 
 				if (string.IsNullOrEmpty(_targetId) && !PickTarget()) return;
 				Hook();
@@ -123,7 +123,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				Status = "failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveHijack] " + e.Message);
 			}
 		}
 
@@ -183,14 +183,14 @@ namespace VRChatArchiveMod.Modules
 				if (string.IsNullOrEmpty(_targetId)) { Status = "category has no id"; return false; }
 
 				_targetName = chosenName;
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[ArchiveHijack] taking over '{chosenName}' (id {_targetId}). Categories present: {string.Join(", ", names)}");
 				return true;
 			}
 			catch (Exception e)
 			{
 				Status = "could not read the categories: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] PickTarget: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveHijack] PickTarget: " + e.Message);
 				return false;
 			}
 		}
@@ -275,7 +275,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					Active = true;
 					Status = "'" + _targetName + "' now shows your Archive favourites";
-					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] row retitled to " + Title + ".");
+					Killiorim.Logger.LogInfo("[ArchiveHijack] row retitled to " + Title + ".");
 				}
 			}
 			catch { }
@@ -309,22 +309,22 @@ namespace VRChatArchiveMod.Modules
 					if (!m.Name.StartsWith("Method_Private_Void_", StringComparison.Ordinal)) continue;
 					var ps = m.GetParameters();
 					if (ps.Length != 1 || ps[0].ParameterType != typeof(Category)) continue;
-					try { VRChatArchiveModPlugin.HarmonyInstance.Patch(m, postfix: post); hooked++; }
-					catch (Exception pe) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] " + m.Name + ": " + pe.Message); }
+					try { Killiorim.HarmonyInstance.Patch(m, postfix: post); hooked++; }
+					catch (Exception pe) { Killiorim.Logger.LogWarning("[ArchiveHijack] " + m.Name + ": " + pe.Message); }
 				}
 
 				_hooked = true;
 				if (hooked == 0)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] no selection handler takes a category — the grid will keep its own avatars.");
+					Killiorim.Logger.LogWarning("[ArchiveHijack] no selection handler takes a category — the grid will keep its own avatars.");
 					return;
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] selection hooked on " + hooked + " handler(s).");
+				Killiorim.Logger.LogInfo("[ArchiveHijack] selection hooked on " + hooked + " handler(s).");
 			}
 			catch (Exception e)
 			{
 				_hooked = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] hook failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveHijack] hook failed: " + e.Message);
 			}
 		}
 
@@ -338,7 +338,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			if (why == _lastWhy) return;
 			_lastWhy = why;
-			VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] grid not filled: " + why + ".");
+			Killiorim.Logger.LogInfo("[ArchiveHijack] grid not filled: " + why + ".");
 		}
 
 		private static void AfterSelect(Category __0)
@@ -350,7 +350,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_selectSeen)
 				{
 					_selectSeen = true;
-					VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] selection postfix fired for the first time.");
+					Killiorim.Logger.LogInfo("[ArchiveHijack] selection postfix fired for the first time.");
 				}
 
 				// These four exits used to be silent, which made an empty grid indistinguishable from a
@@ -371,21 +371,21 @@ namespace VRChatArchiveMod.Modules
 				_showing = true;
 
 				var view = _panel._avatarListView;
-				if (view == null) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] no grid view."); return; }
+				if (view == null) { Killiorim.Logger.LogWarning("[ArchiveHijack] no grid view."); return; }
 
 				var avatars = BuildAvatars();
 				if (avatars == null) { Once("BuildAvatars produced nothing"); return; }
 
 				var src = new ReactiveProperty<Il2IList>(avatars)
 					.TryCast<InterfacePublicAbstractIDisposableVoAc1ObVoAc1ObUnique<Il2IList>>();
-				if (src == null) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] grid source cast failed."); return; }
+				if (src == null) { Killiorim.Logger.LogWarning("[ArchiveHijack] grid source cast failed."); return; }
 
 				view.Method_Public_Void_InterfacePublicAbstractIDisposableVoAc1ObVoAc1ObUnique_1_IList_Boolean_0(src, false);
 				WireClick(view);
 				Status = "grid filled from the Archive";
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] grid filled from the Archive.");
+				Killiorim.Logger.LogInfo("[ArchiveHijack] grid filled from the Archive.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] fill: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveHijack] fill: " + e.Message); }
 		}
 
 		// Hands the same list over again, which rebinds every card to its record.
@@ -403,7 +403,7 @@ namespace VRChatArchiveMod.Modules
 				if (src == null) return;
 				view.Method_Public_Void_InterfacePublicAbstractIDisposableVoAc1ObVoAc1ObUnique_1_IList_Boolean_0(src, false);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] refill: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[ArchiveHijack] refill: " + e.Message); }
 		}
 
 		// ------------------------------------------------------------------ the click
@@ -445,12 +445,12 @@ namespace VRChatArchiveMod.Modules
 				view.Method_Public_add_Void_Action_1_IAvatar_0(_clickAction);
 				_wiredSection = view.Pointer;
 
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[ArchiveHijack] card clicks wired (VRChat's own listener " + (vanilla ? "present" : "ABSENT") + ").");
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] click wiring failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveHijack] click wiring failed: " + e.Message);
 			}
 		}
 
@@ -492,7 +492,7 @@ namespace VRChatArchiveMod.Modules
 				if (cur == null || cur.Pointer != ptr) return;
 
 				pane.Method_Public_UniTask_1_Boolean_IAvatar_Boolean_Boolean_Boolean_Boolean_String_0(cur);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] preview refreshed once " + id + " finished loading.");
+				Killiorim.Logger.LogInfo("[ArchiveHijack] preview refreshed once " + id + " finished loading.");
 			}
 			catch { }
 		}
@@ -534,7 +534,7 @@ namespace VRChatArchiveMod.Modules
 							_pendingId = clickedId;
 							_pendingPtr = av.Pointer;
 							_pendingUntil = Time.realtimeSinceStartup + 12f;
-							VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] priority fetch for " + clickedId);
+							Killiorim.Logger.LogInfo("[ArchiveHijack] priority fetch for " + clickedId);
 						}
 					}
 				}
@@ -543,7 +543,7 @@ namespace VRChatArchiveMod.Modules
 				var panel = _panel;
 				if (panel == null) return;
 				var pane = panel._selectedAvatarPanel;
-				if (pane == null) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] no preview pane."); return; }
+				if (pane == null) { Killiorim.Logger.LogWarning("[ArchiveHijack] no preview pane."); return; }
 
 				// VRChat's listener subscribed first, so it has already run. If it committed, leave it.
 				try { var cur = pane.prop_IAvatar_0; if (cur != null && cur.Pointer == av.Pointer) return; } catch { }
@@ -551,11 +551,11 @@ namespace VRChatArchiveMod.Modules
 				// Takes the object, never an id. Returns UniTask<bool> — a refusal is silent, which is
 				// why the pane's own avatar is re-read above rather than trusted.
 				pane.Method_Public_UniTask_1_Boolean_IAvatar_Boolean_Boolean_Boolean_Boolean_String_0(av);
-				VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] preview opened for a card we own.");
+				Killiorim.Logger.LogInfo("[ArchiveHijack] preview opened for a card we own.");
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] click: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveHijack] click: " + e.Message);
 			}
 		}
 
@@ -624,14 +624,14 @@ namespace VRChatArchiveMod.Modules
 					made++;
 				}
 
-				if (made == 0) { VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] no IAvatar built."); return null; }
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				if (made == 0) { Killiorim.Logger.LogWarning("[ArchiveHijack] no IAvatar built."); return null; }
+				Killiorim.Logger.LogInfo(
 					$"[ArchiveHijack] built {made} IAvatar ({known} known, {made - known} to fetch, {blocked} scan-failed skipped).");
 				return list.TryCast<Il2IList>();
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[ArchiveHijack] BuildAvatars: " + e.Message);
+				Killiorim.Logger.LogWarning("[ArchiveHijack] BuildAvatars: " + e.Message);
 				return null;
 			}
 		}
@@ -684,7 +684,7 @@ namespace VRChatArchiveMod.Modules
 				_refillAt = now + 2f;
 
 				lock (Pending) left = Pending.Count;
-				if (left == 0) VRChatArchiveModPlugin.Logger.LogInfo("[ArchiveHijack] all avatars resolved by VRChat.");
+				if (left == 0) Killiorim.Logger.LogInfo("[ArchiveHijack] all avatars resolved by VRChat.");
 			}
 			catch { }
 		}
@@ -768,7 +768,7 @@ namespace VRChatArchiveMod.Modules
 						// fired in any kept log. If a real archived avatar ever disappears from the
 						// list, this is the code that did it.
 						Unavailable.Add(id);
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							"[ArchiveHijack] auto-clean: VRChat has no data for '" + id + "' — removing it from the Archive favourites.");
 						try { _ = FavoritesModule.RemoveAsync(id); } catch { }
 					}

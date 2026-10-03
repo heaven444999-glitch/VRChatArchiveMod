@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// THE SONG, AND THE CLOCK THE PICTURE FOLLOWS.
 	//
@@ -61,13 +61,13 @@ namespace VRChatArchiveMod.Core
 				_src.volume = Mathf.Clamp01(volume);
 				_src.time = 0f;
 				_src.Play();
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					$"[BadAppleAudio] playing ({_clip.length:0.0}s, {_clip.frequency} Hz, vol {_src.volume:0.00}).");
 				return true;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[BadAppleAudio] play failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[BadAppleAudio] play failed: " + e.Message);
 				return false;
 			}
 		}
@@ -98,14 +98,14 @@ namespace VRChatArchiveMod.Core
 					if (wav == null || wav.Length < 44)
 					{
 						_loadFailed = true;
-						VRChatArchiveModPlugin.Logger.LogWarning("[BadAppleAudio] " + ResourceName + " is missing from the DLL — the show will run silently.");
+						Killiorim.Logger.LogWarning("[BadAppleAudio] " + ResourceName + " is missing from the DLL — the show will run silently.");
 						return false;
 					}
 					_clip = WavAudio.Decode(wav, "BadApple");
 					if (_clip == null)
 					{
 						_loadFailed = true;
-						VRChatArchiveModPlugin.Logger.LogWarning("[BadAppleAudio] " + ResourceName + " did not decode — the show will run silently.");
+						Killiorim.Logger.LogWarning("[BadAppleAudio] " + ResourceName + " did not decode — the show will run silently.");
 						return false;
 					}
 				}
@@ -133,7 +133,7 @@ namespace VRChatArchiveMod.Core
 			catch (Exception e)
 			{
 				_loadFailed = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[BadAppleAudio] setup failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[BadAppleAudio] setup failed: " + e.Message);
 				return false;
 			}
 		}

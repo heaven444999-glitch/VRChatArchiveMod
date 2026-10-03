@@ -1,9 +1,9 @@
 using System;
 using System.Reflection;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// PLAYER ROTATOR — turn your OWN capsule, and take the view with it.
 	//
@@ -92,7 +92,7 @@ namespace VRChatArchiveMod.Modules
 				RestoreBody();
 				Status = "off";
 			}
-			VRChatArchiveModPlugin.Logger.LogInfo("[Rotator] " + Status);
+			Killiorim.Logger.LogInfo("[Rotator] " + Status);
 			Toast.Show(on ? "Player rotator ON — " + Status : "Player rotator OFF — upright again");
 		}
 
@@ -174,7 +174,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					// One line, once: the tilt survived a full frame, so the rig is ours to hold.
 					_holdProbed = true;
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[Rotator] rig rotation holds between frames — body tilt is applied to "
 						+ rig.name + ".");
 				}
@@ -371,7 +371,7 @@ namespace VRChatArchiveMod.Modules
 				if (a < 0f && b > 0f) { fs[0].SetValue(widened, -lim); fs[1].SetValue(widened, lim); ok = true; }
 				else if (b < 0f && c > 0f) { fs[1].SetValue(widened, -lim); fs[2].SetValue(widened, lim); ok = true; }
 
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[Rotator] NeckRange as found: (" + a.ToString("F1") + ", " + b.ToString("F1") + ", "
 					+ c.ToString("F1") + ")" + (ok ? " -> widened to ±" + lim.ToString("F0") + "°"
 					: " — no pair straddles zero, so the clamp was left alone"));
@@ -394,7 +394,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				catch { _neckWidened = true; _neckWhy = "widened (read-back unavailable)"; }
 
-				VRChatArchiveModPlugin.Logger.LogInfo("[Rotator] free look: " + _neckWhy
+				Killiorim.Logger.LogInfo("[Rotator] free look: " + _neckWhy
 					+ ". Mouse pitch is unclamped — look up and keep going to end up head-down.");
 			}
 			catch (Exception e) { _neckWhy = "widen threw: " + e.Message; }
@@ -407,9 +407,9 @@ namespace VRChatArchiveMod.Modules
 				if (!_neckWidened || _neck == null || _rangeProp == null || _rangeOriginal == null) return;
 				_rangeProp.SetValue(_neck, _rangeOriginal);
 				_neckWidened = false;
-				VRChatArchiveModPlugin.Logger.LogInfo("[Rotator] neck clamp put back the way it was.");
+				Killiorim.Logger.LogInfo("[Rotator] neck clamp put back the way it was.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[Rotator] could not restore the neck clamp: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[Rotator] could not restore the neck clamp: " + e.Message); }
 		}
 
 		// NeckRange's three floats sit at fixed managed offsets (0/4/8) rather than behind the

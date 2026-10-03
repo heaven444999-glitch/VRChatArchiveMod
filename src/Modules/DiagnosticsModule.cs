@@ -4,9 +4,9 @@ using System.IO;
 using System.Text;
 using Il2CppInterop.Runtime;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// DIAGNOSTICS REPORT — the small file a tester can actually send back.
 	//
@@ -20,7 +20,7 @@ namespace VRChatArchiveMod.Modules
 	//   * PROBLEM lines: conditions that mean a feature is silently doing nothing
 	//
 	// The file is capped and rotated, so it stays small enough to attach to a message.
-	// Written to BepInEx/VRChatArchiveMod/diagnostics/.
+	// Written to BepInEx/Killiorim/diagnostics/.
 	public class DiagnosticsModule : IModule
 	{
 		public override string Name => "Diagnostics";
@@ -39,7 +39,7 @@ namespace VRChatArchiveMod.Modules
 			try { if (ModConfig.DebugMode != null && ModConfig.DebugMode.Value) return true; } catch { }
 			try
 			{
-				string marker = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "DEBUG");
+				string marker = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "DEBUG");
 				return File.Exists(marker);
 			}
 			catch { return false; }
@@ -108,7 +108,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				string dir = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "diagnostics");
+				string dir = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "diagnostics");
 				Directory.CreateDirectory(dir);
 				_path = Path.Combine(dir, "va-report_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".log");
 				// AutoFlush=false + a timed flush from OnUpdate. With AutoFlush the writer issued a
@@ -121,7 +121,7 @@ namespace VRChatArchiveMod.Modules
 				WriteHeader();
 
 				// Our own plugin's output — this is what actually explains a broken feature.
-				_src = VRChatArchiveModPlugin.Logger;
+				_src = Killiorim.Logger;
 				if (_src != null) _src.LogEvent += OnPluginLog;
 
 				// Unity's errors only. Ordinary Debug.Log traffic belongs in LogCapture.
@@ -143,13 +143,13 @@ namespace VRChatArchiveMod.Modules
 				if (Debug)
 				{
 					Line("*** DEBUG BUILD — health every 5s, warnings captured ***");
-					VRChatArchiveModPlugin.Logger.LogInfo("[Diagnostics] DEBUG MODE ON.");
+					Killiorim.Logger.LogInfo("[Diagnostics] DEBUG MODE ON.");
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo("[Diagnostics] report: " + _path);
+				Killiorim.Logger.LogInfo("[Diagnostics] report: " + _path);
 			}
 			catch (Exception e)
 			{
-				try { VRChatArchiveModPlugin.Logger.LogWarning($"[Diagnostics] could not start: {Core.Unwrap.Describe(e)}"); } catch { }
+				try { Killiorim.Logger.LogWarning($"[Diagnostics] could not start: {Core.Unwrap.Describe(e)}"); } catch { }
 			}
 		}
 
@@ -168,7 +168,7 @@ namespace VRChatArchiveMod.Modules
 		private void WriteHeader()
 		{
 			Line("==================================================================");
-			Line($" VRCHAT ARCHIVE MOD  v{PluginInfo.Version}  —  diagnostics report");
+			Line($" KILLIORIM  v{PluginInfo.Version}  —  diagnostics report");
 			Line($" generated  : {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 			Line("==================================================================");
 			try
@@ -275,7 +275,7 @@ namespace VRChatArchiveMod.Modules
 		private static void Perf(string msg)
 		{
 			Line("  " + msg);
-			try { VRChatArchiveModPlugin.Logger.LogWarning(msg); } catch { }
+			try { Killiorim.Logger.LogWarning(msg); } catch { }
 		}
 
 		private static void SlowWatch(float now)

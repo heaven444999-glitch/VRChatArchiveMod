@@ -4,9 +4,9 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// SOUNDBOARD — a member presses a button, every other mod hears it.
 	//
@@ -62,7 +62,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			var c = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
 			c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 VRChatArchiveMod/3.4");
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 Killiorim/3.4");
 			return c;
 		}
 
@@ -209,7 +209,7 @@ namespace VRChatArchiveMod.Modules
 					History.Insert(0, e);
 					if (History.Count > HistoryMax) History.RemoveRange(HistoryMax, History.Count - HistoryMax);
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Soundboard] {e.When}  {e.Who} -> {e.What}");
+				Killiorim.Logger.LogInfo($"[Soundboard] {e.When}  {e.Who} -> {e.What}");
 			}
 			catch { }
 		}
@@ -262,9 +262,9 @@ namespace VRChatArchiveMod.Modules
 				_src.PlayOneShot(audio);
 				Played++;
 				LastHeard = by + " → " + clip.Label;
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Soundboard] {by} played {clip.Key}.");
+				Killiorim.Logger.LogInfo($"[Soundboard] {by} played {clip.Key}.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[Soundboard] play failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[Soundboard] play failed: {e.Message}"); }
 		}
 
 		private static AudioClip Resolve(Clip clip)
@@ -276,7 +276,7 @@ namespace VRChatArchiveMod.Modules
 				using var res = typeof(SoundboardModule).Assembly.GetManifestResourceStream(clip.Resource);
 				if (res == null)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[Soundboard] missing resource " + clip.Resource);
+					Killiorim.Logger.LogWarning("[Soundboard] missing resource " + clip.Resource);
 					return null;
 				}
 				var wav = new byte[res.Length];
@@ -284,7 +284,7 @@ namespace VRChatArchiveMod.Modules
 				while (off < wav.Length && (n = res.Read(wav, off, wav.Length - off)) > 0) off += n;
 				clip.Audio = WavAudio.Decode(wav, "sb_" + clip.Key);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[Soundboard] decode failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[Soundboard] decode failed: {e.Message}"); }
 			return clip.Audio;
 		}
 

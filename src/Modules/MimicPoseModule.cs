@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// MIMIC POSE — wear somebody else's pose.
 	//
@@ -68,12 +68,12 @@ namespace VRChatArchiveMod.Modules
 					if (partner != null && byName.TryGetValue(partner, out int j)) idx[i] = j;
 				}
 				_mirrorIndex = idx; _mirrorSign = sign; _muscleScratch = new float[count];
-				VRChatArchiveModPlugin.Logger.LogInfo("[MimicPose] mirror map built for " + count + " muscle(s).");
+				Killiorim.Logger.LogInfo("[MimicPose] mirror map built for " + count + " muscle(s).");
 				return true;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[MimicPose] mirror map failed (" + Short(e.Message) + "); mirror ignored.");
+				Killiorim.Logger.LogWarning("[MimicPose] mirror map failed (" + Short(e.Message) + "); mirror ignored.");
 				return false;
 			}
 		}
@@ -134,7 +134,7 @@ namespace VRChatArchiveMod.Modules
 			_nextResolve = 0f;
 			_copiedFrames = 0;
 			Status = "mimicking " + TargetName;
-			VRChatArchiveModPlugin.Logger.LogInfo("[MimicPose] mimicking " + TargetName + " (" + TargetUid + ")");
+			Killiorim.Logger.LogInfo("[MimicPose] mimicking " + TargetName + " (" + TargetUid + ")");
 		}
 
 		public static void Stop(string why)
@@ -142,7 +142,7 @@ namespace VRChatArchiveMod.Modules
 			if (!Active) return;
 			RestoreIk();
 			DropHandlers();
-			VRChatArchiveModPlugin.Logger.LogInfo("[MimicPose] " + why + " (" + _copiedFrames + " frame(s) copied from " + TargetName + ", muscles=" + !_humanPoseFailed + ")");
+			Killiorim.Logger.LogInfo("[MimicPose] " + why + " (" + _copiedFrames + " frame(s) copied from " + TargetName + ", muscles=" + !_humanPoseFailed + ")");
 			TargetUid = ""; TargetName = "";
 			_local = _target = null;
 			Status = why;
@@ -291,7 +291,7 @@ namespace VRChatArchiveMod.Modules
 					bool on = false; try { on = c.enabled; } catch { }
 					sb.Append(n).Append(on ? "(on) " : "(off) ");
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo("[MimicPose] rig components: " + sb);
+				Killiorim.Logger.LogInfo("[MimicPose] rig components: " + sb);
 			}
 			catch { }
 		}
@@ -314,7 +314,7 @@ namespace VRChatArchiveMod.Modules
 					try { if (c.enabled) { c.enabled = false; _disabledIk.Add(c); } } catch { }
 				}
 				if (_disabledIk.Count > 0)
-					VRChatArchiveModPlugin.Logger.LogInfo("[MimicPose] local IK paused (" + _disabledIk.Count + " component(s)) so the copied pose is what gets sent.");
+					Killiorim.Logger.LogInfo("[MimicPose] local IK paused (" + _disabledIk.Count + " component(s)) so the copied pose is what gets sent.");
 			}
 			catch { }
 		}
@@ -416,7 +416,7 @@ namespace VRChatArchiveMod.Modules
 				// Once: the interop shape of HumanPose can differ between builds. The bone copy takes
 				// over for the rest of the session, and the log says why.
 				_humanPoseFailed = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[MimicPose] HumanPoseHandler path failed (" + Short(e.Message) + "); falling back to bone rotations.");
+				Killiorim.Logger.LogWarning("[MimicPose] HumanPoseHandler path failed (" + Short(e.Message) + "); falling back to bone rotations.");
 				return false;
 			}
 		}

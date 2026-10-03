@@ -6,9 +6,9 @@ using System.Text;
 using System.Text.Json;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// ARCHIVE FAVOURITES — the user's unlimited favourites, in game.
 	//
@@ -122,7 +122,7 @@ namespace VRChatArchiveMod.Modules
 				Loaded = true;
 				Bump();
 				LastStatus = Count + " Archive favourite(s)";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Favorites] {Count} avatar favourite(s) from the Archive.");
+				Killiorim.Logger.LogInfo($"[Favorites] {Count} avatar favourite(s) from the Archive.");
 			}
 			catch (Exception e) { LastStatus = "favourites failed: " + e.Message; }
 			finally { _busy = false; }
@@ -210,7 +210,7 @@ namespace VRChatArchiveMod.Modules
 					// Marked done anyway: a failing batch retried every second forever would hammer
 					// the bridge for as long as the menu is open. The next full refresh retries.
 					foreach (var f in batch) f.MetaDone = true;
-					VRChatArchiveModPlugin.Logger.LogWarning("[Favorites] metadata batch failed (" + status + ")");
+					Killiorim.Logger.LogWarning("[Favorites] metadata batch failed (" + status + ")");
 					return;
 				}
 
@@ -240,7 +240,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				foreach (var f in batch) f.MetaDone = true;
-				VRChatArchiveModPlugin.Logger.LogWarning("[Favorites] metadata: " + e.Message);
+				Killiorim.Logger.LogWarning("[Favorites] metadata: " + e.Message);
 			}
 			finally { _metaBusy = false; }
 		}
@@ -315,7 +315,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			get
 			{
-				string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "thumbs");
+				string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "thumbs");
 				try { Directory.CreateDirectory(d); } catch { }
 				return d;
 			}

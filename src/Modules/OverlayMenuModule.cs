@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// THE MENU, DECLARED.
 	//
@@ -20,17 +21,15 @@ namespace VRChatArchiveMod.Modules
 		public override void OnInitialize()
 		{
 			Build();
-			VRChatArchiveModPlugin.Logger.LogInfo(
-				"[Overlay] built: " + Overlay.PageCount + " page(s) — Right-Shift+N opens it (Right-Shift+M is the radar's).");
+			Killiorim.Logger.LogInfo(
+				"[Overlay] built: " + Overlay.PageCount + " page(s) — Insert or Right-Shift+N opens it.");
 		}
 
 		public override void OnUpdate()
 		{
-			// One key check per frame. GetKeyDown is edge-triggered, so no debounce is needed.
-			// Right-Shift+N, not +M: +M is the radar's toggle (ModConfig.RadarEnabled, Menu.cs,
-			// OrbitModule all say so) and one press was flipping both — the overlay opened and
-			// the radar vanished at the same time.
-			if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.N))
+			// Insert is the primary toggle; keep the former shortcut as a fallback.
+			if (Input.GetKeyDown(KeyCode.Insert)
+				|| (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.N)))
 				Overlay.Visible = !Overlay.Visible;
 		}
 
@@ -41,58 +40,51 @@ namespace VRChatArchiveMod.Modules
 		private static void Build()
 		{
 			Overlay.Clear();
+			var overview = Overlay.AddPage("OVERVIEW");
+			var entries = ConfigRegistry.Config();
+			overview.Group("LIVE STATUS")
+				.Label(() => "FRAME RATE     " + Mathf.RoundToInt(1f / Mathf.Max(Time.smoothDeltaTime, 0.0001f)) + " FPS")
+				.Label(() => "SETTINGS       " + entries.Count + " AVAILABLE")
+				.Label(() => "FEATURE AREAS  " + (Overlay.PageCount - 1));
 
-			// ---- MOVEMENT
-			Overlay.Page move = Overlay.AddPage("MOVEMENT");
+			var pages = new Dictionary<string, Overlay.Page>(StringComparer.OrdinalIgnoreCase);
+			var groups = new Dictionary<string, Overlay.Foldout>(StringComparer.OrdinalIgnoreCase);
+			for (int i = 0; i < entries.Count; i++)
+			{
+				ConfigRegistry.Entry entry = entries[i];
+				if (entry?.Raw == null) continue;
+				string section = entry.Section ?? "General";
+				int dot = section.IndexOf('.');
+				string area = dot < 0 ? section : section.Substring(0, dot);
+				string pageKey = area.Trim();
+				if (!pages.TryGetValue(pageKey, out Overlay.Page page))
+				{
+					page = Overlay.AddPage(DisplayName(pageKey));
+					pages.Add(pageKey, page);
+				}
 
-			move.Group("FLY")
-				.Toggle("Fly", ModConfig.FlyEnabled)
-				.Toggle("Noclip", ModConfig.NoclipEnabled);
+				string groupKey = section;
+				if (!groups.TryGetValue(groupKey, out Overlay.Foldout group))
+				{
+					group = page.Group(DisplayName(section.Replace('.', ' ')));
+					group.Open = page.Foldouts.Count == 1;
+					groups.Add(groupKey, group);
+				}
+				group.Setting(entry.Raw);
+			}
+		}
 
-			move.Group("SPEED")
-				.Toggle("Custom speed", ModConfig.SpeedEnabled)
-				.Toggle("Override walk", ModConfig.WalkMod)
-				.Toggle("Override run", ModConfig.RunMod)
-				.Toggle("Override jump", ModConfig.JumpMod);
-
-			// The numbers only mean anything while custom speed is on, so they hide with it rather
-			// than sitting there looking editable and doing nothing.
-			// Quarter-unit steps: speeds are read as numbers you can say out loud, and a free float
-			// gives 4.3187262 for a value nobody chose.
-			move.Group("SPEED VALUES")
-				.Slider("Walk", ModConfig.WalkSpeed, 0f, 20f, "F2", 0.25f)
-				.Slider("Run", ModConfig.RunSpeed, 0f, 30f, "F2", 0.25f)
-				.Slider("Strafe", ModConfig.StrafeSpeed, 0f, 20f, "F2", 0.25f)
-				.Slider("Jump impulse", ModConfig.JumpImpulse, 0f, 15f, "F2", 0.25f)
-				.OnlyWhen(() => ModConfig.SpeedEnabled.Value);
-
-			move.Group("GRAVITY")
-				.Toggle("Player gravity off", ModConfig.GravityPlayerOff)
-				.Toggle("World gravity off", ModConfig.GravityWorldOff);
-
-			// ---- VISUALS
-			Overlay.Page vis = Overlay.AddPage("VISUALS");
-
-			vis.Group("RADAR")
-				.Toggle("Radar", ModConfig.RadarEnabled)
-				.Slider("Range (m)", ModConfig.RadarRange, 10f, 500f, "F0", 5f)
-				.Slider("Size (px)", ModConfig.RadarSize, 80f, 600f, "F0", 10f)
-				.Toggle("Show names", ModConfig.RadarNames)
-				.OnlyWhen(() => ModConfig.RadarEnabled.Value);
-
-			vis.Group("RADAR MAP")
-				.Toggle("World map", ModConfig.RadarMap)
-				.Slider("Resolution", ModConfig.RadarMapResolution, 64, 1024)
-				.Slider("Height", ModConfig.RadarMapHeight, 1f, 200f, "F0")
-				.Slider("Opacity", ModConfig.RadarMapOpacity, 0f, 1f, "F2")
-				.OnlyWhen(() => ModConfig.RadarMap.Value);
-
-			// ---- STATUS: read-only, and proof the overlay costs nothing to keep live
-			Overlay.Page info = Overlay.AddPage("STATUS");
-			info.Group("SESSION")
-				.Label(() => "fps        " + Mathf.RoundToInt(1f / Mathf.Max(Time.smoothDeltaTime, 0.0001f)))
-				.Label(() => "pages      " + Overlay.PageCount)
-				.Action("Close overlay", () => Overlay.Visible = false);
+		private static string DisplayName(string value)
+		{
+			if (string.IsNullOrEmpty(value)) return "GENERAL";
+			var result = new System.Text.StringBuilder(value.Length + 8);
+			for (int i = 0; i < value.Length; i++)
+			{
+				char c = value[i];
+				if (i > 0 && char.IsUpper(c) && char.IsLower(value[i - 1])) result.Append(' ');
+				result.Append(c);
+			}
+			return result.ToString().ToUpperInvariant();
 		}
 	}
 }

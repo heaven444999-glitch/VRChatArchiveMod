@@ -4,9 +4,9 @@ using System.Reflection;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Highlight ESP: glows the outline of each remote player's actual avatar mesh, plus the world's
 	// portals and grabbable pickups, using VRChat's OWN highlight post-effect (HighlightsFX, the one
@@ -76,7 +76,7 @@ namespace VRChatArchiveMod.Modules
 			try
 			{
 				if (ModConfig.EspHighlight.Value || ModConfig.EspPortals.Value || ModConfig.EspItems.Value)
-					VRChatArchiveModPlugin.Logger.LogInfo("[HighlightEsp] armed — glows via VRChat's own HighlightsFX.");
+					Killiorim.Logger.LogInfo("[HighlightEsp] armed — glows via VRChat's own HighlightsFX.");
 			}
 			catch { }
 		}
@@ -115,7 +115,7 @@ namespace VRChatArchiveMod.Modules
 					if (msG > 8.0 && Time.realtimeSinceStartup >= _nextSlowLog)
 					{
 						_nextSlowLog = Time.realtimeSinceStartup + 10f;
-						VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] EspCameraGuard.Tick took {msG:0.0} ms this frame.");
+						Killiorim.Logger.LogWarning($"[HighlightEsp] EspCameraGuard.Tick took {msG:0.0} ms this frame.");
 					}
 				}
 
@@ -130,7 +130,7 @@ namespace VRChatArchiveMod.Modules
 				if (msR > 8.0 && Time.realtimeSinceStartup >= _nextSlowLog)
 				{
 					_nextSlowLog = Time.realtimeSinceStartup + 10f;
-					VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] Resolve() took {msR:0.0} ms this frame (fx {(resolved ? "ok" : "missing")}, via {_how}).");
+					Killiorim.Logger.LogWarning($"[HighlightEsp] Resolve() took {msR:0.0} ms this frame (fx {(resolved ? "ok" : "missing")}, via {_how}).");
 				}
 				if (!resolved)
 				{
@@ -164,11 +164,11 @@ namespace VRChatArchiveMod.Modules
 					if (msWorld > 20.0 && Time.realtimeSinceStartup >= _nextSlowLog)
 					{
 						_nextSlowLog = Time.realtimeSinceStartup + 10f;
-						VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] world pass took {msWorld:0} ms ({_items.Count} pickup(s), {_portals.Count} portal(s) glowing).");
+						Killiorim.Logger.LogWarning($"[HighlightEsp] world pass took {msWorld:0} ms ({_items.Count} pickup(s), {_portals.Count} portal(s) glowing).");
 					}
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[HighlightEsp] update threw: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[HighlightEsp] update threw: {e}"); }
 		}
 
 		public override void OnShutdown() => ClearAll();
@@ -265,7 +265,7 @@ namespace VRChatArchiveMod.Modules
 			if (ms > 20.0 && Time.realtimeSinceStartup >= _nextPlayerCostLog)
 			{
 				_nextPlayerCostLog = Time.realtimeSinceStartup + 10f;
-				VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] player pass {ms:0} ms: {kept} avatar(s) kept, {relit} relit ({relitRenderers} renderers), {pruned} dead renderer(s) forgotten, {(gone != null ? gone.Count : 0)} left.");
+				Killiorim.Logger.LogWarning($"[HighlightEsp] player pass {ms:0} ms: {kept} avatar(s) kept, {relit} relit ({relitRenderers} renderers), {pruned} dead renderer(s) forgotten, {(gone != null ? gone.Count : 0)} left.");
 			}
 
 			FeatureHealth.Ok("ESP/Highlight", _players.Count == 0
@@ -290,8 +290,7 @@ namespace VRChatArchiveMod.Modules
 		private void DropPlayer(string uid)
 		{
 			if (!_players.TryGetValue(uid, out var lit)) return;
-			_players.Remove(uid);
-			UnlightAll(lit);
+			if (UnlightAll(lit)) _players.Remove(uid);
 		}
 
 		// Just the avatar glow, leaving portals and pickups alone.
@@ -299,7 +298,6 @@ namespace VRChatArchiveMod.Modules
 		{
 			var keys = new List<string>(_players.Keys);
 			foreach (string uid in keys) { try { DropPlayer(uid); } catch { } }
-			_players.Clear();
 		}
 
 		// ------------------------------------------------------------------ portals and pickups
@@ -403,7 +401,7 @@ namespace VRChatArchiveMod.Modules
 			if (msE + msL + msV > 8.0 && now >= _nextItemCostLog)
 			{
 				_nextItemCostLog = now + 5f;
-				VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] item step {msE + msL + msV:0.0} ms this frame: enumerate {msE:0.0} ms, light {msL:0.0} ms ({n} candidate(s) seen, {litNow} newly lit, cursor {_itemCursor}/{_itemCands.Count}), validate {msV:0.0} ms ({v} checked, {_items.Count} glowing).");
+				Killiorim.Logger.LogWarning($"[HighlightEsp] item step {msE + msL + msV:0.0} ms this frame: enumerate {msE:0.0} ms, light {msL:0.0} ms ({n} candidate(s) seen, {litNow} newly lit, cursor {_itemCursor}/{_itemCands.Count}), validate {msV:0.0} ms ({v} checked, {_items.Count} glowing).");
 			}
 		}
 
@@ -566,17 +564,17 @@ namespace VRChatArchiveMod.Modules
 					try { _portalIl2 = Il2CppType.From(_portalType); }
 					catch (Exception e)
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] portals: " + how + " is not an il2cpp type (" + e.Message + ") — portal glow marks nothing.");
+						Killiorim.Logger.LogWarning("[HighlightEsp] portals: " + how + " is not an il2cpp type (" + e.Message + ") — portal glow marks nothing.");
 						_portalType = null; _portalIl2 = null;
 					}
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] portals: type lookup threw: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[HighlightEsp] portals: type lookup threw: " + e.Message); }
 
 			if (_portalType != null)
-				VRChatArchiveModPlugin.Logger.LogInfo("[HighlightEsp] portals: component type resolved (" + how + ").");
+				Killiorim.Logger.LogInfo("[HighlightEsp] portals: component type resolved (" + how + ").");
 			else
-				VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] portals: no PortalInternal / VRC.PortalInternal / PortalInternalDynamic type on this build — portal glow marks nothing (no name matching).");
+				Killiorim.Logger.LogWarning("[HighlightEsp] portals: no PortalInternal / VRC.PortalInternal / PortalInternalDynamic type on this build — portal glow marks nothing (no name matching).");
 			return _portalType;
 		}
 
@@ -668,15 +666,13 @@ namespace VRChatArchiveMod.Modules
 		private void DropWorld(Dictionary<int, Lit> dict, int id)
 		{
 			if (!dict.TryGetValue(id, out var lit)) return;
-			dict.Remove(id);
-			UnlightAll(lit);
+			if (UnlightAll(lit)) dict.Remove(id);
 		}
 
 		private void ClearWorld(Dictionary<int, Lit> dict)
 		{
 			var ids = new List<int>(dict.Keys);
 			foreach (int id in ids) { try { DropWorld(dict, id); } catch { } }
-			dict.Clear();
 		}
 
 		// EVERYTHING this module ever lit, players AND world.
@@ -687,13 +683,21 @@ namespace VRChatArchiveMod.Modules
 			ClearWorld(_items);
 		}
 
-		private static void UnlightAll(Lit lit)
+		private static bool UnlightAll(Lit lit)
 		{
-			if (lit == null) return;
+			if (lit == null) return true;
+			bool complete = true;
 			for (int i = 0; i < lit.Renderers.Count; i++)
 			{
-				try { Unhighlight(lit.Renderers[i], lit.Fx); } catch { }
+				try
+				{
+					var renderer = lit.Renderers[i];
+					if (renderer == null || !NativeGuard.Alive(renderer)) continue;
+					if (!Unhighlight(renderer, lit.Fx)) complete = false;
+				}
+				catch { complete = false; }
 			}
+			return complete;
 		}
 
 		// ------------------------------------------------------------------ the effect
@@ -710,7 +714,7 @@ namespace VRChatArchiveMod.Modules
 			// Said once per distinct reason: this runs per renderer per frame, so anything louder
 			// would bury the log. It is the difference between "the glow is off" and "the glow tried
 			// and failed", which need different fixes.
-			VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] glow not applied: " + why + ".");
+			Killiorim.Logger.LogWarning("[HighlightEsp] glow not applied: " + why + ".");
 		}
 
 		private static readonly Dictionary<string, string> _lastWarn = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -718,7 +722,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			if (_lastWarn.TryGetValue(key, out var prev) && prev == msg) return;
 			_lastWarn[key] = msg;
-			VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] " + msg);
+			Killiorim.Logger.LogWarning("[HighlightEsp] " + msg);
 		}
 
 		// Is the effect there right now? (CapsuleEspModule's health report asks.)
@@ -740,48 +744,66 @@ namespace VRChatArchiveMod.Modules
 				if (!Resolve()) { Blame("HighlightsFX did not resolve"); return false; }
 				_addWithColor.Invoke(_fx, new object[] { rnd, col, true });
 				litWith = _fx;
-				if (!_litOnce) { _litOnce = true; VRChatArchiveModPlugin.Logger.LogInfo("[HighlightEsp] first renderer lit — the glow path works."); }
+				if (!_litOnce) { _litOnce = true; Killiorim.Logger.LogInfo("[HighlightEsp] first renderer lit — the glow path works."); }
 				return true;
 			}
 			catch (Exception e) { Blame("add-renderer threw: " + Core.Unwrap.Describe(e)); return false; }
 		}
 
-		public static void Unhighlight(Renderer rnd) => Unhighlight(rnd, null);
+		public static void Unhighlight(Renderer rnd) { Unhighlight(rnd, null); }
 
 		// UNCONDITIONAL. Every removal path the effect offers is tried, each on its own guard,
 		// against the instance the renderer was lit on (when it is still alive) — and against the
 		// current instance as well when that is a different, live one. If lighting worked,
 		// un-lighting works too: the fallback is the very call that lit it, with the effect's
 		// on/off flag set to FALSE.
-		public static void Unhighlight(Renderer rnd, object litWith)
+		public static bool Unhighlight(Renderer rnd, object litWith)
 		{
 			try
 			{
-				if (!NativeGuard.Alive(rnd) || rnd == null) return;   // destroyed: nothing left to glow
+				if (!NativeGuard.Alive(rnd) || rnd == null) return true;   // destroyed: nothing left to glow
 				if (_fx == null) { try { Resolve(); } catch { } }
 				object primary = FxAlive(litWith) ? litWith : null;
 				object current = FxAlive(_fx) ? _fx : null;
-				if (primary != null) UnhighlightOn(primary, rnd);
-				if (current != null && !SameFx(current, primary)) UnhighlightOn(current, rnd);
+				bool attempted = false, complete = true;
+				if (primary != null)
+				{
+					attempted = true;
+					if (!UnhighlightOn(primary, rnd)) complete = false;
+				}
+				if (current != null && !SameFx(current, primary))
+				{
+					attempted = true;
+					if (!UnhighlightOn(current, rnd)) complete = false;
+				}
+				return attempted && complete;
 			}
-			catch { }
+			catch { return false; }
 		}
 
-		private static void UnhighlightOn(object fx, Renderer rnd)
+		private static bool UnhighlightOn(object fx, Renderer rnd)
 		{
+			bool removed = false;
 			if (_removeRenderer != null)
 			{
 				try
 				{
 					var ps = _removeRenderer.GetParameters();
-					_removeRenderer.Invoke(fx, ps.Length == 2 ? new object[] { rnd, false } : new object[] { rnd });
+					object result = _removeRenderer.Invoke(fx, ps.Length == 2 ? new object[] { rnd, false } : new object[] { rnd });
+					removed |= _removeRenderer.ReturnType != typeof(bool) || (result is bool ok && ok);
 				}
 				catch { }
 			}
 			if (_addWithColor != null)
 			{
-				try { _addWithColor.Invoke(fx, new object[] { rnd, Color.clear, false }); } catch { }
+				try
+				{
+					object result = _addWithColor.Invoke(fx, new object[] { rnd, Color.clear, false });
+					removed |= _addWithColor.ReturnType != typeof(bool) || (result is bool ok && ok);
+				}
+				catch { }
 			}
+			return removed;
 		}
 
 		// A CACHED EFFECT IS ONLY GOOD WHILE IT IS ALIVE. Unity destroying it does not null the
@@ -845,7 +867,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					var asm = Assembly.Load("Assembly-CSharp");
 					_fxType = asm.GetType("HighlightsFX");
-					if (_fxType == null) { VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] HighlightsFX type not found on this build."); return false; }
+					if (_fxType == null) { Killiorim.Logger.LogWarning("[HighlightEsp] HighlightsFX type not found on this build."); return false; }
 
 					var methods = _fxType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 					foreach (var m in methods)
@@ -873,12 +895,12 @@ namespace VRChatArchiveMod.Modules
 					}
 
 					if (_addWithColor == null)
-						VRChatArchiveModPlugin.Logger.LogWarning("[HighlightEsp] no (Renderer, Color, bool) highlight method — outline ESP unavailable.");
+						Killiorim.Logger.LogWarning("[HighlightEsp] no (Renderer, Color, bool) highlight method — outline ESP unavailable.");
 					else
-						VRChatArchiveModPlugin.Logger.LogInfo("[HighlightEsp] HighlightsFX methods: add=" + _addWithColor.Name
+						Killiorim.Logger.LogInfo("[HighlightEsp] HighlightsFX methods: add=" + _addWithColor.Name
 							+ ", remove=" + (_removeRenderer != null ? _removeRenderer.Name : "none (un-light goes through the add call with enabled=false)") + ".");
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] resolve failed: {e.Message}"); }
+				catch (Exception e) { Killiorim.Logger.LogWarning($"[HighlightEsp] resolve failed: {e.Message}"); }
 			}
 			if (_fxType == null || _addWithColor == null) return false;
 
@@ -926,29 +948,29 @@ namespace VRChatArchiveMod.Modules
 						if (beh != null && !beh.enabled)
 						{
 							beh.enabled = true;
-							VRChatArchiveModPlugin.Logger.LogInfo("[HighlightEsp] the effect was disabled — switched on.");
+							Killiorim.Logger.LogInfo("[HighlightEsp] the effect was disabled — switched on.");
 						}
 						var go2 = beh != null ? beh.gameObject : null;
 						if (go2 != null && !go2.activeInHierarchy)
-							VRChatArchiveModPlugin.Logger.LogWarning(
+							Killiorim.Logger.LogWarning(
 								"[HighlightEsp] the effect's object is inactive — the glow will not draw.");
 					}
 					catch { }
 
-					VRChatArchiveModPlugin.Logger.LogInfo("[HighlightEsp] highlight effect resolved via " + _how + ".");
+					Killiorim.Logger.LogInfo("[HighlightEsp] highlight effect resolved via " + _how + ".");
 				}
 				else if (!_warnedNoFx && now - _firstFxTry >= GiveUpAfter)
 				{
 					// Once, and only once it has really been missing for half a minute — by which
 					// point a world is long since loaded and "not yet" is no longer an explanation.
 					_warnedNoFx = true;
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[HighlightEsp] HighlightsFX still not found after " + (int)GiveUpAfter + "s — capsule and "
 						+ "item glow will do nothing on this machine. Type found: " + (_fxType != null)
 						+ ", add method: " + (_addWithColor != null) + ". Still retrying once a second.");
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[HighlightEsp] instance lookup failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[HighlightEsp] instance lookup failed: {e.Message}"); }
 
 			return _fx != null;
 		}

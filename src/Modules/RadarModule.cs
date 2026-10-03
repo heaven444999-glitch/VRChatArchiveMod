@@ -2,9 +2,9 @@
 using UnityEngine;
 using VRC.Core;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Top-down radar: a circular minimap in the corner with a dot for every player around
 	// you, oriented to your view (forward = up), coloured by VRChat trust rank like the ESP.
@@ -254,7 +254,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[Radar] draw threw: {e}");
+				Killiorim.Logger.LogError($"[Radar] draw threw: {e}");
 			}
 		}
 

@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// CUSTOM USERNAME — the name the world's Udon scripts read for you, on this client.
 	//
@@ -90,7 +90,7 @@ namespace VRChatArchiveMod.Modules
 					if (!Armed)
 					{
 						Status = "custom username unavailable: field offsets unrepaired on this build";
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[Spoof] NOT ARMED — FieldOffsetFix could not verify the offset slot, so a field "
 							+ "write would land outside the object. Custom username is off for this session.");
 					}
@@ -111,7 +111,7 @@ namespace VRChatArchiveMod.Modules
 					if (Applied.Length > 0)
 					{
 						Applied = "";
-						VRChatArchiveModPlugin.Logger.LogInfo("[Spoof] new local VRCPlayerApi (world change) — re-applying.");
+						Killiorim.Logger.LogInfo("[Spoof] new local VRCPlayerApi (world change) — re-applying.");
 					}
 				}
 
@@ -126,7 +126,7 @@ namespace VRChatArchiveMod.Modules
 					&& !string.Equals(current, Applied, StringComparison.Ordinal))
 				{
 					RealName = current;
-					VRChatArchiveModPlugin.Logger.LogInfo("[Spoof] real display name noted: " + RealName);
+					Killiorim.Logger.LogInfo("[Spoof] real display name noted: " + RealName);
 				}
 
 				if (wanted.Length == 0)
@@ -135,7 +135,7 @@ namespace VRChatArchiveMod.Modules
 						&& string.Equals(current, Applied, StringComparison.Ordinal))
 					{
 						try { api.displayName = RealName; } catch { }
-						VRChatArchiveModPlugin.Logger.LogInfo("[Spoof] restored to " + RealName);
+						Killiorim.Logger.LogInfo("[Spoof] restored to " + RealName);
 					}
 					Applied = ""; _lastLogged = "";
 					Status = "custom username: off";
@@ -172,12 +172,12 @@ namespace VRChatArchiveMod.Modules
 				{
 					_lastLogged = wanted;
 					if (ok)
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							"[Spoof] udon name = \"" + wanted + "\" — VERIFIED by read-back (real: "
 							+ (RealName.Length > 0 ? RealName : "?") + "). Worlds on this client read the new "
 							+ "one; your nameplate still shows the real one.");
 					else
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[Spoof] wrote \"" + wanted + "\" but read back \"" + after
 							+ "\" — the write did not stick. Not retrying in a loop.");
 				}
@@ -194,7 +194,7 @@ namespace VRChatArchiveMod.Modules
 		//        at System.String.Ctor(Char*, Int32, Int32)
 		//        at Il2CppInterop.Runtime.IL2CPP.Il2CppStringToManaged(IntPtr)
 		//        at VRC.SDKBase.VRCPlayerApi.get_displayName()
-		//        at VRChatArchiveMod.Modules.SpoofModule.OnUpdate()
+		//        at Killiorim.Modules.SpoofModule.OnUpdate()
 		//
 		// The generated getter reads the field and hands the pointer straight to
 		// Il2CppStringToManaged, which validates nothing: it takes the length out of the string
@@ -256,7 +256,7 @@ namespace VRChatArchiveMod.Modules
 				_nameFieldTried = true;
 				_nameField = Il2CppStr.FindField(apiPtr, "displayName");
 				if (_nameField == IntPtr.Zero)
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[Spoof] VRCPlayerApi has no field called displayName on this build — custom username "
 						+ "cannot verify itself, so it stays off rather than writing blind.");
 			}
@@ -272,7 +272,7 @@ namespace VRChatArchiveMod.Modules
 			if (Il2CppStr.Rejected != _lastRejected)
 			{
 				_lastRejected = Il2CppStr.Rejected;
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[Spoof] refused an unsafe displayName read (" + _lastRejected + " so far). This is the "
 					+ "guard doing its job — that read used to end the process.");
 			}
@@ -294,8 +294,8 @@ namespace VRChatArchiveMod.Modules
 			if (total == 0) return;
 			string line = "[Spoof] \"" + wanted + "\" holding: " + _held + " ok, " + _reverted
 				+ " reverted out of " + total + " checks in the last 10 s";
-			if (_reverted == 0) VRChatArchiveModPlugin.Logger.LogInfo(line + " — stable.");
-			else VRChatArchiveModPlugin.Logger.LogWarning(
+			if (_reverted == 0) Killiorim.Logger.LogInfo(line + " — stable.");
+			else Killiorim.Logger.LogWarning(
 				line + " — the game is putting the real name back; a world reading between two of our "
 				+ "passes would see it. Re-asserted each time.");
 			_held = 0; _reverted = 0;

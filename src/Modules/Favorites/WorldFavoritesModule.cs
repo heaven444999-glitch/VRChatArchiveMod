@@ -1,19 +1,19 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
-	// The user ids behind the VRCHAT ARCHIVE social list. Data only — WorldFavListModule renders it.
+	// The world ids behind the VRCHAT ARCHIVE world list. Data only — WorldFavListModule renders it.
 	//
 	// Same shape as FavoritesModule (which does this for avatars), and it goes through the same
 	// route: the desktop client's local bridge, never VRChat's API. The bridge already understands
 	// worlds — its relay maps kind=world to the wrld_ prefix and the site's world favourites
 	// endpoint — so nothing new is asked of the server.
-	public class UserFavoritesModule : IModule
+	public class WorldFavoritesModule : IModule
 	{
-		public override string Name => "UserFavorites";
+		public override string Name => "WorldFavorites";
 
 		private static readonly List<string> Ids = new List<string>();
 		private static readonly object Gate = new object();
@@ -33,7 +33,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				// No config gate: Favorites/SocialList went 2026-09-01. Whether this runs at all is
+				// No config gate: Favorites/WorldList went 2026-09-01. Whether this runs at all is
 				// decided by its Register line in Plugin.cs (currently disarmed).
 				float now = Time.realtimeSinceStartup;
 				if (now < _next) return;
@@ -56,7 +56,7 @@ namespace VRChatArchiveMod.Modules
 				if (!VaAuth.InsideClient) { Status = "needs the desktop client"; return; }
 
 				var (ok, raw, code) = await VaAuth.FavRawAsync(
-					"{\"action\":\"list\",\"kind\":\"user\",\"id\":\"\"}");
+					"{\"action\":\"list\",\"kind\":\"world\",\"id\":\"\"}");
 				if (!ok) { Status = "list failed (" + code + ")"; return; }
 
 				var found = Collect(raw);
@@ -64,17 +64,17 @@ namespace VRChatArchiveMod.Modules
 				if (found.Count > 0) _gotOnce = true;
 				Bump();
 
-				Status = found.Count + " user(s)";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[UserFav] {found.Count} user id(s) from the Archive.");
+				Status = found.Count + " world(s)";
+				Killiorim.Logger.LogInfo($"[WorldFav] {found.Count} world id(s) from the Archive.");
 			}
 			catch (Exception e)
 			{
 				Status = "refresh failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[UserFav] refresh: " + e.Message);
+				Killiorim.Logger.LogWarning("[WorldFav] refresh: " + e.Message);
 			}
 		}
 
-		// Every usr_ id in the response, in order, without duplicates. Scraping the ids out rather
+		// Every wrld_ id in the response, in order, without duplicates. Scraping the ids out rather
 		// than modelling the payload keeps this working when the server's shape changes — the same
 		// approach the avatar list uses for avtr_.
 		private static List<string> Collect(string raw)
@@ -83,7 +83,7 @@ namespace VRChatArchiveMod.Modules
 			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			if (string.IsNullOrEmpty(raw)) return outp;
 
-			const string pfx = "usr_";
+			const string pfx = "wrld_";
 			int i = 0;
 			while (true)
 			{

@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// ONE recipe for turning a cloned VRChat menu card into one of ours.
 	//
@@ -27,12 +27,12 @@ namespace VRChatArchiveMod.Core
 	//   * hover/press through Unity's own transition, plus the game's click sound
 	public static class MenuCard
 	{
-		public static readonly Color Bg = new Color(0.086f, 0.196f, 0.231f, 1f);   // #16323B
-		public static readonly Color On = new Color(0.086f, 0.451f, 0.494f, 1f);   // lit
-		public static readonly Color Glow = new Color(0.647f, 0.353f, 1.000f, 0.85f); // violet bloom
+		public static readonly Color Bg = new Color(0.10f, 0.10f, 0.10f, 1f);   // black neutral
+		public static readonly Color On = new Color(0.90f, 0.90f, 0.90f, 1f);   // lit
+		public static readonly Color Glow = new Color(0.75f, 0.75f, 0.75f, 0.85f); // monochrome bloom
 		// The two states of a toggle tile, told entirely by the colour of its aura.
-		public static readonly Color GlowOn  = new Color(1.000f, 0.416f, 0.835f, 0.90f);  // pink  = ON
-		public static readonly Color GlowOff = new Color(0.290f, 0.659f, 1.000f, 0.55f);  // blue  = OFF
+		public static readonly Color GlowOn  = new Color(1.000f, 1.000f, 1.000f, 0.90f);  // white = ON
+		public static readonly Color GlowOff = new Color(0.36f, 0.36f, 0.36f, 0.55f);  // grey = OFF
 
 		private static readonly HashSet<string> Keep = new HashSet<string>(StringComparer.Ordinal)
 		{
@@ -107,7 +107,7 @@ namespace VRChatArchiveMod.Core
 				if (onClick != null) UiClick.AddClick(btn, onClick);
 				UiClick.AddClick(btn, PlayClick);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] '{label}' click failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuCard] '{label}' click failed: {e.Message}"); }
 
 			try { CopySprite(donor, card, "Background"); CopySprite(donor, card, "Icons/Icon"); } catch { }
 
@@ -122,13 +122,13 @@ namespace VRChatArchiveMod.Core
 				if (baseBg != null)
 				{
 					var c = baseBg.color;
-					if (c.r + c.g + c.b < 0.05f) c = new Color(0.20f, 0.10f, 0.32f, 1f);   // colourless copy -> a card-like violet
+					if (c.r + c.g + c.b < 0.05f) c = new Color(0.12f, 0.12f, 0.12f, 1f);   // colourless copy -> a neutral black card
 					baseBg.color = new Color(c.r, c.g, c.b, 1f);
 				}
 				else
 				{
 					var root = card.GetComponent<Image>();
-					if (root != null) { var c = root.color; if (c.a < 0.9f || c.r + c.g + c.b < 0.05f) root.color = new Color(0.20f, 0.10f, 0.32f, 1f); }
+					if (root != null) { var c = root.color; if (c.a < 0.9f || c.r + c.g + c.b < 0.05f) root.color = new Color(0.12f, 0.12f, 0.12f, 1f); }
 				}
 			}
 			catch { }
@@ -332,13 +332,13 @@ namespace VRChatArchiveMod.Core
 				try
 				{
 					if (_logged.Add(card.GetInstanceID()))
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							$"[MenuCard] layout '{card.name}' card={w:F0}x{h:F0} icon={side:F0} @-{top + side * 0.5f:F0} "
 							+ $"label@-{top + side + gap:F0} textH={textH:F0} labelNull={label == null}");
 				}
 				catch { }
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] card layout failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuCard] card layout failed: {e.Message}"); }
 		}
 
 		private static readonly HashSet<int> _logged = new HashSet<int>();
@@ -426,7 +426,7 @@ namespace VRChatArchiveMod.Core
 					100f, 0, SpriteMeshType.FullRect, new Vector4(B, B, B, B));
 				if (_rimSprite != null) _rimSprite.hideFlags = HideFlags.HideAndDontSave;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] rim sprite failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuCard] rim sprite failed: {e.Message}"); }
 			return _rimSprite;
 		}
 
@@ -445,6 +445,7 @@ namespace VRChatArchiveMod.Core
 				{
 					var ex = existing.GetComponent<Image>();
 					if (ex != null) ex.color = c;
+					existing.gameObject.SetActive(true);
 					return;
 				}
 
@@ -517,12 +518,20 @@ namespace VRChatArchiveMod.Core
 		{
 			try
 			{
-				SetAura(card, lit ? GlowOn : GlowOff);   // always on; only the colour says which
+				if (lit)
+				{
+					SetAura(card, GlowOn);
+				}
+				else
+				{
+					var glow = card.Find(GlowName);
+					if (glow != null) glow.gameObject.SetActive(false);
+					var rim = card.Find("Background")?.Find(RimChild);
+					if (rim != null) rim.gameObject.SetActive(false);
+				}
 
-				// Under keepStyle the game (or MenuThemeModule) owns the Background colour and Setup
-				// gave the Button a neutral WHITE tint for hover/press; overwriting that ColorBlock
-				// with On/Bg here would paint our own colour over the themed one. The aura above is
-				// the whole ON/OFF signal on such a card, so stop here.
+				// Under keepStyle the game owns the Background colour. OFF is the untouched theme;
+				// only ON adds our highlight, so an inactive switch cannot still look lit.
 				if (keepStyle) return;
 
 				var btn = card.GetComponent<Button>();
@@ -572,7 +581,7 @@ namespace VRChatArchiveMod.Core
 				_glowSprite = Sprite.Create(tex, new Rect(0f, 0f, N, N), new Vector2(0.5f, 0.5f));
 				if (_glowSprite != null) _glowSprite.hideFlags = HideFlags.HideAndDontSave;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] glow sprite failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuCard] glow sprite failed: {e.Message}"); }
 			return _glowSprite;
 		}
 
@@ -603,7 +612,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] glow failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[MenuCard] glow failed: {e.Message}");
 				return null;
 			}
 		}
@@ -648,7 +657,7 @@ namespace VRChatArchiveMod.Core
 				img.preserveAspect = true;
 				if (!iconT.gameObject.activeSelf) iconT.gameObject.SetActive(true);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] SetIcon failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuCard] SetIcon failed: {e.Message}"); }
 		}
 
 		public static void StripRoot(Transform t, bool keepStyle = false)
@@ -693,7 +702,7 @@ namespace VRChatArchiveMod.Core
 				img.color = IconTint;
 				if (!iconT.gameObject.activeSelf) iconT.gameObject.SetActive(true);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuCard] SetIcon(sprite) failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuCard] SetIcon(sprite) failed: {e.Message}"); }
 		}
 
 		// ICON COLOUR. The Launchpad icons the tiles are cloned from are tinted teal by VRChat's

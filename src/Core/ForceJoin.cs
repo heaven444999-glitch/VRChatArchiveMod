@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// GO TO A WORLD OR AN INSTANCE BY ID.
 	//
@@ -74,13 +74,13 @@ namespace VRChatArchiveMod.Core
 			if (room.Length == 0)
 			{
 				LastStatus = "no world id found in \"" + Trim(raw) + "\"";
-				VRChatArchiveModPlugin.Logger.LogWarning("[ForceJoin] " + LastStatus);
+				Killiorim.Logger.LogWarning("[ForceJoin] " + LastStatus);
 				return false;
 			}
 
 			try
 			{
-				VRChatArchiveModPlugin.Logger.LogInfo("[ForceJoin] going to " + room);
+				Killiorim.Logger.LogInfo("[ForceJoin] going to " + room);
 				VRC.SDKBase.Networking.GoToRoom(room);
 				// SAID, NOT PROVED. GoToRoom returns immediately and the transition happens over the
 				// next seconds; whether the instance accepts us is the server's answer, not ours, and
@@ -92,7 +92,7 @@ namespace VRChatArchiveMod.Core
 			catch (Exception e)
 			{
 				LastStatus = "join failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[ForceJoin] " + LastStatus);
+				Killiorim.Logger.LogWarning("[ForceJoin] " + LastStatus);
 				return false;
 			}
 		}

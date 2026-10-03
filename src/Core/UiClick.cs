@@ -2,7 +2,7 @@ using System;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// EVERY BUTTON IN THIS MOD WENT THROUGH A CAST THAT KILLS THE GAME.
 	//
@@ -28,7 +28,7 @@ namespace VRChatArchiveMod.Core
 			try { btn.onClick.AddListener((UnityAction)onClick); }
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[UiClick] listener refused: " + Unwrap.Describe(e));
+				Killiorim.Logger.LogWarning("[UiClick] listener refused: " + Unwrap.Describe(e));
 			}
 		}
 
@@ -39,7 +39,7 @@ namespace VRChatArchiveMod.Core
 			try { slider.onValueChanged.AddListener((UnityAction<float>)onChanged); }
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[UiClick] value listener refused: " + Unwrap.Describe(e));
+				Killiorim.Logger.LogWarning("[UiClick] value listener refused: " + Unwrap.Describe(e));
 			}
 		}
 
@@ -48,12 +48,12 @@ namespace VRChatArchiveMod.Core
 		{
 			_refused++;
 			if (_refused == 1)
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[UiClick] buttons are being drawn WITHOUT click handlers: wiring one needs "
 					+ "Il2CppInterop's delegate bridge, which crashes this VRChat build. The menu will "
 					+ "appear but not respond. See [Compatibility] AllowIl2CppDelegates.");
 			else if (_refused % 25 == 0)
-				VRChatArchiveModPlugin.Logger.LogWarning("[UiClick] " + _refused + " unwired controls so far.");
+				Killiorim.Logger.LogWarning("[UiClick] " + _refused + " unwired controls so far.");
 		}
 	}
 }

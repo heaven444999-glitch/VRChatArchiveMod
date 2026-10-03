@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// WHAT THE ARCHIVE ITSELF IS DOING, SHOWN IN GAME.
 	//

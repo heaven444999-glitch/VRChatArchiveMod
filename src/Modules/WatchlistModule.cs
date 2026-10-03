@@ -6,9 +6,9 @@ using Il2CppInterop.Runtime;
 using UnityEngine;
 using VRC.Core;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Watchlist: flags specific VRChat user ids. When a watched user is in your instance they
 	// get an animated super-RGB ESP box (rainbow outline + soft glow) so they stand out, and
@@ -53,7 +53,7 @@ namespace VRChatArchiveMod.Modules
 					_alertTried = true;
 					byte[] wav = Core.AssetLoader.RawBytes("watch_join.wav");
 					if (wav != null) _alertClip = Core.WavAudio.Decode(wav, "watch_join");
-					if (_alertClip == null) VRChatArchiveModPlugin.Logger.LogWarning("[Watchlist] join sound could not be loaded.");
+					if (_alertClip == null) Killiorim.Logger.LogWarning("[Watchlist] join sound could not be loaded.");
 				}
 				if (_alertClip == null) return;
 
@@ -73,7 +73,7 @@ namespace VRChatArchiveMod.Modules
 				_alertSrc.volume = 1f;
 				_alertSrc.PlayOneShot(_alertClip);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[Watchlist] alert: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[Watchlist] alert: " + e.Message); }
 		}
 
 		public override void OnSceneLoaded(int buildIndex)
@@ -120,7 +120,7 @@ namespace VRChatArchiveMod.Modules
 		public override void OnInitialize()
 		{
 			RebuildWatch();
-			VRChatArchiveModPlugin.Logger.LogInfo($"[Watchlist] armed — {_watch.Count} watched user(s).");
+			Killiorim.Logger.LogInfo($"[Watchlist] armed — {_watch.Count} watched user(s).");
 		}
 
 		public override void OnUpdate()
@@ -136,7 +136,7 @@ namespace VRChatArchiveMod.Modules
 				_frame = 0;
 				PollPresence();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[Watchlist] update threw: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[Watchlist] update threw: {e}"); }
 		}
 
 		private void RebuildWatch()
@@ -190,7 +190,7 @@ namespace VRChatArchiveMod.Modules
 					{
 						_notifyName = nameByUid.TryGetValue(uid, out string n) ? n : uid;
 						_notifyUntil = Time.realtimeSinceStartup + 6f;
-						VRChatArchiveModPlugin.Logger.LogInfo($"[Watchlist] watched user joined: {_notifyName} ({uid}).");
+						Killiorim.Logger.LogInfo($"[Watchlist] watched user joined: {_notifyName} ({uid}).");
 						// The banner is easy to miss when you are not looking at that corner of the
 						// screen — which is most of the time, and the whole point of watching someone.
 						Alert();
@@ -219,7 +219,7 @@ namespace VRChatArchiveMod.Modules
 				if (settled && _memberPrimed && !_presentMembers.Contains(e.UserId))
 				{
 					(newcomers ??= new List<string>()).Add(e.Name);
-					VRChatArchiveModPlugin.Logger.LogInfo($"[Watchlist] VRChat Archive member joined: {e.Name}.");
+					Killiorim.Logger.LogInfo($"[Watchlist] VRChat Archive member joined: {e.Name}.");
 				}
 			}
 			// Several members can arrive in the same poll; naming only the last one silently
@@ -258,7 +258,7 @@ namespace VRChatArchiveMod.Modules
 				DrawMemberNotification();
 				GUI.color = Color.white;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[Watchlist] draw threw: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[Watchlist] draw threw: {e}"); }
 		}
 
 		private void DrawBoxes()
@@ -438,7 +438,7 @@ namespace VRChatArchiveMod.Modules
 						?.MakeGenericMethod(_playerType);
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[Watchlist] reflection unavailable: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[Watchlist] reflection unavailable: {e.Message}"); }
 		}
 
 		// Goes through the shared cached resolver: this used to rebuild an Il2CppType, search the

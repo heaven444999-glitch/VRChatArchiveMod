@@ -3,22 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
 using UnityEngine.Networking;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
-	// Era loading screen: while a world is loading we draw VRChat's OWN period loading
-	// screen over the game's modern one, using artwork lifted from the real Steam builds.
-	//
-	//   2017 — the turquoise diamond, dashed ring, glow halo, waveform line and the
-	//          speech-bubble logo (popup-* textures from the 1 Feb 2017 build)
-	//   2018 — the flat cyan progress bar over a dark backdrop (GUI_LoadingBar from the
-	//          22 Dec 2018 build)
-	//
-	// Only TEXTURES and audio survive the jump between engines: the 2017 screen was a Unity
-	// 5.3 scene full of materials and shaders that cannot be dropped into Unity 2022. So we
-	// re-draw the same layout ourselves in screen space from those textures, which also
-	// means nothing is injected into the game's own loading machinery.
+	// Loading screen overlay: opaque black sky, a procedural starfield and a restrained
+	// indeterminate loader. Loading detection stays passive; VRChat's world-loading machinery
+	// is never patched or replaced.
 	//
 	// Loading is detected passively: VRChat's active scene changes and the local player
 	// disappears while a world loads, so we watch for that instead of hooking anything.
@@ -43,7 +34,6 @@ namespace VRChatArchiveMod.Modules
 		// never stops" looked like. Cleared only when the popup genuinely goes inactive.
 		private bool _suppressed;
 		private float _loadingSince;
-		private float _fakeProgress;
 		private int _frame;
 
 		// The game's own loading popup is the ground truth for "a world is loading":
@@ -69,7 +59,7 @@ namespace VRChatArchiveMod.Modules
 		public override void OnInitialize()
 		{
 			RequestClip();
-			VRChatArchiveModPlugin.Logger.LogInfo("[EraLoading] armed — 2017 loading screen.");
+			Killiorim.Logger.LogInfo("[EraLoading] armed — starfield loading screen.");
 		}
 
 		public override void OnUpdate()
@@ -107,22 +97,22 @@ namespace VRChatArchiveMod.Modules
 				{
 					if (Time.realtimeSinceStartup - _loadingSince > MaxLoadSeconds)
 					{
-						VRChatArchiveModPlugin.Logger.LogInfo("[EraLoading] load exceeded the ceiling — ending (music off).");
+						Killiorim.Logger.LogInfo("[EraLoading] load exceeded the ceiling — ending (music off).");
 						nowLoading = false; _suppressed = true;
 					}
 					else if (Time.realtimeSinceStartup - _loadingSince >= GraceSeconds && LocalPlayerInWorld())
 					{
-						VRChatArchiveModPlugin.Logger.LogInfo("[EraLoading] local player is in the world — ending (music off).");
+						Killiorim.Logger.LogInfo("[EraLoading] local player is in the world — ending (music off).");
 						nowLoading = false; _suppressed = true;
 					}
 				}
 
 				if (nowLoading && !_loading)
 				{
-					_loading = true; IsLoading = true; _loadingSince = Time.realtimeSinceStartup; _fakeProgress = 0f;
+					_loading = true; IsLoading = true; _loadingSince = Time.realtimeSinceStartup;
 					// Decisive evidence: until this line appears in a report we cannot claim the
 					// era screen ever engaged, only that the popup object was found.
-					VRChatArchiveModPlugin.Logger.LogInfo("[EraLoading] LOADING STARTED — drawing the 2017 screen.");
+					Killiorim.Logger.LogInfo("[EraLoading] LOADING STARTED — drawing the starfield screen.");
 				}
 				else if (!nowLoading && _loading)
 				{
@@ -142,10 +132,10 @@ namespace VRChatArchiveMod.Modules
 				else if (!show && _audioStarted)
 				{
 					StopMusic(); UnduckGameAudio(); _audioStarted = false;
-					VRChatArchiveModPlugin.Logger.LogInfo("[EraLoading] switched off mid-load — audio restored, detection still running.");
+					Killiorim.Logger.LogInfo("[EraLoading] switched off mid-load — audio restored, detection still running.");
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[EraLoading] update threw: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[EraLoading] update threw: {e.Message}"); }
 		}
 
 		// A world change can destroy the popup we cached; re-arm the scan so detection re-resolves
@@ -159,7 +149,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			if (!_loading && !_audioStarted) return;
 			_loading = false; IsLoading = false;
-			VRChatArchiveModPlugin.Logger.LogInfo("[EraLoading] loading ended.");
+			Killiorim.Logger.LogInfo("[EraLoading] loading ended.");
 			if (_audioStarted) { StopMusic(); UnduckGameAudio(); _audioStarted = false; }
 		}
 		private bool _audioStarted;
@@ -208,11 +198,26 @@ namespace VRChatArchiveMod.Modules
 				for (int i = 0; i < _loginScreens.Count; i++)
 				{
 					var t = _loginScreens[i];
-					if (t != null && t.gameObject.activeInHierarchy) return true;
+					if (IsLoginScreenVisible(t)) return true;
 				}
 			}
 			catch { }
 			return false;
+		}
+
+		private static bool IsLoginScreenVisible(Transform screen)
+		{
+			try
+			{
+				if (screen == null || !screen.gameObject.activeInHierarchy) return false;
+				for (Transform t = screen; t != null; t = t.parent)
+				{
+					var group = t.GetComponent<CanvasGroup>();
+					if (group != null && group.alpha <= 0.05f) return false;
+				}
+				return true;
+			}
+			catch { return false; }
 		}
 
 		private bool DetectLoading()
@@ -258,7 +263,6 @@ namespace VRChatArchiveMod.Modules
 				foreach (var t in Resources.FindObjectsOfTypeAll<Transform>())
 				{
 					if (t == null || t.name != "LoadingPopup") continue;
-					if (t.hideFlags == HideFlags.HideAndDontSave) continue;
 					// Prefab assets live outside any scene; only scene instances can be shown.
 					// `catch { continue; }`, NOT `catch { }`. Three objects in this build are named
 					// LoadingPopup: one live in level1, plus LoadingScreenCosmeticsHandler/LoadingPopup
@@ -271,10 +275,10 @@ namespace VRChatArchiveMod.Modules
 				if (_loadingPopups.Count != _lastPopupCount)
 				{
 					_lastPopupCount = _loadingPopups.Count;
-					VRChatArchiveModPlugin.Logger.LogInfo($"[EraLoading] loading popup candidates: {_loadingPopups.Count}.");
+					Killiorim.Logger.LogInfo($"[EraLoading] loading popup candidates: {_loadingPopups.Count}.");
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[EraLoading] popup scan failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[EraLoading] popup scan failed: {e.Message}"); }
 		}
 
 		// Silence VRChat's own loading audio for the duration, so the era track replaces it.
@@ -298,7 +302,7 @@ namespace VRChatArchiveMod.Modules
 					}
 				}
 				if (_ducked.Count > 0)
-					VRChatArchiveModPlugin.Logger.LogInfo($"[EraLoading] muted {_ducked.Count} of VRChat's own loading source(s).");
+					Killiorim.Logger.LogInfo($"[EraLoading] muted {_ducked.Count} of VRChat's own loading source(s).");
 			}
 			catch { }
 		}
@@ -334,7 +338,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_music.isPlaying) _music.Play();
 				return _music.isPlaying;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[EraLoading] music start failed: {e.Message}"); return false; }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[EraLoading] music start failed: {e.Message}"); return false; }
 		}
 
 		private static void StopMusic()
@@ -360,7 +364,7 @@ namespace VRChatArchiveMod.Modules
 				byte[] wav;
 				using (var res = typeof(EraLoadingModule).Assembly.GetManifestResourceStream("era_music" + key + ".wav"))
 				{
-					if (res == null) { VRChatArchiveModPlugin.Logger.LogWarning("[EraLoading] embedded music missing."); return; }
+					if (res == null) { Killiorim.Logger.LogWarning("[EraLoading] embedded music missing."); return; }
 					wav = new byte[res.Length];
 					int read = 0;
 					while (read < wav.Length)
@@ -374,13 +378,13 @@ namespace VRChatArchiveMod.Modules
 				_clip = ClipFromWav(wav, "ArchiveEraMusic" + key);
 				if (_clip != null)
 				{
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						$"[EraLoading] {key} music loaded ({_clip.length:F1}s, {_clip.frequency}Hz, {_clip.channels}ch).");
 					if (_loading) StartMusic();
 				}
-				else VRChatArchiveModPlugin.Logger.LogWarning("[EraLoading] could not decode the embedded music.");
+				else Killiorim.Logger.LogWarning("[EraLoading] could not decode the embedded music.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[EraLoading] music load failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[EraLoading] music load failed: {e.Message}"); }
 		}
 
 		// Minimal RIFF/WAVE reader: walks the chunks, accepts 16-bit PCM, converts to the
@@ -424,7 +428,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[EraLoading] wav decode failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[EraLoading] wav decode failed: {e.Message}");
 				return null;
 			}
 		}
@@ -438,170 +442,165 @@ namespace VRChatArchiveMod.Modules
 				if (!_loading || Event.current.type != EventType.Repaint) return;
 				float elapsed = Time.realtimeSinceStartup - _loadingSince;
 				if (elapsed < GraceSeconds) return;
-
-				// The game never tells us the real percentage, so the bar eases towards 100%
-				// and never quite reaches it — the same illusion the original screens used.
-				_fakeProgress = Mathf.Clamp01(1f - Mathf.Exp(-elapsed * 0.18f)) * 0.97f;
-
-				GuiKit.Fill(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.02f, 0.03f, 0.05f, 0.96f));
-				Draw2017();
-				GUI.color = Color.white;
+				DrawStarfield(elapsed);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[EraLoading] draw threw: {e}"); }
+			catch (Exception e) { GUI.color = Color.white; Killiorim.Logger.LogError($"[EraLoading] draw threw: {e}"); }
 		}
 
-		// Both screens are laid out in the ORIGINAL canvas units read straight from the old
-		// scenes, then scaled to the running resolution the way Unity's CanvasScaler did
-		// (reference height 1080). That is why the proportions match the real thing instead
-		// of being eyeballed:
-		//
-		//   2017 (level1, all at scale 0.80)      2018 (level1)
-		//     InnerDashRing    (0,   0) 604x604     VRChat_LOGO  (0, 110) 350x149
-		//     ProgressLine     (0, 160) 325x89      LOADING_BAR  (0,  39) 632x20
-		//     ProgressLineBack (0,  93) 325x89      LowPercent   (-154,130) scale 0.80
-		//     ProgressPercent  (0, -43) 200x50
-		//     Low/HighPercent (∓152,130) 100x50
-		//     TextVRChat       (-8, 196) 437x129 (scale 1.0)
-		private const float RefHeight = 1080f;   // design resolution of the old canvases
-		private static float U => Screen.height / RefHeight;
-
-		// Canvas rect (centre-anchored, Y up) -> screen rect (Y down).
-		private static Rect R(float x, float y, float w, float h, float scale = 1f)
+		private struct ForegroundStar
 		{
-			float u = U, sw = w * scale * u, sh = h * scale * u;
-			return new Rect(Screen.width * 0.5f + x * scale * u - sw * 0.5f,
-			                Screen.height * 0.5f - y * scale * u - sh * 0.5f, sw, sh);
+			public float X, Y, Speed, Size, Brightness, Phase;
 		}
 
-		// Authentic ring stack, read straight out of both original builds' level1 scene.
-		// Every ring carries a `UiSpinner` whose Update is exactly:
-		//     transform.Rotate(RotationSpeed * Time.deltaTime)
-		// so the motion is a constant Z spin in DEGREES PER SECOND — no easing, no clip:
-		//     InnerDashRing  604 x 604   @ (0,0)        Z = 10 deg/s
-		//     OuterGlowRing  855 x 854   @ (0,-157.3)   Z = 10 deg/s
-		//     RingGlow       855 x 854   @ (0,0)        Z =  1 deg/s   (slow drift)
-		//     MidRing        645 x 644   @ (0,0)        NO spinner — static
-		// Unity's Rotate(+Z) turns counter-clockwise; IMGUI's Y axis points down, so the
-		// screen-space angle is negated to match what the old clients actually showed.
-		private const float SpinFast = 10f;    // InnerDashRing + OuterGlowRing
-		private const float SpinSlow = 1f;     // RingGlow
+		private static Texture2D _starfield;
+		private static int _starfieldWidth, _starfieldHeight;
+		private static readonly ForegroundStar[] ForegroundStars = CreateForegroundStars();
+		private static GUIStyle _titleStyle, _captionStyle;
 
-		private void DrawRings(float t, float S)
+		private static ForegroundStar[] CreateForegroundStars()
 		{
-			// Exactly the three rings the real LoadingPopup carries, in its own child order.
-			// (OuterGlowRing belongs to a DIFFERENT popup — it is not part of this screen.)
-			Spin("l17_ringglow", R(0f, 0f, 855f, 854f, S), new Color(0.15f, 0.85f, 0.85f, 0.40f), -t * SpinSlow);
-			Tex ("l17_midring",  R(0f, 0f, 645f, 644f, S), new Color(1f, 1f, 1f, 0.30f));
-			Spin("l17_dashring", R(0f, 0f, 604f, 604f, S), new Color(0.18f, 0.85f, 0.87f, 1f), -t * SpinFast);
-		}
-
-		// 2017 — the real LoadingPopup child list, with each element's own RectTransform:
-		//     Rectangle        788 x 788   (0, 0)      backdrop
-		//     MidRing          645 x 644   (0, 0)      static
-		//     InnerDashRing    604 x 604   (0, 0)      UiSpinner Z = 10 deg/s
-		//     RingGlow         855 x 854   (0, 0)      UiSpinner Z =  1 deg/s
-		//     ProgressLineBack 325 x 89    (0, 93)     the wave line, dim
-		//     ProgressLine     325 x 89    (0, 93)     the SAME wave, filled by progress
-		//     LowPercent       100 x 50    (-152, 63)  "0%"
-		//     HighPercent      100 x 50    ( 152, 63)  "100%"
-		//     ProgressPercent  199.8 x 50  (0, -43)    the live percentage
-		//     TitleText        526 x 92.8  (0, 8)
-		// Everything except Rectangle sits at the popup's own 0.8 scale.
-		private void Draw2017()
-		{
-			const float S = 0.80f;
-			float t = Time.realtimeSinceStartup;
-
-			Tex("l17_diamond", R(0f, 0f, 788f, 788f), new Color(0.09f, 0.58f, 0.55f, 0.55f));
-			DrawRings(t, S);
-
-			// The wave line is ONE sprite drawn twice at the SAME spot: a dim full-width base,
-			// then the bright copy clipped left-to-right by the progress — that clip IS the
-			// animation (both rects are at y=93 in the scene; they are not stacked).
-			// Colours taken from the real Image components in level1 (both are plain
-			// "Simple" images stacked on the SAME rect): the dark teal wave is the track and
-			// the WHITE wave is revealed across it as the load progresses.
-			//   ProgressLineBack  color = (0.048, 0.343, 0.382, 1)
-			//   ProgressLine      color = (1, 1, 1, 1)
-			Rect back = R(0f, 93f, 325f, 89f, S);
-			Tex("l17_wave", back, new Color(0.048f, 0.343f, 0.382f, 1f));
-			DrawClipped("l17_wave", back, Color.white, _fakeProgress);
-
-			var logo = AssetLoader.EraTexture("logo");
-			if (logo != null)
+			var random = new System.Random(20171017);
+			var stars = new ForegroundStar[54];
+			for (int i = 0; i < stars.Length; i++)
 			{
-				GUI.color = Color.white;
-				GUI.DrawTexture(R(0f, 196f, 437f, 129f), logo, ScaleMode.ScaleToFit, true);
+				stars[i] = new ForegroundStar
+				{
+					X = (float)random.NextDouble(),
+					Y = (float)random.NextDouble(),
+					Speed = 0.00015f + (float)random.NextDouble() * 0.00075f,
+					Size = random.NextDouble() < 0.12 ? 2f : 1f,
+					Brightness = 0.25f + (float)random.NextDouble() * 0.65f,
+					Phase = (float)random.NextDouble() * Mathf.PI * 2f,
+				};
+			}
+			return stars;
+		}
+
+		private static void EnsureStarfield()
+		{
+			int width = 1024;
+			int height = Mathf.Clamp(Mathf.RoundToInt(width * Screen.height / (float)Mathf.Max(1, Screen.width)), 256, 1200);
+			if (_starfield != null && width == _starfieldWidth && height == _starfieldHeight) return;
+			if (_starfield != null) UnityEngine.Object.Destroy(_starfield);
+
+			var pixels = new Color[width * height];
+			for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.black;
+			var random = new System.Random(198411);
+			for (int i = 0; i < 920; i++)
+			{
+				int x = random.Next(width), y = random.Next(height);
+				bool bright = random.NextDouble() < 0.045;
+				float intensity = bright
+					? 0.62f + (float)random.NextDouble() * 0.38f
+					: 0.12f + (float)random.NextDouble() * 0.48f;
+				float sigma = bright ? 0.85f + (float)random.NextDouble() * 0.9f : 0.28f + (float)random.NextDouble() * 0.30f;
+				float tint = 0.90f + (float)random.NextDouble() * 0.10f;
+				int radius = Mathf.CeilToInt(sigma * 3f);
+				for (int dy = -radius; dy <= radius; dy++)
+				{
+					int py = y + dy;
+					if (py < 0 || py >= height) continue;
+					for (int dx = -radius; dx <= radius; dx++)
+					{
+						int px = x + dx;
+						if (px < 0 || px >= width) continue;
+						float d2 = dx * dx + dy * dy;
+						float value = intensity * Mathf.Exp(-d2 / (2f * sigma * sigma));
+						if (value < 0.012f) continue;
+						int index = py * width + px;
+						Color old = pixels[index];
+						pixels[index] = new Color(
+							Mathf.Max(old.r, value * tint),
+							Mathf.Max(old.g, value * Mathf.Min(1f, tint + 0.025f)),
+							Mathf.Max(old.b, value), 1f);
+					}
+				}
 			}
 
-			Label(R(-152f, 63f, 100f, 50f, S), "0%", 12, new Color(0.6f, 0.9f, 0.95f));
-			Label(R( 152f, 63f, 100f, 50f, S), "100%", 12, new Color(0.6f, 0.9f, 0.95f));
-			Label(R(0f, 8f, 526f, 92.8f, S), "LOADING", 30, new Color(0.20f, 0.83f, 0.85f));
-			Label(R(0f, -43f, 199.8f, 50f, S), (_fakeProgress * 100f).ToString("F2") + "%", 22, Color.white);
+			_starfield = new Texture2D(width, height, TextureFormat.RGB24, false);
+			_starfield.name = "KilliorimStarfield";
+			_starfield.hideFlags = HideFlags.HideAndDontSave;
+			_starfield.filterMode = FilterMode.Bilinear;
+			_starfield.wrapMode = TextureWrapMode.Clamp;
+			_starfield.SetPixels(pixels);
+			_starfield.Apply(false, true);
+			_starfieldWidth = width;
+			_starfieldHeight = height;
 		}
 
-		// 2018 — the REAL LoadingPopup, read from the 22 Dec 2018 build's level1:
-		//     3DElements/LoadingBackground_TealGradient   a teal 3D scene (approximated here)
-		//     ProgressPanel/Parent_Loading_Progress
-		//       Panel_Backdrop     1040 x 176.6  (0, 0)
-		//       Decoration_Left      60 x 60     (-470, -26)
-		//       Decoration_Right     60 x 60     ( 470, -26)  mirrored (scale -1)
-		//       Loading Elements
-		//         txt_LOADING      425.5 x 81.9  (-390, -20)
-		//         txt_Percent      375.5 x 82    ( 143, -15)
-		//         LOADING_BAR_BG     632 x 19.5  (0, 39.3)
-		//         LOADING_BAR        632 x 19.5  (0, 39.3)
-		// It carries NO rings and NO logo: the spinning rings found elsewhere in level1
-		// belong to a different popup, and drawing them here was simply wrong.
-
-
-		// Draws the left `fill` fraction of a texture, clipping instead of squashing it —
-		// this is how the ProgressLine grows over ProgressLineBack in the original scene.
-		private static void DrawClipped(string key, Rect r, Color tint, float fill)
+		private static void DrawStarfield(float elapsed)
 		{
-			var tex = AssetLoader.EraTexture(key);
-			if (tex == null) return;
-			fill = Mathf.Clamp01(fill);
-			if (fill <= 0f) return;
-			GUI.color = tint;
-			GUI.BeginGroup(new Rect(r.x, r.y, r.width * fill, r.height));
-			GUI.DrawTexture(new Rect(0f, 0f, r.width, r.height), tex, ScaleMode.StretchToFill, true);
-			GUI.EndGroup();
+			Color previous = GUI.color;
+			GUI.color = Color.black;
+			GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+			GUI.color = Color.white;
+			EnsureStarfield();
+			if (_starfield != null)
+				GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), _starfield, ScaleMode.StretchToFill, false);
+
+			DrawForegroundStars(elapsed);
+			DrawLoadingIndicator(elapsed);
+			GUI.color = previous;
+		}
+
+		private static void DrawForegroundStars(float elapsed)
+		{
+			Texture2D pixel = Texture2D.whiteTexture;
+			for (int i = 0; i < ForegroundStars.Length; i++)
+			{
+				ForegroundStar star = ForegroundStars[i];
+				float x = Mathf.Repeat(star.X + elapsed * star.Speed, 1f) * Screen.width;
+				float y = Mathf.Repeat(star.Y + elapsed * star.Speed * 0.11f, 1f) * Screen.height;
+				float alpha = star.Brightness * (0.78f + 0.22f * Mathf.Sin(elapsed * 1.3f + star.Phase));
+				GUI.color = new Color(0.83f, 0.90f, 1f, alpha * 0.16f);
+				if (star.Size > 1f) GUI.DrawTexture(new Rect(x - 3f, y - 3f, 7f, 7f), pixel);
+				GUI.color = new Color(0.91f, 0.95f, 1f, alpha);
+				GUI.DrawTexture(new Rect(x, y, star.Size, star.Size), pixel);
+			}
 			GUI.color = Color.white;
 		}
 
-		// One spinning ring: rotates about the RECT'S OWN CENTRE, like the scene's UiSpinner
-		// (the old code pivoted on screen centre, which made off-centre rings orbit instead).
-		private static void Spin(string key, Rect r, Color tint, float angle)
+		private static void DrawLoadingIndicator(float elapsed)
 		{
-			var tex = AssetLoader.EraTexture(key);
-			if (tex == null) return;
-			Matrix4x4 old = GUI.matrix;
-			GUIUtility.RotateAroundPivot(angle % 360f, new Vector2(r.center.x, r.center.y));
-			GUI.color = tint;
-			GUI.DrawTexture(r, tex, ScaleMode.StretchToFill, true);
+			float width = Mathf.Min(460f, Screen.width * 0.42f);
+			float x = (Screen.width - width) * 0.5f;
+			float y = Screen.height * 0.77f;
+			EnsureLoadingStyles();
+
+			GUI.color = new Color(0.78f, 0.84f, 0.92f, 0.95f);
+			GUI.Label(new Rect(x, y - 62f, width, 26f), "LOADING WORLD", _titleStyle);
+			GUI.color = new Color(0.52f, 0.59f, 0.68f, 0.88f);
+			GUI.Label(new Rect(x, y - 34f, width, 18f), "CONNECTING TO INSTANCE", _captionStyle);
+
+			GUI.color = new Color(0.36f, 0.43f, 0.52f, 0.45f);
+			GUI.DrawTexture(new Rect(x, y, width, 2f), Texture2D.whiteTexture);
+			float segment = width * 0.22f;
+			float phase = Mathf.PingPong(elapsed * 0.32f, 1f);
+			phase = phase * phase * (3f - 2f * phase);
+			float segmentX = x + (width - segment) * phase;
+			GUI.color = new Color(0.63f, 0.77f, 0.94f, 0.16f);
+			GUI.DrawTexture(new Rect(segmentX - 8f, y - 3f, segment + 16f, 8f), Texture2D.whiteTexture);
+			GUI.color = new Color(0.83f, 0.90f, 0.98f, 0.94f);
+			GUI.DrawTexture(new Rect(segmentX, y, segment, 2f), Texture2D.whiteTexture);
 			GUI.color = Color.white;
-			GUI.matrix = old;
 		}
 
-		private static void Tex(string key, Rect r, Color tint)
+		private static void EnsureLoadingStyles()
 		{
-			var t = AssetLoader.EraTexture(key);
-			if (t == null) return;
-			GUI.color = tint;
-			GUI.DrawTexture(r, t, ScaleMode.StretchToFill, true);
-			GUI.color = Color.white;
-		}
-
-		private static GUIStyle _style;
-		private static void Label(Rect r, string text, int size, Color col)
-		{
-			if (_style == null) _style = new GUIStyle { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, richText = true };
-			_style.fontSize = size;
-			_style.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
-			GUI.Label(new Rect(r.x + 1.5f, r.y + 1.5f, r.width, r.height), text, _style);
-			_style.normal.textColor = col;
-			GUI.Label(r, text, _style);
+			if (_titleStyle == null)
+				_titleStyle = new GUIStyle(GUI.skin.label)
+				{
+					alignment = TextAnchor.MiddleCenter,
+					fontSize = 17,
+					fontStyle = FontStyle.Bold,
+				};
+			if (_captionStyle == null)
+				_captionStyle = new GUIStyle(GUI.skin.label)
+				{
+					alignment = TextAnchor.MiddleCenter,
+					fontSize = 10,
+					fontStyle = FontStyle.Normal,
+				};
 		}
 	}
 }

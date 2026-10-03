@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// WHAT A SETTING IS ACTUALLY DOING, as opposed to what it is set to.
 	//

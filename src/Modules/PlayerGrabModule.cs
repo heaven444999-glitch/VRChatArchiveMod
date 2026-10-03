@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// PLAYER GRAB — mod users grab and throw EACH OTHER.
 	//
@@ -83,7 +83,7 @@ namespace VRChatArchiveMod.Modules
 			Status = "player grab ON — grip near a mod user to lift them (PC: GRAB PLAYER YOU AIM AT / RightShift+U)";
 			StateText = "";
 			EnsurePolling();
-			VRChatArchiveModPlugin.Logger.LogInfo("[PlayerGrab] ON.");
+			Killiorim.Logger.LogInfo("[PlayerGrab] ON.");
 		}
 
 		private static void TurnOff(string why)
@@ -94,7 +94,7 @@ namespace VRChatArchiveMod.Modules
 			Active = false;
 			StateText = "";
 			Status = why;
-			VRChatArchiveModPlugin.Logger.LogInfo("[PlayerGrab] OFF.");
+			Killiorim.Logger.LogInfo("[PlayerGrab] OFF.");
 		}
 
 		// ---------------------------------------------------------------- update
@@ -103,7 +103,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			try
 			{
-				while (Main.TryDequeue(out var act)) { try { act(); } catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PlayerGrab] event: " + e.Message); } }
+				while (Main.TryDequeue(out var act)) { try { act(); } catch (Exception e) { Killiorim.Logger.LogWarning("[PlayerGrab] event: " + e.Message); } }
 
 				if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.H)) Toggle();
 				// The relay is the mod's event bus — grabs AND the Mark's art broadcasts — so it listens as
@@ -182,14 +182,14 @@ namespace VRChatArchiveMod.Modules
 			if (!Active) { Status = "turn player grab on first"; return; }
 			if (!string.IsNullOrEmpty(_holdingUid)) { ReleaseHeld(); return; }
 			var target = NearestToCrosshair(AimRange);
-			if (target == null) { Status = "no player under your crosshair (within " + AimRange.ToString("0") + "m)"; VRChatArchiveModPlugin.Logger.LogInfo($"[PlayerGrab] aim: no target (roster={VaTagsModule.Roster.Count}, range={AimRange:0})"); return; }
+			if (target == null) { Status = "no player under your crosshair (within " + AimRange.ToString("0") + "m)"; Killiorim.Logger.LogInfo($"[PlayerGrab] aim: no target (roster={VaTagsModule.Roster.Count}, range={AimRange:0})"); return; }
 			BeginGrab(target, "aim");
 		}
 
 		private static void BeginGrab(VaTagsModule.PlayerEntry target, string hand)
 		{
 			_pendingUid = target.UserId; _pendingName = target.Name; _pendingAt = Time.realtimeSinceStartup;
-			VRChatArchiveModPlugin.Logger.LogInfo($"[PlayerGrab] asking {target.Name} ({target.UserId}) hand={hand}");
+			Killiorim.Logger.LogInfo($"[PlayerGrab] asking {target.Name} ({target.UserId}) hand={hand}");
 			_holdingHand = hand;
 			Status = "asking " + target.Name + "…";
 			Send(target.UserId, "grab", hand);
@@ -209,7 +209,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			if (!Active) { Send(fromUid, "nack", ""); return; }
 			var entry = FindEntry(fromUid);
-			VRChatArchiveModPlugin.Logger.LogInfo($"[PlayerGrab] grab request from {fromUid}: {(entry == null ? "NOT in my roster (" + VaTagsModule.Roster.Count + " entries)" : entry.Name)}");
+			Killiorim.Logger.LogInfo($"[PlayerGrab] grab request from {fromUid}: {(entry == null ? "NOT in my roster (" + VaTagsModule.Roster.Count + " entries)" : entry.Name)}");
 			if (entry == null || entry.IsLocal) { Send(fromUid, "nack", ""); return; }   // not in my instance: ignore
 			var api = ApiOf(entry); var me = PlayerRef.LocalApi();
 			if (api == null || me == null) { Send(fromUid, "nack", ""); return; }
@@ -406,7 +406,7 @@ namespace VRChatArchiveMod.Modules
 						try
 						{
 							var (ok, raw, code) = await VaAuth.PostAsync("/api/grab/send", item.body);
-							VRChatArchiveModPlugin.Logger.LogInfo($"[PlayerGrab] send {item.kind} -> {item.to} : {(ok ? "ok" : "FAIL " + code + " " + (raw ?? "").Substring(0, Math.Min(120, (raw ?? "").Length)))}");
+							Killiorim.Logger.LogInfo($"[PlayerGrab] send {item.kind} -> {item.to} : {(ok ? "ok" : "FAIL " + code + " " + (raw ?? "").Substring(0, Math.Min(120, (raw ?? "").Length)))}");
 							if (!ok) Main.Enqueue(() => Status = code == 401
 								? "login required — connect your VRChat Archive account (your tag ▸ Connect)"
 								: "relay error " + code);
@@ -438,7 +438,7 @@ namespace VRChatArchiveMod.Modules
 						var (ok, raw, code) = await VaAuth.PostAsync("/api/grab/poll", "{\"me\":\"" + me + "\",\"wait\":4}");
 						if (!ok)
 						{
-							if (backoff == 0) VRChatArchiveModPlugin.Logger.LogWarning($"[PlayerGrab] poll FAIL {code}: {(raw ?? "").Substring(0, Math.Min(160, (raw ?? "").Length))}");
+							if (backoff == 0) Killiorim.Logger.LogWarning($"[PlayerGrab] poll FAIL {code}: {(raw ?? "").Substring(0, Math.Min(160, (raw ?? "").Length))}");
 							if (code == 401) Main.Enqueue(() => Status = "login required — connect your VRChat Archive account (your tag ▸ Connect)");
 							backoff = Math.Min(backoff + 1, 5);
 							await Task.Delay(code == 401 ? 60000 : 1000 * backoff);   // not logged in: ask again in a minute, not five times a second
@@ -454,7 +454,7 @@ namespace VRChatArchiveMod.Modules
 								string hand = ev.TryGetProperty("hand", out var h) ? h.GetString() : "";
 								string data = ev.TryGetProperty("data", out var dd) && dd.ValueKind == JsonValueKind.String ? dd.GetString() : "";
 								if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(kind)) continue;
-								VRChatArchiveModPlugin.Logger.LogInfo($"[PlayerGrab] event {kind} from {from} hand={hand}");
+								Killiorim.Logger.LogInfo($"[PlayerGrab] event {kind} from {from} hand={hand}");
 								Main.Enqueue(() => HandleEvent(from, kind, hand ?? "", data ?? ""));
 							}
 					}

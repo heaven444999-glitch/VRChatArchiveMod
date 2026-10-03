@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// THE PLAYERS PANEL, BESIDE THE QUICKMENU'S LEFT WING.
 	//
@@ -73,7 +73,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[WingPlayers] update threw: {e.Message}");
+				Killiorim.Logger.LogWarning($"[WingPlayers] update threw: {e.Message}");
 				_fails++;
 			}
 		}
@@ -107,7 +107,7 @@ namespace VRChatArchiveMod.Modules
 			_headingsShowPos = PositionsOn();
 
 			_panel = p;
-			VRChatArchiveModPlugin.Logger.LogInfo("[WingPlayers] panel built beside the left wing.");
+			Killiorim.Logger.LogInfo("[WingPlayers] panel built beside the left wing.");
 			return true;
 		}
 
@@ -167,14 +167,26 @@ namespace VRChatArchiveMod.Modules
 			}
 
 			var roster = VaTagsModule.Roster;
-
-			var rows = new List<PanelSkin.Row>(roster.Count);
-			for (int i = 0; i < roster.Count; i++)
+			var list = new List<VaTagsModule.PlayerEntry>();
+			if (roster != null)
 			{
-				var p = roster[i];
-				if (p == null) continue;
-				rows.Add(RowOf(p));
+				for (int i = 0; i < roster.Count; i++)
+				{
+					var p = roster[i];
+					if (p != null) list.Add(p);
+				}
 			}
+
+			list.Sort((a, b) =>
+			{
+				if (a == null || b == null) return 0;
+				if (a.IsLocal != b.IsLocal) return a.IsLocal ? -1 : 1;
+				if (a.IsMaster != b.IsMaster) return a.IsMaster ? -1 : 1;
+				return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+			});
+
+			var rows = new List<PanelSkin.Row>(list.Count);
+			for (int i = 0; i < list.Count; i++) rows.Add(RowOf(list[i]));
 
 			int cap = _panel.Capacity;
 			_panel.SetRows(rows);
@@ -197,19 +209,7 @@ namespace VRChatArchiveMod.Modules
 			string col = string.IsNullOrEmpty(p.TrustColor) ? "#EAF6FF" : p.TrustColor;
 			string name = "<color=" + col + "><b>" + Trunc(p.Name, 20) + "</b></color>";
 			if (p.IsMaster) name = PanelSkin.Tag("FFC800", "♛") + " " + name;
-			if (p.IsLocal) name += PanelSkin.Tag("FF4FD8", " (you)");
-			// CUSTOM USERNAME, SHOWN BESIDE THE REAL ONE RATHER THAN REPLACING IT.
-			//
-			// This roster's Name comes from APIUser.displayName (VaTagsModule.ReadApiFields) — the API
-			// record, the same source VRChat's own nameplate uses. The custom username writes
-			// VRCPlayerApi.displayName, which is what UDON reads. Two different objects, so the spoof
-			// cannot move this row, and that is correct rather than broken.
-			//
-			// Overwriting the row with the spoofed name would be a lie about the API truth, and writing
-			// the spoof INTO APIUser is forbidden outright: those are ApiModel fields carrying
-			// Save()/Put(), so a forged value can travel back to VRChat under this account. So the row
-			// shows BOTH — the real name, then an arrow to what the worlds are being told. It doubles
-			// as confirmation that the write landed, without a trip to the log.
+			if (p.IsLocal) name = PanelSkin.Tag("FF4FD8", "<b>YOU</b>") + " " + name;
 			try
 			{
 				if (p.IsLocal && !string.IsNullOrEmpty(SpoofModule.Applied))
@@ -217,8 +217,6 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 			if (p.IsOwner) name += PanelSkin.Tag("FFC800", " ★");
-			// Who has blocked YOU — the whole reason BlockedByProbeModule exists. Prefixed and red, so
-			// it is the first thing read on the line.
 			try
 			{
 				if (!string.IsNullOrEmpty(p.UserId) && BlockedByProbeModule.BlockedMe.Contains(p.UserId))
@@ -227,12 +225,6 @@ namespace VRChatArchiveMod.Modules
 			catch { }
 			r.Name = name;
 
-			// Saturated rather than muted, and bold. The HUD's palette only looks electric because it
-			// sits on flat black; ported onto a wallpaper the same hex values came out washed, so the
-			// darker row plate does half the job and these do the other half.
-			// The HUD's RosterPositions switch governs BOTH rosters. It read "in the PLAYERS panel",
-			// and the QuickMenu panel IS a players panel — a switch that turns coordinates off in one
-			// of two identical-looking lists is a switch that looks broken.
 			r.Pos = !PositionsOn() ? ""
 				: p.HasPos || p.Transform != null
 				? PanelSkin.Tag("4DFFA6", string.Format(System.Globalization.CultureInfo.InvariantCulture,
@@ -245,8 +237,6 @@ namespace VRChatArchiveMod.Modules
 			badge += p.Platform == "Quest" ? PanelSkin.Tag("3BFF7A", "<b>Q</b>")
 			       : p.Platform == "PC" ? PanelSkin.Tag("3FA9FF", "<b>PC</b>")
 			       : PanelSkin.Tag("A8BCD4", "<b>" + Trunc(p.Platform, 3) + "</b>");
-			// VR is a SEPARATE question from the build, and only drawn when VRChat answered it
-			// (VrKnown). Silence when unknown — never the claim that somebody is on desktop.
 			if (p.VrKnown && p.InVR) badge += PanelSkin.Tag("8FE9A8", "<b>VR</b>");
 			r.Badge = badge;
 

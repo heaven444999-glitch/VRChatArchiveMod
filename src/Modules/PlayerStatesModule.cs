@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// AFK · SEATED · IN STATION · VR — the game's own answers about the people around you.
 	//
@@ -74,7 +74,7 @@ namespace VRChatArchiveMod.Modules
 					try { _isInVr = c.Api.GetType().GetMethod("IsUserInVR", BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null); }
 					catch { }
 					if (_isInVr == null)
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[PlayerStates] VRCPlayerApi has no IsUserInVR() on this build — the VR tag falls back to the "
 							+ "avatar's VRMode parameter, which most avatars do not declare.");
 				}
@@ -90,7 +90,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_isInVrLogged)
 				{
 					_isInVrLogged = true;
-					VRChatArchiveModPlugin.Logger.LogInfo("[PlayerStates] VR state now comes from VRCPlayerApi.IsUserInVR() — headset users show VR whatever avatar they wear.");
+					Killiorim.Logger.LogInfo("[PlayerStates] VR state now comes from VRCPlayerApi.IsUserInVR() — headset users show VR whatever avatar they wear.");
 				}
 			}
 			catch { }

@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// GHOST — a TOGGLE that stops YOUR OWN player from being serialized to the network.
 	//
@@ -54,7 +54,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					Active = false;
 					Status = "ghost: your player's network serializer was not found (not in a world yet?)";
-					VRChatArchiveModPlugin.Logger.LogWarning("[Ghost] " + SerializerName + " not found on the local player.");
+					Killiorim.Logger.LogWarning("[Ghost] " + SerializerName + " not found on the local player.");
 					return;
 				}
 				if (Active)
@@ -71,7 +71,7 @@ namespace VRChatArchiveMod.Modules
 					Status = "ghost ON — you are frozen for everyone else, you still move for yourself";
 				}
 				VaTagsModule.LastStatus = Status;
-				VRChatArchiveModPlugin.Logger.LogInfo("[Ghost] " + Status);
+				Killiorim.Logger.LogInfo("[Ghost] " + Status);
 			}
 			catch (Exception e) { Status = "ghost: " + e.Message; VaTagsModule.LastStatus = Status; }
 		}
@@ -131,14 +131,14 @@ namespace VRChatArchiveMod.Modules
 							foreach (var c in comps) { if (c == null) continue; if (k++ > 0) names.Append(", "); names.Append(NameOf(c)); if (k > 40) break; }
 						}
 						catch { }
-						VRChatArchiveModPlugin.Logger.LogWarning("[Ghost] no component named *" + SerializerName + "* on '" + go.name + "'. Components there: " + names);
+						Killiorim.Logger.LogWarning("[Ghost] no component named *" + SerializerName + "* on '" + go.name + "'. Components there: " + names);
 					}
 					return null;
 				}
 				_serializer = found;
 				return found;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[Ghost] resolve: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[Ghost] resolve: " + e.Message); }
 			return null;
 		}
 
@@ -179,13 +179,13 @@ namespace VRChatArchiveMod.Modules
 				}
 				if (t == null)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[Ghost] no managed type named " + SerializerName + " in the loaded interop assemblies.");
+					Killiorim.Logger.LogWarning("[Ghost] no managed type named " + SerializerName + " in the loaded interop assemblies.");
 					return null;
 				}
 				_il2Type = Il2CppInterop.Runtime.Il2CppType.From(t);
-				VRChatArchiveModPlugin.Logger.LogInfo("[Ghost] serializer type resolved: " + t.FullName + " (" + t.Assembly.GetName().Name + ")");
+				Killiorim.Logger.LogInfo("[Ghost] serializer type resolved: " + t.FullName + " (" + t.Assembly.GetName().Name + ")");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[Ghost] type lookup: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[Ghost] type lookup: " + e.Message); }
 			return _il2Type;
 		}
 

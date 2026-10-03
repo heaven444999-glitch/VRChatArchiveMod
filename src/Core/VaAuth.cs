@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Resolves HOW the mod authenticates VA tag WRITES, and performs them. Reads are always
 	// public (GET /api/va-tags), so this only governs add/remove/lock.
@@ -47,7 +47,7 @@ namespace VRChatArchiveMod.Core
 			// header is unreliable). Browser UA: Cloudflare 403s non-browser agents.
 			var c = new HttpClient(new HttpClientHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(12) };
 			c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 VRChatArchiveMod/3.3");
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 Killiorim/3.3");
 			return c;
 		}
 

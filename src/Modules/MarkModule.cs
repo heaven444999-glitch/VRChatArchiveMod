@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// MARK — an anchor you place with your aim, then use for the world's loose objects: teleport them
 	// around it, orbit them, arrange SHAPES, or play Bad Apple with the objects as pixels.
@@ -376,7 +376,7 @@ namespace VRChatArchiveMod.Modules
 			StartShowAudio();
 			float width = ArtSize > 0f ? ArtSize : _autoCell * _baCW;
 			Status = "object Bad Apple — " + _art.Count + " objects as pixels on a " + _baCW + "x" + _baCH + " grid, " + width.ToString("0.#") + " m wide" + ModeTag();
-			VRChatArchiveModPlugin.Logger.LogInfo($"[Mark] Bad Apple (local): {_art.Count} objects, grid {_baCW}x{_baCH} (down x{_baDown}), {width:0.#} m; {_syncMuted} ObjectSync component(s) muted so nothing leaves this client.");
+			Killiorim.Logger.LogInfo($"[Mark] Bad Apple (local): {_art.Count} objects, grid {_baCW}x{_baCH} (down x{_baDown}), {width:0.#} m; {_syncMuted} ObjectSync component(s) muted so nothing leaves this client.");
 			return true;
 		}
 
@@ -529,7 +529,7 @@ namespace VRChatArchiveMod.Modules
 
 			Status = $"object Bad Apple — VRCHAT NETWORK: {_baCW}x{_baCH} grid, {n} objects owned, budget {_netBudget:0} moves/s (auto)";
 			NetInfo = $"{_baCW}x{_baCH} · {n} objects · budget {_netBudget:0} moves/s · sent 0 · 0 ev/s · backlog 0";
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				$"[Mark] Bad Apple (vrchat): {n}/{objs.Count} pickups owned, grid {_baCW}x{_baCH} (down x{d}: p85 {st.P85}, max {st.Max}, ~{st.MovesPerSec:0} moves/s), " +
 				$"{width:0.#} m, budget {_netBudget:0}, {inBox} object(s) inside the picture to park, parking {(parkUp ? "above" : "below")}.");
 			// CAN ANYONE ELSE SEE THESE? A VRC_Pickup alone does not sync its position — VRCObjectSync (or a
@@ -554,7 +554,7 @@ namespace VRChatArchiveMod.Modules
 					if (has) synced++;
 					if (names != null) sample.Append(" | '").Append(go.name).Append("': ").Append(names);
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Mark] net objects with an ObjectSync component: {synced}/{n}.{sample}");
+				Killiorim.Logger.LogInfo($"[Mark] net objects with an ObjectSync component: {synced}/{n}.{sample}");
 				if (synced == 0) Status += " ⚠ none of these objects has ObjectSync: only you will see them move";
 			}
 			catch { }
@@ -739,7 +739,7 @@ namespace VRChatArchiveMod.Modules
 					else _calmSeconds = 0;
 				}
 				NetInfo = $"{_baCW}x{_baCH} · {n} objects · budget {_netBudget:0} moves/s · sent {_movesLastSec} · peak {rate} ev/s · backlog {backlog}";
-				if (now >= _nextNetLog) { _nextNetLog = now + 5f; VRChatArchiveModPlugin.Logger.LogInfo("[Mark] net: " + NetInfo); }
+				if (now >= _nextNetLog) { _nextNetLog = now + 5f; Killiorim.Logger.LogInfo("[Mark] net: " + NetInfo); }
 			}
 		}
 
@@ -951,7 +951,7 @@ namespace VRChatArchiveMod.Modules
 		{
 			_learnedBudget = Mathf.Max(100f, _hotSeconds > 2 ? Mathf.Min(_netBudget, 120f) : Mathf.Min(_netBudget, 260f));
 			_lastShowEnd = Time.realtimeSinceStartup;
-			VRChatArchiveModPlugin.Logger.LogInfo($"[Mark] net: show ended, budget {_netBudget:0}, {_hotSeconds} hot second(s) -> next show starts at {_learnedBudget:0} moves/s.");
+			Killiorim.Logger.LogInfo($"[Mark] net: show ended, budget {_netBudget:0}, {_hotSeconds} hot second(s) -> next show starts at {_learnedBudget:0} moves/s.");
 			_hotSeconds = 0; _calmSeconds = 0;
 		}
 
@@ -1019,10 +1019,10 @@ namespace VRChatArchiveMod.Modules
 				while ((line = reader.ReadLine()) != null) if (line.Length == _hdW * _hdH) list.Add(ToLevels(line));
 				_hdFrames = list.ToArray();
 				frames = _hdFrames; w = _hdW; h = _hdH; intervalMs = _hdInterval;
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Mark] HD Bad Apple frames: {_hdFrames.Length} x {_hdW}x{_hdH} @ {_hdInterval} ms.");
+				Killiorim.Logger.LogInfo($"[Mark] HD Bad Apple frames: {_hdFrames.Length} x {_hdW}x{_hdH} @ {_hdInterval} ms.");
 				return _hdFrames.Length > 0;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[Mark] HD frames unavailable: " + e.Message); return false; }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[Mark] HD frames unavailable: " + e.Message); return false; }
 		}
 
 		private static byte[] ToLevels(string digits)
@@ -1147,7 +1147,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				catch { }
 			}
-			if (n > 0) VRChatArchiveModPlugin.Logger.LogInfo("[Mark] re-sent " + n + " shape position(s) now that the objects are ours.");
+			if (n > 0) Killiorim.Logger.LogInfo("[Mark] re-sent " + n + " shape position(s) now that the objects are ours.");
 		}
 
 		// SHAPES STAY OURS. Somebody grabbing an arranged object takes its ownership and VRChat then follows
@@ -1189,7 +1189,7 @@ namespace VRChatArchiveMod.Modules
 				if (fixedPos + refrozen + asked > 0 && now >= _nextKeepAliveLog)
 				{
 					_nextKeepAliveLog = now + 10f;
-					VRChatArchiveModPlugin.Logger.LogInfo($"[Mark] shape keep-alive ({Mode}): {fixedPos} put back on target, {refrozen} re-frozen, {asked} ownership(s) asked back.");
+					Killiorim.Logger.LogInfo($"[Mark] shape keep-alive ({Mode}): {fixedPos} put back on target, {refrozen} re-frozen, {asked} ownership(s) asked back.");
 				}
 			}
 			catch { }

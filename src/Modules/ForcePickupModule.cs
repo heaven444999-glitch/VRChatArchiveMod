@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FORCE PICKUP — make a world's LOCKED pickups grabbable again, so you pick them up with your
 	// own hands the way the world intended.
@@ -83,7 +83,7 @@ namespace VRChatArchiveMod.Modules
 			Status = Unlocked > 0
 				? "force pickup ON — " + Unlocked + " locked pickup(s) unlocked, grab them normally"
 				: "force pickup ON — nothing here was locked";
-			VRChatArchiveModPlugin.Logger.LogInfo("[ForcePickup] on — " + Unlocked + " unlocked.");
+			Killiorim.Logger.LogInfo("[ForcePickup] on — " + Unlocked + " unlocked.");
 		}
 
 		public static void Stop(string why)
@@ -105,7 +105,7 @@ namespace VRChatArchiveMod.Modules
 			Active = false;
 			Unlocked = 0;
 			if (!string.IsNullOrEmpty(why)) Status = why;
-			VRChatArchiveModPlugin.Logger.LogInfo("[ForcePickup] off — restored.");
+			Killiorim.Logger.LogInfo("[ForcePickup] off — restored.");
 		}
 
 		// A world change destroys every pickup we recorded, so the record means nothing after it and
@@ -181,7 +181,7 @@ namespace VRChatArchiveMod.Modules
 				// world, so a later sweep never lowers it.
 				Unlocked = Touched.Count;
 				if (scanned == 0)
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[ForcePickup] no VRC_Pickup found in this world — it likely uses a custom/Udon "
 						+ "pickup system, which Force Pickup cannot unlock (use FORCE GRAB for raw objects).");
 			}

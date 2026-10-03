@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Il2CppInterop.Runtime.InteropTypes;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// THE SYMBOL NAMES OF AN UDON BEHAVIOUR, WITHOUT TOUCHING ITS VARIABLE TABLE.
 	//
@@ -72,11 +72,11 @@ namespace VRChatArchiveMod.Core
 				if (iProgram != null) _syncTable = iProgram.GetProperty("SyncMetadataTable", Any);
 				if (iSyncTable != null) _allSync = iSyncTable.GetMethod("GetAllSyncMetadata", Any, null, Type.EmptyTypes, null);
 				if (iSyncMeta != null) _syncName = iSyncMeta.GetProperty("Name", Any);
-				VRChatArchiveModPlugin.Logger.LogInfo("[UdonSymbols] resolved: program member=" + (_programMember?.Name ?? "-")
+				Killiorim.Logger.LogInfo("[UdonSymbols] resolved: program member=" + (_programMember?.Name ?? "-")
 					+ " source member=" + (_sourceMember?.Name ?? "-") + " SerializedProgramAsset=" + (_serializedAsset != null)
 					+ " RetrieveProgram=" + (_retrieve != null) + " SymbolTable=" + (_symbolTable != null) + " GetExportedSymbols=" + (_exported != null));
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[UdonSymbols] resolve failed: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[UdonSymbols] resolve failed: " + e.Message); }
 		}
 
 		/// <summary>
@@ -125,7 +125,7 @@ namespace VRChatArchiveMod.Core
 					catch { }
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[UdonSymbols] sync metadata: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[UdonSymbols] sync metadata: " + e.Message); }
 			return outp;
 		}
 

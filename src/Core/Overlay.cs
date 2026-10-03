@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using BepInEx.Configuration;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// A MENU THAT IS DECLARED ONCE AND DRAWN EVERY FRAME.
 	//
@@ -28,7 +29,7 @@ namespace VRChatArchiveMod.Core
 	{
 		// ---------------------------------------------------------------- declaration
 
-		public enum Kind { Toggle, Slider, IntSlider, Action, Label }
+		public enum Kind { Toggle, Slider, IntSlider, Action, Label, Setting }
 
 		public sealed class Widget
 		{
@@ -37,6 +38,9 @@ namespace VRChatArchiveMod.Core
 			public ConfigEntry<bool> Flag;
 			public ConfigEntry<float> Number;
 			public ConfigEntry<int> Integer;
+			public ConfigEntryBase Entry;
+			public string EditBuffer;
+			public bool Editing;
 			public float Min, Max;
 			public string Format = "F1";
 			// STEP AND ONCHANGE, both taken from what Luna's BindSlider carries.
@@ -99,6 +103,13 @@ namespace VRChatArchiveMod.Core
 				return this;
 			}
 
+			public Foldout Setting(ConfigEntryBase entry)
+			{
+				if (entry != null)
+					Widgets.Add(new Widget { Kind = Kind.Setting, Label = ReadableName(entry.Definition.Key), Entry = entry });
+				return this;
+			}
+
 			// Applies to every widget added after it — how a whole group is greyed out behind its
 			// own master switch without repeating the condition on each line.
 			public Foldout OnlyWhen(Func<bool> when)
@@ -139,13 +150,18 @@ namespace VRChatArchiveMod.Core
 		// ---------------------------------------------------------------- state
 
 		public static bool Visible;
-		public static Rect Window = new Rect(90f, 90f, 560f, 620f);
+		public static Rect Window = new Rect(48f, 48f, 1060f, 760f);
+		private static string _search = "";
+		private static Vector2 _navScroll;
+		private static bool _dragging;
+		private static Vector2 _dragOffset;
+		private static GUIStyle _searchStyle, _navLabel, _pageHeading, _helper;
 
-		private const float Pad = 14f;
+		private const float Pad = 20f;
 		private const float RowH = 30f;
 		private const float RowGap = 6f;
-		private const float TabH = 30f;
-		private const float HeadH = 34f;
+		private const float NavW = 198f;
+		private const float HeaderH = 76f;
 
 		// ---------------------------------------------------------------- draw
 
@@ -156,36 +172,225 @@ namespace VRChatArchiveMod.Core
 			// Everything below reads Event.current, so it must not run before IMGUI has one.
 			if (Event.current == null) return;
 
-			GuiKit.RoundedBorder(Window, new Color(0.03f, 0.04f, 0.06f, 0.96f),
-				GuiKit.Accent, 10f, 1.5f);
-			GuiKit.SoftGlow(Window, GuiKit.Accent, 10f, 0.16f);
+			Window.width = Mathf.Min(Window.width, Mathf.Max(360f, Screen.width - 32f));
+			Window.height = Mathf.Min(Window.height, Mathf.Max(320f, Screen.height - 32f));
+			Window.x = Mathf.Clamp(Window.x, 8f, Mathf.Max(8f, Screen.width - Window.width - 8f));
+			Window.y = Mathf.Clamp(Window.y, 8f, Mathf.Max(8f, Screen.height - Window.height - 8f));
+			var background = AssetLoader.Background;
+			if (background != null)
+			{
+				GUI.DrawTexture(Window, background, ScaleMode.ScaleAndCrop, true, 0f,
+					new Color(1f, 1f, 1f, 0.82f), Vector4.zero, new Vector4(12f, 12f, 12f, 12f));
+				GuiKit.RoundedFill(Window, new Color(0.005f, 0.005f, 0.008f, 0.42f), 12f);
+			}
+			GuiKit.SoftGlow(Window, GuiKit.Accent, 12f, 0.12f, 5, 2.5f);
+			GuiKit.RoundedBorder(Window, new Color(0.008f, 0.008f, 0.012f, background != null ? 0.58f : 0.975f),
+				new Color(0.96f, 0.78f, 0.86f, 0.78f), 12f, 1.4f);
+			GuiKit.Corners(Window, 28f, 1.5f, 3f);
 
 			float x = Window.x + Pad;
-			float w = Window.width - Pad * 2f;
 			float y = Window.y + Pad;
-
-			GUI.Label(new Rect(x, y, w, HeadH), "VRCHAT ARCHIVE", GuiKit.BoxLabel);
-			y += HeadH;
-
-			// tabs — one segmented control, not N buttons: exactly one page is open
-			if (Pages.Count > 1)
-			{
-				string[] titles = TabTitles();
-				_page = Mathf.Clamp(GuiKit.Segmented(new Rect(x, y, w, TabH), titles, _page), 0, Pages.Count - 1);
-				y += TabH + RowGap;
-			}
-
-			Page page = Pages[_page];
-			float bodyY = y;
+			float w = Window.width - Pad * 2f;
+			DrawHeader(x, y, w);
+			float bodyY = y + HeaderH;
 			float bodyH = Window.yMax - Pad - bodyY;
+			DrawNavigation(new Rect(x, bodyY, NavW, bodyH));
+			DrawActivePage(new Rect(x + NavW + 18f, bodyY, w - NavW - 18f, bodyH));
+			HandleDrag(new Rect(Window.x, Window.y, Window.width, HeaderH + Pad));
+		}
 
-			float contentH = MeasureHeight(page);
-			var view = new Rect(x, bodyY, w, bodyH);
-			var content = new Rect(0f, 0f, w - 18f, contentH);
+		private static void DrawHeader(float x, float y, float width)
+		{
+			EnsureStyles();
+			string previousSearch = _search ?? "";
+			var mark = new Rect(x, y + 3f, 42f, 42f);
+			GuiKit.RoundedBorder(mark, new Color(0.025f, 0.025f, 0.03f, 0.98f),
+				new Color(0.96f, 0.78f, 0.86f, 0.78f), 9f, 1f);
+			GUI.Label(mark, "K", _pageHeading);
+			GUI.Label(new Rect(x + 54f, y, 340f, 30f), "KILLIORIUM", _pageHeading);
+			GUI.Label(new Rect(x + 55f, y + 29f, 300f, 19f), "IN-GAME CONTROL DECK", _helper);
 
-			page.Scroll = GUI.BeginScrollView(view, page.Scroll, content);
-			DrawPage(page, w - 18f);
+			float searchW = Mathf.Min(330f, width * 0.36f);
+			float searchX = x + width - searchW - 42f;
+			GUI.Label(new Rect(searchX, y + 1f, searchW, 16f), "SEARCH ALL SETTINGS", _helper);
+			_search = GUI.TextField(new Rect(searchX, y + 22f, searchW, 30f), _search ?? "", _searchStyle);
+			if (!string.Equals(previousSearch, _search, StringComparison.Ordinal))
+			{
+				_navScroll = Vector2.zero;
+				if (!string.IsNullOrWhiteSpace(_search))
+					for (int i = 0; i < Pages.Count; i++)
+						if (PageMatches(Pages[i], _search)) { _page = i; break; }
+			}
+			if (GuiKit.Button(new Rect(x + width - 34f, y + 22f, 34f, 30f), "×")) Visible = false;
+			GuiKit.Fill(new Rect(x, y + HeaderH - 8f, width, 1f), new Color(0.96f, 0.84f, 0.89f, 0.32f));
+		}
+
+		private static void DrawNavigation(Rect rect)
+		{
+			GuiKit.RoundedBorder(rect, new Color(0.012f, 0.012f, 0.018f, 0.94f),
+				new Color(0.94f, 0.90f, 0.92f, 0.15f), 9f, 1f);
+			float pad = 10f, rowH = 34f;
+			var view = new Rect(rect.x + pad, rect.y + pad, rect.width - pad * 2f, rect.height - pad * 2f);
+			float contentH = Pages.Count * (rowH + 5f) + 26f;
+			_navScroll = GUI.BeginScrollView(view, _navScroll, new Rect(0f, 0f, view.width - 14f, contentH));
+			GUI.Label(new Rect(0f, 0f, view.width - 14f, 20f), "FEATURE AREAS", _helper);
+			float y = 24f;
+			for (int i = 0; i < Pages.Count; i++)
+			{
+				Page page = Pages[i];
+				if (!string.IsNullOrWhiteSpace(_search) && !PageMatches(page, _search)) continue;
+				var row = new Rect(0f, y, view.width - 14f, rowH);
+				bool selected = i == _page;
+				if (selected) GuiKit.Box(row, true);
+				else if (row.Contains(Event.current.mousePosition)) GuiKit.RoundedFill(row, new Color(1f, 1f, 1f, 0.045f), 7f);
+				if (GUI.Button(row, "", GUIStyle.none)) _page = i;
+				_navLabel.normal.textColor = selected ? Color.white : new Color(0.70f, 0.75f, 0.80f);
+				GUI.Label(new Rect(row.x + 11f, row.y, row.width - 20f, row.height), page.Title, _navLabel);
+				y += rowH + 5f;
+			}
 			GUI.EndScrollView();
+		}
+
+		private static void DrawActivePage(Rect rect)
+		{
+			if (_page < 0 || _page >= Pages.Count) _page = 0;
+			Page page = Pages[_page];
+			bool searching = !string.IsNullOrWhiteSpace(_search);
+			GUI.Label(new Rect(rect.x, rect.y, rect.width, 30f), page.Title, _pageHeading);
+			GUI.Label(new Rect(rect.x + 1f, rect.y + 30f, rect.width, 18f),
+				searching ? "MATCHING CONTROLS" : page.Foldouts.Count + " CONFIGURATION GROUPS", _helper);
+
+			DrawInsertCard(new Rect(rect.x, rect.y + 48f, rect.width, 96f));
+
+			float bodyY = rect.y + 150f;
+			float bodyH = rect.height - 150f;
+			float contentH = MeasureHeight(page);
+			var view = new Rect(rect.x, bodyY, rect.width, bodyH);
+			var content = new Rect(0f, 0f, rect.width - 18f, contentH);
+			page.Scroll = GUI.BeginScrollView(view, page.Scroll, content);
+			DrawPage(page, content.width);
+			GUI.EndScrollView();
+		}
+
+		private static void DrawInsertCard(Rect rect)
+		{
+			if (rect.width <= 0f || rect.height <= 0f) return;
+			GuiKit.SoftGlow(rect, new Color(0.94f, 0.62f, 0.90f, 1f), 16f, 0.14f, 5, 2.8f);
+			GuiKit.RoundedBorder(rect, new Color(0.05f, 0.04f, 0.08f, 0.98f),
+				new Color(0.97f, 0.83f, 0.90f, 0.75f), 16f, 1.5f);
+
+			var tag = new Rect(rect.x + 18f, rect.y + 16f, 88f, 24f);
+			GuiKit.RoundedFill(tag, new Color(0.98f, 0.84f, 0.92f, 0.14f), 12f);
+			GUI.Label(tag, "INSERT", new GUIStyle(GuiKit.BoxLabel)
+			{
+				fontSize = 10,
+				alignment = TextAnchor.MiddleCenter,
+				normal = { textColor = new Color(0.99f, 0.94f, 0.97f, 1f) }
+			});
+
+			var status = new Rect(rect.xMax - 118f, rect.y + 16f, 100f, 24f);
+			GuiKit.RoundedFill(status, new Color(0.39f, 0.97f, 0.67f, 0.18f), 10f);
+			GUI.Label(status, "LIVE", new GUIStyle(GuiKit.BoxLabel)
+			{
+				fontSize = 10,
+				alignment = TextAnchor.MiddleCenter,
+				normal = { textColor = new Color(0.70f, 1f, 0.84f, 1f) }
+			});
+
+			GUI.Label(new Rect(rect.x + 18f, rect.y + 42f, rect.width * 0.52f, 26f), "KILLIORIM CONTROL PANEL", new GUIStyle(_pageHeading)
+			{
+				fontSize = 20,
+				normal = { textColor = new Color(0.98f, 0.98f, 0.98f, 1f) }
+			});
+			GUI.Label(new Rect(rect.x + 18f, rect.y + 68f, rect.width * 0.6f, 18f), "custom theme • panel stream • quick access", _helper);
+
+			var stat1 = new Rect(rect.xMax - 200f, rect.y + 42f, 70f, 42f);
+			var stat2 = new Rect(rect.xMax - 120f, rect.y + 42f, 70f, 42f);
+			var stat3 = new Rect(rect.xMax - 40f, rect.y + 42f, 70f, 42f);
+			for (int i = 0; i < 3; i++)
+			{
+				Rect r = i == 0 ? stat1 : i == 1 ? stat2 : stat3;
+				GuiKit.RoundedFill(r, new Color(0.12f, 0.11f, 0.18f, 0.9f), 11f);
+				GuiKit.Corners(r, 10f, 1.2f, 0f);
+			}
+			GUI.Label(new Rect(stat1.x + 8f, stat1.y + 6f, 54f, 12f), "FPS", _helper);
+			GUI.Label(new Rect(stat1.x + 8f, stat1.y + 20f, 54f, 18f), Mathf.RoundToInt(1f / Mathf.Max(Time.smoothDeltaTime, 0.0001f)).ToString(), new GUIStyle(_pageHeading) { fontSize = 14, alignment = TextAnchor.MiddleLeft, normal = { textColor = Color.white } });
+			GUI.Label(new Rect(stat2.x + 8f, stat2.y + 6f, 54f, 12f), "PAGES", _helper);
+			GUI.Label(new Rect(stat2.x + 8f, stat2.y + 20f, 54f, 18f), Pages.Count.ToString(), new GUIStyle(_pageHeading) { fontSize = 14, alignment = TextAnchor.MiddleLeft, normal = { textColor = Color.white } });
+			GUI.Label(new Rect(stat3.x + 8f, stat3.y + 6f, 54f, 12f), "MODE", _helper);
+			GUI.Label(new Rect(stat3.x + 8f, stat3.y + 20f, 54f, 18f), "ON", new GUIStyle(_pageHeading) { fontSize = 14, alignment = TextAnchor.MiddleLeft, normal = { textColor = new Color(0.74f, 1f, 0.85f, 1f) } });
+		}
+
+		private static void HandleDrag(Rect header)
+		{
+			Event e = Event.current;
+			if (e.type == EventType.MouseDown && e.button == 0 && header.Contains(e.mousePosition)
+				&& e.mousePosition.x < Window.xMax - 390f)
+			{
+				_dragging = true;
+				_dragOffset = new Vector2(e.mousePosition.x - Window.x, e.mousePosition.y - Window.y);
+				e.Use();
+			}
+			else if (_dragging && e.type == EventType.MouseDrag)
+			{
+				Window.position = e.mousePosition - _dragOffset;
+				GUI.changed = true;
+				e.Use();
+			}
+			else if (_dragging && e.type == EventType.MouseUp) _dragging = false;
+		}
+
+		private static void EnsureStyles()
+		{
+			if (_searchStyle == null) _searchStyle = new GUIStyle(GUI.skin.textField)
+			{
+				fontSize = 12, alignment = TextAnchor.MiddleLeft,
+				padding = new RectOffset(11, 8, 4, 4),
+			};
+			if (_navLabel == null) _navLabel = new GUIStyle(GuiKit.BoxLabel)
+			{
+				alignment = TextAnchor.MiddleLeft, fontSize = 11,
+			};
+			if (_pageHeading == null) _pageHeading = new GUIStyle(GUI.skin.label)
+			{
+				fontSize = 19, fontStyle = FontStyle.Bold,
+				alignment = TextAnchor.MiddleLeft, clipping = TextClipping.Clip,
+			};
+			if (_helper == null) _helper = new GUIStyle(GUI.skin.label)
+			{
+				fontSize = 9, fontStyle = FontStyle.Bold,
+				alignment = TextAnchor.MiddleLeft, clipping = TextClipping.Clip,
+			};
+		}
+
+		private static bool PageMatches(Page page, string query)
+		{
+			if (string.IsNullOrWhiteSpace(query) || page.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+				return true;
+			for (int i = 0; i < page.Foldouts.Count; i++)
+			{
+				var group = page.Foldouts[i];
+				if (group.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+				for (int j = 0; j < group.Widgets.Count; j++)
+				{
+					var widget = group.Widgets[j];
+					if (widget.Label != null && widget.Label.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+					if (widget.Entry != null && widget.Entry.Definition.Section.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+				}
+			}
+			return false;
+		}
+
+		private static bool FoldoutMatches(Foldout foldout, string query)
+		{
+			if (string.IsNullOrWhiteSpace(query) || foldout.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+			for (int i = 0; i < foldout.Widgets.Count; i++)
+			{
+				var widget = foldout.Widgets[i];
+				if (widget.Label != null && widget.Label.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+				if (widget.Entry != null && widget.Entry.Definition.Section.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+			}
+			return false;
 		}
 
 		// Rebuilt only when the page changes shape, which is what a collapsed foldout does.
@@ -195,11 +400,15 @@ namespace VRChatArchiveMod.Core
 			for (int i = 0; i < page.Foldouts.Count; i++)
 			{
 				Foldout f = page.Foldouts[i];
+				if (!FoldoutMatches(f, _search)) continue;
 				h += RowH + RowGap;                                   // the foldout header
-				if (!f.Open) continue;
+				if (!f.Open && string.IsNullOrWhiteSpace(_search)) continue;
 				for (int j = 0; j < f.Widgets.Count; j++)
 				{
 					Widget wd = f.Widgets[j];
+					if (!string.IsNullOrWhiteSpace(_search) && wd.Label != null
+						&& wd.Label.IndexOf(_search, StringComparison.OrdinalIgnoreCase) < 0
+						&& (wd.Entry == null || wd.Entry.Definition.Section.IndexOf(_search, StringComparison.OrdinalIgnoreCase) < 0)) continue;
 					if (wd.Enabled != null && !Safe(wd.Enabled)) continue;
 					h += (wd.Kind == Kind.Slider || wd.Kind == Kind.IntSlider) ? RowH + 18f + RowGap : RowH + RowGap;
 				}
@@ -214,16 +423,21 @@ namespace VRChatArchiveMod.Core
 			for (int i = 0; i < page.Foldouts.Count; i++)
 			{
 				Foldout f = page.Foldouts[i];
+				if (!FoldoutMatches(f, _search)) continue;
 
-				string arrow = f.Open ? "▾" : "▸";
-				if (GuiKit.Button(new Rect(0f, y, w, RowH), arrow + "  " + f.Title)) f.Open = !f.Open;
+				bool searching = !string.IsNullOrWhiteSpace(_search);
+				string arrow = f.Open || searching ? "−" : "+";
+				if (GuiKit.Button(new Rect(0f, y, w, RowH), arrow + "  " + f.Title) && !searching) f.Open = !f.Open;
 				y += RowH + RowGap;
 
-				if (!f.Open) continue;
+				if (!f.Open && !searching) continue;
 
 				for (int j = 0; j < f.Widgets.Count; j++)
 				{
 					Widget wd = f.Widgets[j];
+					if (searching && wd.Label != null
+						&& wd.Label.IndexOf(_search, StringComparison.OrdinalIgnoreCase) < 0
+						&& (wd.Entry == null || wd.Entry.Definition.Section.IndexOf(_search, StringComparison.OrdinalIgnoreCase) < 0)) continue;
 					if (wd.Enabled != null && !Safe(wd.Enabled)) continue;
 					y = DrawWidget(wd, 0f, y, w);
 				}
@@ -261,7 +475,7 @@ namespace VRChatArchiveMod.Core
 							try { wd.OnChange(now); }
 							catch (Exception e)
 							{
-								VRChatArchiveModPlugin.Logger.LogWarning(
+								Killiorim.Logger.LogWarning(
 									"[Overlay] '" + wd.Label + "' change handler failed: " + e.Message);
 							}
 						}
@@ -288,7 +502,7 @@ namespace VRChatArchiveMod.Core
 						try { wd.Run(); }
 						catch (Exception e)
 						{
-							VRChatArchiveModPlugin.Logger.LogWarning(
+							Killiorim.Logger.LogWarning(
 								"[Overlay] '" + wd.Label + "' failed: " + e.Message);
 						}
 					}
@@ -301,8 +515,77 @@ namespace VRChatArchiveMod.Core
 					GUI.Label(new Rect(x, y, w, RowH), text, GuiKit.BoxLabel);
 					return y + RowH + RowGap;
 				}
+
+				case Kind.Setting:
+					return DrawConfigSetting(wd, x, y, w);
 			}
 			return y + RowH + RowGap;
+		}
+
+		private static float DrawConfigSetting(Widget widget, float x, float y, float width)
+		{
+			ConfigEntryBase entry = widget.Entry;
+			if (entry == null) return y + RowH + RowGap;
+			if (entry.SettingType == typeof(bool))
+			{
+				bool old = (bool)entry.BoxedValue;
+				bool current = GuiKit.Toggle(new Rect(x, y, width, RowH), widget.Label, old);
+				if (current != old) entry.BoxedValue = current;
+				return y + RowH + RowGap;
+			}
+
+			string currentText = ConfigRegistry.ValueOf(new ConfigRegistry.Entry { Raw = entry });
+			if (!widget.Editing) widget.EditBuffer = currentText;
+			GUI.Label(new Rect(x, y, width * 0.34f, RowH), widget.Label, GuiKit.BoxLabel);
+			float fieldX = x + width * 0.36f;
+			float fieldWidth = width * 0.46f;
+			Rect field = new Rect(fieldX, y, fieldWidth, RowH);
+			widget.EditBuffer = IsSensitive(widget.Label)
+				? GUI.PasswordField(field, widget.EditBuffer ?? "", '*', _searchStyle)
+				: GUI.TextField(field, widget.EditBuffer ?? "", _searchStyle);
+			if (widget.EditBuffer != currentText) widget.Editing = true;
+			if (GuiKit.Button(new Rect(fieldX + fieldWidth + 8f, y,
+				width - (fieldX - x) - fieldWidth - 8f, RowH), "APPLY")
+				&& TryParseValue(entry.SettingType, widget.EditBuffer, out object parsed))
+			{
+				try { entry.BoxedValue = parsed; widget.Editing = false; }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[Overlay] setting '" + widget.Label + "' rejected: " + e.Message); }
+			}
+			return y + RowH + RowGap;
+		}
+
+		private static bool TryParseValue(Type type, string text, out object parsed)
+		{
+			parsed = null;
+			try
+			{
+				if (type == typeof(string)) { parsed = text; return true; }
+				if (type.IsEnum) { parsed = Enum.Parse(type, text, true); return true; }
+				parsed = Convert.ChangeType(text, type, CultureInfo.InvariantCulture);
+				return true;
+			}
+			catch { return false; }
+		}
+
+		private static bool IsSensitive(string key)
+		{
+			return key.IndexOf("token", StringComparison.OrdinalIgnoreCase) >= 0
+				|| key.IndexOf("password", StringComparison.OrdinalIgnoreCase) >= 0
+				|| key.IndexOf("secret", StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		private static string ReadableName(string value)
+		{
+			if (string.IsNullOrEmpty(value)) return "SETTING";
+			var result = new System.Text.StringBuilder(value.Length + 8);
+			for (int i = 0; i < value.Length; i++)
+			{
+				char c = value[i];
+				if (c == '_' || c == '-') { result.Append(' '); continue; }
+				if (i > 0 && char.IsUpper(c) && char.IsLower(value[i - 1])) result.Append(' ');
+				result.Append(c);
+			}
+			return result.ToString();
 		}
 
 		// ---------------------------------------------------------------- plumbing

@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// FORCE JUMP — a TOGGLE that gives you a working (and strong) jump, even in worlds that switched
 	// jumping off.
@@ -85,14 +85,14 @@ namespace VRChatArchiveMod.Modules
 					Active = true;
 					Status = "on — you can jump at " + ConfiguredForce.ToString("0.#")
 						+ " m/s, even where the world blocks it";
-					VRChatArchiveModPlugin.Logger.LogInfo($"[ForceJump] ON — impulse {ConfiguredForce:0.#}.");
+					Killiorim.Logger.LogInfo($"[ForceJump] ON — impulse {ConfiguredForce:0.#}.");
 				}
 				else
 				{
 					Active = false;
 					if (_captured) { try { api.SetJumpImpulse(_origJump); } catch { } }
 					Status = "off — the world's own jump restored";
-					VRChatArchiveModPlugin.Logger.LogInfo("[ForceJump] OFF.");
+					Killiorim.Logger.LogInfo("[ForceJump] OFF.");
 				}
 			}
 			catch (Exception e) { Status = "failed: " + e.Message; }

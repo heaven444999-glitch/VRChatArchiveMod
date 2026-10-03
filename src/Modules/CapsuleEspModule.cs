@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// CAPSULE ESP — a real 3D capsule around each player, lit by VRChat's own glow.
 	//
@@ -102,7 +102,7 @@ namespace VRChatArchiveMod.Modules
 				_frame = 0;
 				Rescan();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[CapsuleEsp] " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[CapsuleEsp] " + e.Message); }
 		}
 
 		public override void OnSceneLoaded(int buildIndex) { ClearAll(); EspCameraGuard.Reset(); }
@@ -200,7 +200,7 @@ namespace VRChatArchiveMod.Modules
 			if (!_reported && seen.Count > 0)
 			{
 				_reported = true;
-				VRChatArchiveModPlugin.Logger.LogInfo("[CapsuleEsp] seen " + seen.Count + " player(s) in range, " + _caps.Count + " capsule(s) built.");
+				Killiorim.Logger.LogInfo("[CapsuleEsp] seen " + seen.Count + " player(s) in range, " + _caps.Count + " capsule(s) built.");
 			}
 		}
 
@@ -337,7 +337,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[CapsuleEsp] build: " + e.Message);
+				Killiorim.Logger.LogWarning("[CapsuleEsp] build: " + e.Message);
 				return null;
 			}
 		}
@@ -474,7 +474,7 @@ namespace VRChatArchiveMod.Modules
 					catch { }
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[EspCameraGuard] " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[EspCameraGuard] " + e.Message); }
 		}
 
 		// Rebuilds the camera list and switches off any HighlightsFX copy that is not the one the glow

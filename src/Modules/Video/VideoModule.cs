@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// PLAY YOUR OWN VIDEO — on YOUR screen, in a world's player.
 	//
@@ -141,7 +141,7 @@ namespace VRChatArchiveMod.Modules
 					}
 
 				Status = "playing on your client only (" + Trunc(p.Short, 24) + ", via " + used + ")";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Video] local URL set on {p.Path} ({p.UrlVar}), reload event {used}.");
+				Killiorim.Logger.LogInfo($"[Video] local URL set on {p.Path} ({p.UrlVar}), reload event {used}.");
 				return true;
 			}
 			catch (Exception e)

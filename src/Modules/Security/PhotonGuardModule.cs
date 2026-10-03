@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// PHOTON GUARD — drops hostile inbound Photon events BEFORE VRChat ever sees them.
 	//
@@ -126,7 +126,7 @@ namespace VRChatArchiveMod.Modules
 						if (!_hooked && _hookAttempts >= MaxHookAttempts && !_gaveUpLogged)
 						{
 							_gaveUpLogged = true;
-							VRChatArchiveModPlugin.Logger.LogError(
+							Killiorim.Logger.LogError(
 								"[PhotonGuard] never attached after " + MaxHookAttempts + " tries — no inbound event is being "
 								+ "filtered on this build (" + HookInfo + "). Report so we can re-target it.");
 						}
@@ -171,7 +171,7 @@ namespace VRChatArchiveMod.Modules
 				_lastBlockedKey = long.MinValue;
 				_dropsSinceLog = 0;
 			}
-			VRChatArchiveModPlugin.Logger.LogInfo("[PhotonGuard] reset — suspensions and counters cleared.");
+			Killiorim.Logger.LogInfo("[PhotonGuard] reset — suspensions and counters cleared.");
 		}
 
 		// ---------------------------------------------------------------- config
@@ -192,7 +192,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					_blockTable = ParseBlockCodes(src, out int n);
 					_blockSource = src;
-					VRChatArchiveModPlugin.Logger.LogInfo(n == 0
+					Killiorim.Logger.LogInfo(n == 0
 						? "[PhotonGuard] block list empty — only the rate limit is active."
 						: "[PhotonGuard] block list: " + n + " code(s) dropped unconditionally [" + src.Trim() + "].");
 				}
@@ -235,7 +235,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					HookInfo = "VRCNetworkingClient not found";
 					if (_hookAttempts == 0)
-						VRChatArchiveModPlugin.Logger.LogWarning("[PhotonGuard] VRCNetworkingClient not found — nothing is filtered (will retry).");
+						Killiorim.Logger.LogWarning("[PhotonGuard] VRCNetworkingClient not found — nothing is filtered (will retry).");
 					return;
 				}
 
@@ -254,17 +254,17 @@ namespace VRChatArchiveMod.Modules
 				{
 					HookInfo = "OnEvent(EventData) not found on VRCNetworkingClient";
 					if (_hookAttempts == 0)
-						VRChatArchiveModPlugin.Logger.LogWarning("[PhotonGuard] " + HookInfo + " (will retry).");
+						Killiorim.Logger.LogWarning("[PhotonGuard] " + HookInfo + " (will retry).");
 					return;
 				}
 
 				var pre = new HarmonyMethod(typeof(PhotonGuardModule)
 					.GetMethod(nameof(OnEventPrefix), BindingFlags.Static | BindingFlags.NonPublic));
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(target, prefix: pre);
+				Killiorim.HarmonyInstance.Patch(target, prefix: pre);
 
 				_hooked = true;
 				HookInfo = "prefix on VRCNetworkingClient.OnEvent";
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[PhotonGuard] armed — filtering inbound events on VRCNetworkingClient.OnEvent"
 					+ " (rate " + _fRate + "/s per actor per code, mute " + (_fSuspendMs / 1000) + "s"
 					+ (_fEnabled ? ")." : ") — DISABLED in config, passing everything through."));
@@ -272,7 +272,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				HookInfo = "install failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogError($"[PhotonGuard] hook install failed: {e}");
+				Killiorim.Logger.LogError($"[PhotonGuard] hook install failed: {e}");
 			}
 		}
 
@@ -345,7 +345,7 @@ namespace VRChatArchiveMod.Modules
 					SuspendedCount = _suspendedUntil.Count;
 					w.Count = 0;
 					if (_fLog)
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[PhotonGuard] actor " + sender + " flooding event " + code + " at " + rate
 							+ "+/s (limit " + _fRate + "), muted for " + (_fSuspendMs / 1000) + "s.");
 					DropLocked(code, sender, key);
@@ -373,7 +373,7 @@ namespace VRChatArchiveMod.Modules
 			if (_fLog && ++_dropsSinceLog >= DropLogEvery)
 			{
 				_dropsSinceLog = 0;
-				VRChatArchiveModPlugin.Logger.LogInfo("[PhotonGuard] " + Blocked + " event(s) dropped so far — last: " + LastBlocked + ".");
+				Killiorim.Logger.LogInfo("[PhotonGuard] " + Blocked + " event(s) dropped so far — last: " + LastBlocked + ".");
 			}
 		}
 
@@ -426,10 +426,10 @@ namespace VRChatArchiveMod.Modules
 			if (_resolutionLogged) return;
 			_resolutionLogged = true;
 			if (_mCode == null)
-				VRChatArchiveModPlugin.Logger.LogError(
+				Killiorim.Logger.LogError(
 					"[PhotonGuard] EventData.Code NOT FOUND on " + t.Name + " — the guard cannot identify events and is passing everything through.");
 			else
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[PhotonGuard] event shape on " + t.Name + ": Code=" + Describe(_mCode) + ", Sender=" + Describe(_mSender) + ".");
 		}
 

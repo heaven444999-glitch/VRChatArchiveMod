@@ -6,9 +6,9 @@ using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// VOICE PROBE — TEMPORARY. Find out what carries player voice on THIS build.
 	//
@@ -84,11 +84,11 @@ namespace VRChatArchiveMod.Modules
 					if (ps.Length == 1 && ps[0].ParameterType.Name.Contains("EventData")) { target = m; break; }
 				}
 				if (target == null) return;
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(target, postfix: new HarmonyMethod(typeof(VoiceProbeModule).GetMethod(nameof(OnEventPostfix), BindingFlags.Static | BindingFlags.NonPublic)));
+				Killiorim.HarmonyInstance.Patch(target, postfix: new HarmonyMethod(typeof(VoiceProbeModule).GetMethod(nameof(OnEventPostfix), BindingFlags.Static | BindingFlags.NonPublic)));
 				_hooked = true;
-				VRChatArchiveModPlugin.Logger.LogInfo("[VoiceProbe] armed — TEMPORARY. Shout with a friend; the per-second lines below show which inbound Photon code carries voice, or that none does.");
+				Killiorim.Logger.LogInfo("[VoiceProbe] armed — TEMPORARY. Shout with a friend; the per-second lines below show which inbound Photon code carries voice, or that none does.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VoiceProbe] hook failed: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[VoiceProbe] hook failed: " + e.Message); }
 		}
 
 		private static void OnEventPostfix(object __0)
@@ -133,7 +133,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			if (lines.Count == 0) return;   // quiet second: no log
 			lines.Sort((a, x) => 0);
-			VRChatArchiveModPlugin.Logger.LogInfo("[VoiceProbe] inbound this second: " + string.Join("  |  ", lines));
+			Killiorim.Logger.LogInfo("[VoiceProbe] inbound this second: " + string.Join("  |  ", lines));
 		}
 
 		// ---------------------------------------------------------------- voice audio sources
@@ -187,7 +187,7 @@ namespace VRChatArchiveMod.Modules
 					}
 				}
 				if (talking.Count > 0)
-					VRChatArchiveModPlugin.Logger.LogInfo("[VoiceProbe] TALKING now: " + string.Join(", ", talking)
+					Killiorim.Logger.LogInfo("[VoiceProbe] TALKING now: " + string.Join(", ", talking)
 						+ " — if no inbound code above moves with this, voice bypasses Photon events.");
 			}
 			catch { }
@@ -216,9 +216,9 @@ namespace VRChatArchiveMod.Modules
 						}
 					sb.Append('}');
 				}
-				VRChatArchiveModPlugin.Logger.LogInfo("[VoiceProbe] VOICE OWNER for " + player + ": " + sb);
+				Killiorim.Logger.LogInfo("[VoiceProbe] VOICE OWNER for " + player + ": " + sb);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VoiceProbe] owner dump failed: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[VoiceProbe] owner dump failed: " + e.Message); }
 		}
 
 		// The local player's mic/voice side, once: every Behaviour under the local player root whose
@@ -248,9 +248,9 @@ namespace VRChatArchiveMod.Modules
 							sb.Append(n).Append('@').Append(owner).Append("  ");
 						}
 					}
-				VRChatArchiveModPlugin.Logger.LogInfo("[VoiceProbe] LOCAL voice-side components: " + (sb.Length == 0 ? "(none matched)" : sb.ToString().Trim()));
+				Killiorim.Logger.LogInfo("[VoiceProbe] LOCAL voice-side components: " + (sb.Length == 0 ? "(none matched)" : sb.ToString().Trim()));
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VoiceProbe] local dump failed: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[VoiceProbe] local dump failed: " + e.Message); }
 		}
 
 		// ---------------------------------------------------------------- helpers

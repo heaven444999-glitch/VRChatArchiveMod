@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
-	// MENU THEME — repaints VRChat's QuickMenu in the Archive's pink → violet instead of its stock
-	// teal, and turns its text violet.
+	// MENU THEME — repaints VRChat's QuickMenu in the requested pink / white / black palette
+	// instead of the stock teal or the older flat monochrome treatment, then adds a soft pulse to
+	// match the rest of the mod's side panels and console.
 	//
 	// It has to run on a TIMER rather than once. VRChat themes its own UI through StyleEngine /
 	// StyleElement, which re-asserts colours whenever a page is shown, restyled or rebuilt; a
@@ -16,7 +17,7 @@ namespace VRChatArchiveMod.Modules
 	//
 	// The "gradient" is across the GRID, not inside each button: a UI Image is a single flat colour,
 	// so there is no way to gradient one card on its own without a custom shader. Instead each card
-	// is tinted by WHERE it sits on screen, so a page of buttons reads as one pink→violet sweep.
+	// is tinted by WHERE it sits on screen, so a page of buttons reads as one neutral grey sweep.
 	// That is an honest approximation, and it is the one that actually looks like something.
 	//
 	// Everything is remembered and restored: switch the toggle off and the menu goes back to
@@ -30,12 +31,15 @@ namespace VRChatArchiveMod.Modules
 		// Defaults, used when the config hex is blank or unparseable. The live values come from
 		// config (QuickMenu/GradientStart, GradientEnd, TextColor) so they are editable from the
 		// desktop client's MOD SETTINGS page, and re-read cheaply each pass (cached by the hex string).
-		private static readonly Color PinkDefault = new Color(1.000f, 0.416f, 0.835f);
-		private static readonly Color VioletDefault = new Color(0.506f, 0.263f, 0.902f);
-		private static readonly Color TextVioletDefault = new Color(0.827f, 0.643f, 1.000f);
+		// The desired finish is a black / white / steel-grey palette with a subtle pulse so it matches
+		// the side panels and console instead of the old pink-violet Archive accent.
+		private static readonly Color PinkDefault = new Color(0.94f, 0.94f, 0.94f);
+		private static readonly Color WhiteDefault = new Color(0.96f, 0.96f, 0.96f);
+		private static readonly Color DarkDefault = new Color(0.05f, 0.05f, 0.08f);
+		private static readonly Color TextNeutralDefault = new Color(0.98f, 0.98f, 0.98f);
 
 		private static string _txtHex, _gsHex, _geHex;
-		private static Color _txtCol = new Color(0.827f, 0.643f, 1.000f), _gsCol = new Color(1.000f, 0.416f, 0.835f), _geCol = new Color(0.506f, 0.263f, 0.902f);
+		private static Color _txtCol = new Color(0.98f, 0.98f, 0.98f), _gsCol = new Color(0.94f, 0.94f, 0.94f), _geCol = new Color(0.05f, 0.05f, 0.08f);
 		private static Color Hex(string h, ref string cacheKey, ref Color cacheVal, Color fallback)
 		{
 			if (h == cacheKey) return cacheVal;
@@ -43,9 +47,43 @@ namespace VRChatArchiveMod.Modules
 			cacheVal = (!string.IsNullOrEmpty(h) && ColorUtility.TryParseHtmlString(h, out var c)) ? c : fallback;
 			return cacheVal;
 		}
-		private static Color TextCol() { try { return Hex(ModConfig.QmTextColor?.Value, ref _txtHex, ref _txtCol, TextVioletDefault); } catch { return TextVioletDefault; } }
-		private static Color GradStart() { try { return Hex(ModConfig.QmGradientStart?.Value, ref _gsHex, ref _gsCol, PinkDefault); } catch { return PinkDefault; } }
-		private static Color GradEnd() { try { return Hex(ModConfig.QmGradientEnd?.Value, ref _geHex, ref _geCol, VioletDefault); } catch { return VioletDefault; } }
+		private static float Pulse()
+		{
+			float t = Time.realtimeSinceStartup;
+			return 0.78f + (Mathf.Sin(t * 1.4f) * 0.14f);
+		}
+		private static Color TextCol()
+		{
+			try
+			{
+				var parsed = Hex(ModConfig.QmTextColor?.Value, ref _txtHex, ref _txtCol, TextNeutralDefault);
+				if (!string.IsNullOrEmpty(ModConfig.QmTextColor?.Value) && ColorUtility.TryParseHtmlString(ModConfig.QmTextColor.Value, out _)) return parsed;
+				float p = Pulse();
+				return new Color(p, p, p, 1f);
+			}
+			catch { return TextNeutralDefault; }
+		}
+		private static Color GradStart()
+		{
+			try
+			{
+				var parsed = Hex(ModConfig.QmGradientStart?.Value, ref _gsHex, ref _gsCol, PinkDefault);
+				if (!string.IsNullOrEmpty(ModConfig.QmGradientStart?.Value) && ColorUtility.TryParseHtmlString(ModConfig.QmGradientStart.Value, out _)) return parsed;
+				float p = Pulse();
+				return new Color(p, p, p, 1f);
+			}
+			catch { return PinkDefault; }
+		}
+		private static Color GradEnd()
+		{
+			try
+			{
+				var parsed = Hex(ModConfig.QmGradientEnd?.Value, ref _geHex, ref _geCol, DarkDefault);
+				if (!string.IsNullOrEmpty(ModConfig.QmGradientEnd?.Value) && ColorUtility.TryParseHtmlString(ModConfig.QmGradientEnd.Value, out _)) return parsed;
+				return new Color(0.08f, 0.08f, 0.10f, 1f);
+			}
+			catch { return DarkDefault; }
+		}
 
 		// Targets found by the LAST full scan. Re-asserting colours on these is a handful of property
 		// writes; finding them again means walking every Image and every text in the menu, which is
@@ -112,7 +150,7 @@ namespace VRChatArchiveMod.Modules
 
 				Repaint();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuTheme] update threw: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuTheme] update threw: {e.Message}"); }
 		}
 
 		public override void OnShutdown() => RestoreAll();
@@ -161,7 +199,7 @@ namespace VRChatArchiveMod.Modules
 
 				if (!_diagSeen.Add(t.GetInstanceID())) return;
 				_diagLeft--;
-				VRChatArchiveModPlugin.Logger.LogInfo("[MenuTheme] '" + t.name + "' resists: "
+				Killiorim.Logger.LogInfo("[MenuTheme] '" + t.name + "' resists: "
 					+ (kept ? "" : "colour-overwritten ")
 					+ (grad ? "vertexGradient " : "")
 					+ (tagged ? "rich-text-tag " : "")
@@ -245,9 +283,9 @@ namespace VRChatArchiveMod.Modules
 							var cb = t.Sel.colors;
 							if (cb.normalColor != t.Want)
 							{
-								cb.normalColor = t.Want;
-								cb.highlightedColor = new Color(t.Want.r * 1.75f, t.Want.g * 1.55f, t.Want.b * 1.55f, 1f);
-								cb.pressedColor = new Color(t.Want.r * 2.3f, t.Want.g * 1.9f, t.Want.b * 1.9f, 1f);
+								cb.normalColor = new Color(t.Want.r * 0.78f, t.Want.g * 0.76f, t.Want.b * 0.82f, 1f);
+								cb.highlightedColor = new Color(Mathf.Min(1f, t.Want.r * 1.35f + 0.25f), Mathf.Min(1f, t.Want.g * 1.2f + 0.26f), Mathf.Min(1f, t.Want.b * 1.2f + 0.24f), 1f);
+								cb.pressedColor = new Color(Mathf.Min(1f, t.Want.r * 1.65f + 0.3f), Mathf.Min(1f, t.Want.g * 1.35f + 0.28f), Mathf.Min(1f, t.Want.b * 1.5f + 0.26f), 1f);
 								cb.selectedColor = cb.highlightedColor;
 								cb.colorMultiplier = 1f;
 								t.Sel.colors = cb;

@@ -1,8 +1,8 @@
 ﻿using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// ORBIT / SIT — two ways to park yourself relative to another player.
 	//
@@ -59,7 +59,7 @@ namespace VRChatArchiveMod.Modules
 
 			VaTagsModule.LastStatus = (mode == Mode.Orbit ? "orbiting " : "sitting on ") + entry.Name
 				+ " — press the button again to stop";
-			VRChatArchiveModPlugin.Logger.LogInfo($"[Orbit] {mode} started on {entry.Name}.");
+			Killiorim.Logger.LogInfo($"[Orbit] {mode} started on {entry.Name}.");
 		}
 
 		public static void Stop(string why)

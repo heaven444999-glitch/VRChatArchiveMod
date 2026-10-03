@@ -24,11 +24,11 @@ them, because they have different answers and different places to go:
 
 There are **no tagged releases and no published GitHub releases** in this repository yet. There is one
 line of development, `main`, and one version number, which lives in two places that are kept in step:
-`<Version>` in `VRChatArchiveMod.csproj` and `PluginInfo.Version` in `src/Plugin.cs`. The plugin prints
+`<Version>` in `Killiorim.csproj` and `PluginInfo.Version` in `src/Plugin.cs`. The plugin prints
 it to the BepInEx log on load:
 
 ```
-VRCHAT ARCHIVE MOD v3.9.20 loading (BepInEx IL2CPP)...
+KILLIORIM v3.9.20 loading (BepInEx IL2CPP)...
 ```
 
 | Version | Supported |
@@ -50,7 +50,7 @@ something they do not control. Concretely:
 
 - **Remote code execution or arbitrary file write** reachable from untrusted input: a world's Udon
   programs, an avatar, an inbound Photon event, or the third-party FewTags JSON database the mod
-  re-downloads every ten minutes by default (`src/Modules/FewTagsModule.cs`, `FewTags/UpdateMinutes`).
+  re-downloads every ten minutes by default (`src/Modules/Tags/FewTagsModule.cs`, `FewTags/UpdateMinutes`).
 - **A crash, freeze or hang another client can trigger.** This matters more than usual here, because
   two modules exist specifically to stop it: `PhotonGuardModule` drops hostile inbound Photon events
   before VRChat dispatches them, and `AntiCrashModule` clamps crasher-tier avatar components. A way to
@@ -65,7 +65,7 @@ something they do not control. Concretely:
   the file people paste into a chat when they ask for help. **A redaction bypass is a valid report.**
 - **Unsafe file handling** in what the mod writes — path traversal from a name the mod does not
   control (a display name, a world name, an avatar name, a FewTags record) into a filename under
-  `<BepInEx>/VRChatArchiveMod/`.
+  `<BepInEx>/Killiorim/`.
 - **Memory-safety bugs in the IL2CPP interop layer** that untrusted data can reach —
   `Core/NativeGuard.cs`, `Core/FieldOffsetFix.cs`, `Core/NestedTypeFix.cs`. An access violation in a
   native call is not a catchable exception; it ends the process. Those three files are the mitigation,
@@ -161,9 +161,9 @@ The more of this you include, the faster it moves:
   the instance can do X" are very different severities; say which one you have.
 - **Logs**, with personal identifiers removed:
   - `BepInEx/LogOutput.log` — the game and plugin log.
-  - `<BepInEx>/VRChatArchiveMod/diagnostics/va-report_<timestamp>.log` — the mod's own diagnostics
+  - `<BepInEx>/Killiorim/diagnostics/va-report_<timestamp>.log` — the mod's own diagnostics
     report, capped at 3 MB so it stays attachable.
-  - `<BepInEx>/VRChatArchiveMod/crash/` — for a crash, the crash trail. It is flushed before each
+  - `<BepInEx>/Killiorim/crash/` — for a crash, the crash trail. It is flushed before each
     risky IL2CPP call, so it names what the process died on even though the access violation left no
     exception behind.
 
@@ -227,7 +227,7 @@ This section is grounded in the tracked source, and where it and the README's sh
 
 ### On your disk
 
-Almost everything the mod writes goes under `<BepInEx>/VRChatArchiveMod/`, outside this repository
+Almost everything the mod writes goes under `<BepInEx>/Killiorim/`, outside this repository
 and outside the game's own data:
 
 | Path | Written by | Contents |
@@ -247,7 +247,7 @@ all lives in one folder" is only a useful answer if it is true:
 | `<VRChat>/VRChatArchive-ui-tree.txt` | `Modules/UiTreeDumpModule.cs` | the menu hierarchy, written into the game's working directory only when the desktop client's DUMP MENU TREE action asks for it. It is a capture of *your* UI, so it can contain your own display name — read it before you attach it |
 | `BepInEx/config/org.vrchatarchive.mod.cfg` | BepInEx | your settings. Every `ConfigEntry` in `Core/ModConfig.cs` is persisted here by BepInEx itself, in the ordinary way |
 
-None of it is uploaded anywhere by the mod. Deleting `<BepInEx>/VRChatArchiveMod/` loses caches and
+None of it is uploaded anywhere by the mod. Deleting `<BepInEx>/Killiorim/` loses caches and
 reports, nothing else; deleting the `.cfg` resets every setting to its default.
 
 ### On the network
@@ -269,7 +269,7 @@ That is the complete list in the tracked source; `VaAuth.PostAsync` is the gener
 `POST` helper behind the last two.
 
 **One third party.** `https://raw.githubusercontent.com/Fewdys/FewTags/main/FewTags.json`, a plain
-periodic `GET` for the community tag database, identifying itself as `VRChatArchiveMod-FewTags/1.0`.
+periodic `GET` for the community tag database, identifying itself as `Killiorim-FewTags/1.0`.
 Nothing about you is sent with it.
 
 **What happens with no setting touched.** A fresh install is not silent. Five things run on
@@ -297,7 +297,7 @@ holds and forges no credential of its own; the asset-bundle patch only touches U
 requested. No VRChat login is ever entered into, or handled by, this mod.
 
 The three HTTP clients that talk to `vrchatarchive.org` present a Chrome `User-Agent` string with a
-`VRChatArchiveMod/…` token appended, because the Cloudflare edge in front of that site rejects
+`Killiorim/…` token appended, because the Cloudflare edge in front of that site rejects
 non-browser agents. That is a workaround for a 403, not an attempt to look like a browser to you.
 The version in that token is hardcoded per client (`VaAuth.cs`, `SoundboardModule.cs`,
 `VaTagsModule.cs`) and has drifted behind the mod's real version; it identifies the client, it is

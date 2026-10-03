@@ -5,9 +5,9 @@ using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
 using UnityEngine.UI;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// MENU SKIN — replaces the QuickMenu wallpaper with the VRChat Archive image.
 	//
@@ -98,7 +98,7 @@ namespace VRChatArchiveMod.Modules
 					RestoreVeil();
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuSkin] update threw: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuSkin] update threw: {e.Message}"); }
 		}
 
 		public override void OnShutdown() { Restore(); RestoreVeil(); DestroyLiquid(); }
@@ -160,9 +160,9 @@ namespace VRChatArchiveMod.Modules
 				_liquid.texture = _frames[0];
 				_liquid.raycastTarget = false;
 				_liquid.color = new Color(1f, 1f, 1f, 0.35f);
-				VRChatArchiveModPlugin.Logger.LogInfo("[MenuSkin] liquid: baking " + LiquidFrames + " frames…");
+				Killiorim.Logger.LogInfo("[MenuSkin] liquid: baking " + LiquidFrames + " frames…");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] liquid: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[MenuSkin] liquid: " + e.Message); }
 		}
 
 		private void AnimateLiquid()
@@ -248,7 +248,7 @@ namespace VRChatArchiveMod.Modules
 				{
 					_baked = true;
 					_bakeBuf = null;
-					VRChatArchiveModPlugin.Logger.LogInfo("[MenuSkin] liquid: baked, cycling (zero per-frame cost).");
+					Killiorim.Logger.LogInfo("[MenuSkin] liquid: baked, cycling (zero per-frame cost).");
 				}
 			}
 		}
@@ -407,7 +407,7 @@ namespace VRChatArchiveMod.Modules
 
 						// Everything full-panel is REPORTED whether it is touched or not: that list is
 						// the only way to find out what else is stacked over the wallpaper.
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							$"[MenuSkin] over-wallpaper layer: '{gname}' {rr.width:F0}x{rr.height:F0} "
 							+ $"alpha={c.a:F2} sprite='{sprite}' -> {(translucent || backdropName ? "HIDDEN" : "left alone")}");
 
@@ -420,7 +420,7 @@ namespace VRChatArchiveMod.Modules
 					catch { }
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[MenuSkin] veil pass failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[MenuSkin] veil pass failed: {e.Message}"); }
 		}
 
 		private void RestoreVeil()
@@ -502,7 +502,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				$"[MenuSkin] QuickMenu wallpaper found (target={_bg != null}, previous={_bgPrev != null}).");
 			return true;
 		}
@@ -545,16 +545,16 @@ namespace VRChatArchiveMod.Modules
 						byte[] data = System.IO.File.ReadAllBytes(path);
 						var t = new Texture2D(2, 2, TextureFormat.RGBA32, false, false); t.hideFlags = HideFlags.HideAndDontSave; t.wrapMode = TextureWrapMode.Clamp;
 						if (ImageConversion.LoadImage(t, new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(data))) tex = t;
-						else VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] custom image did not decode: " + path);
+						else Killiorim.Logger.LogWarning("[MenuSkin] custom image did not decode: " + path);
 					}
-					catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] custom image read failed: " + e.Message); }
+					catch (Exception e) { Killiorim.Logger.LogWarning("[MenuSkin] custom image read failed: " + e.Message); }
 				}
 				if (tex == null) { key = "embedded"; if (key == _srcKey && _ours != null) return _ours; tex = AssetLoader.MenuBackground; }
 				if (tex == null) return _ours;
 				_ours = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-				if (_ours != null) { _ours.hideFlags = HideFlags.HideAndDontSave; _srcKey = key; VRChatArchiveModPlugin.Logger.LogInfo("[MenuSkin] wallpaper source: " + key + " (" + tex.width + "x" + tex.height + ")."); }
+				if (_ours != null) { _ours.hideFlags = HideFlags.HideAndDontSave; _srcKey = key; Killiorim.Logger.LogInfo("[MenuSkin] wallpaper source: " + key + " (" + tex.width + "x" + tex.height + ")."); }
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[MenuSkin] OurSprite: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[MenuSkin] OurSprite: " + e.Message); }
 			return _ours;
 		}
 

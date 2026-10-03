@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// NSFW FILTER — hides, on YOUR screen, the parts of OTHER players' avatars whose object name says
 	// what they are. Avatar authors name their meshes; a renderer whose GameObject (or a parent, up to
@@ -102,7 +102,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				catch { }
 			}
-			if (newlyHidden > 0) VRChatArchiveModPlugin.Logger.LogInfo("[NsfwFilter] hid " + newlyHidden + " renderer(s); " + _hidden.Count + " hidden in total.");
+			if (newlyHidden > 0) Killiorim.Logger.LogInfo("[NsfwFilter] hid " + newlyHidden + " renderer(s); " + _hidden.Count + " hidden in total.");
 			Status = "nsfw filter on — " + _hidden.Count + " renderer(s) hidden";
 			FeatureHealth.Ok("AntiCrash/NsfwFilter", _hidden.Count == 0 ? "on — nothing matched so far" : "on — " + _hidden.Count + " renderer(s) hidden");
 		}

@@ -3,6 +3,9 @@
 # ---------------------------------------------------------------------------
 bin/
 obj/
+installer/bin/
+installer/obj/
+installer/publish/
 *.user
 *.suo
 .vs/

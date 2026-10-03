@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// EVERY AVATAR BUNDLE THAT COMES THROUGH, WITH ITS ID, AS IT ARRIVES.
 	//

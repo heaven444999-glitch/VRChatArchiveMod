@@ -2,7 +2,7 @@
 using UnityEngine;
 using VRC.Core;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Single source of truth for VRChat trust-rank colours, shared by ESP, the instance
 	// panels and the PLAYERS tab so a player is the same colour everywhere.

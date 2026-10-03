@@ -2,7 +2,7 @@
 using System.Reflection;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Reflection-based access to the local VRChat player. Uses the same entry points as
 	// the reference fly mod (VRC.Player.prop_Player_0 → the local player Component, whose
@@ -137,7 +137,7 @@ namespace VRChatArchiveMod.Core
 				if (!_deadProxyLogged)
 				{
 					_deadProxyLogged = true;
-					VRChatArchiveModPlugin.Logger.LogInfo(
+					Killiorim.Logger.LogInfo(
 						"[PlayerRef] prop_Player_0 handed back a proxy with no live object behind it "
 						+ "(normal before spawn) — refused instead of read.");
 				}

@@ -7,9 +7,9 @@ using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// OUR CARDS on VRChat's per-user menu.
 	//
@@ -133,7 +133,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[UserMenu] update threw: {e.Message}");
+				Killiorim.Logger.LogWarning($"[UserMenu] update threw: {e.Message}");
 				_fails++;
 			}
 		}
@@ -198,14 +198,14 @@ namespace VRChatArchiveMod.Modules
 						if (InjectInto(page, page.name))
 						{
 							built++;
-							VRChatArchiveModPlugin.Logger.LogInfo(
+							Killiorim.Logger.LogInfo(
 								"[UserMenu] per-user page found by TYPE (SelectedUserMenuQM) on '" + page.name + "'.");
 						}
 					}
 				}
 				catch (Exception e)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] SelectedUserMenuQM lookup: " + e.Message);
+					Killiorim.Logger.LogWarning("[UserMenu] SelectedUserMenuQM lookup: " + e.Message);
 				}
 			}
 
@@ -239,7 +239,7 @@ namespace VRChatArchiveMod.Modules
 						Transform c = body.GetChild(i);
 						if (c != null) names.Add(c.name);
 					}
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[UserMenu] pages under Body: " + (names.Count == 0 ? "(none)" : string.Join(", ", names)));
 				}
 				return Fail("no per-user page under Body (tried: " + string.Join(", ", PagePaths) + " + pattern match)");
@@ -254,7 +254,7 @@ namespace VRChatArchiveMod.Modules
 			if (!string.Equals(_lastFailReason, why, StringComparison.Ordinal))
 			{
 				_lastFailReason = why;
-				VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] not injected: " + why);
+				Killiorim.Logger.LogWarning("[UserMenu] not injected: " + why);
 			}
 			return false;
 		}
@@ -430,12 +430,12 @@ namespace VRChatArchiveMod.Modules
 			}
 			if (donor == null && fallback != null)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] no fully-enabled button on " + pageName
+				Killiorim.Logger.LogWarning("[UserMenu] no fully-enabled button on " + pageName
 					+ " to clone — falling back to '" + fallback.name + "', cards may look faded.");
 				donor = fallback;
 			}
 			if (donor == null) return false;
-			VRChatArchiveModPlugin.Logger.LogInfo("[UserMenu] donor: " + donor.name);
+			Killiorim.Logger.LogInfo("[UserMenu] donor: " + donor.name);
 
 			// Build while the page is ACTIVE, otherwise Unity never runs Awake on the clone and
 			// VRChat's own text component is still uninitialised when we set the label.
@@ -462,7 +462,7 @@ namespace VRChatArchiveMod.Modules
 			// reuses the cards that did come up.
 			if (!pc.Alive || pc.Copy == null || pc.Sit == null || pc.Ring == null || pc.VoiceMimic == null) return false;
 			_injected[page.GetInstanceID()] = pc;
-			VRChatArchiveModPlugin.Logger.LogInfo("[UserMenu] cards added to " + pageName
+			Killiorim.Logger.LogInfo("[UserMenu] cards added to " + pageName
 				+ " (Clone Avatar, Copy Avatar Id, Orbit, Sit on, Ring objects, Voice Mimic).");
 			// Get them themed NOW. Our cards are named Button_VA* precisely so MenuThemeModule's
 			// filter picks them up, but that filter only runs on a full scan, and a full scan
@@ -486,10 +486,10 @@ namespace VRChatArchiveMod.Modules
 			if (ours == null || donor == null) return;
 			try
 			{
-				VRChatArchiveModPlugin.Logger.LogInfo("[UserMenu] ours   " + Describe(ours));
-				VRChatArchiveModPlugin.Logger.LogInfo("[UserMenu] donor  " + Describe(donor));
+				Killiorim.Logger.LogInfo("[UserMenu] ours   " + Describe(ours));
+				Killiorim.Logger.LogInfo("[UserMenu] donor  " + Describe(donor));
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] compare: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[UserMenu] compare: " + e.Message); }
 		}
 
 		private static string Describe(Transform t)
@@ -572,7 +572,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[UserMenu] could not add '{label}': {e.Message}");
+				Killiorim.Logger.LogWarning($"[UserMenu] could not add '{label}': {e.Message}");
 				return null;
 			}
 		}
@@ -614,7 +614,7 @@ namespace VRChatArchiveMod.Modules
 				if (loose == null) loose = g;
 			}
 			if (loose != null)
-				VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] no GridLayoutGroup under " + page.name
+				Killiorim.Logger.LogWarning("[UserMenu] no GridLayoutGroup under " + page.name
 					+ " — using '" + loose.name + "', cards may come out full width.");
 			return loose;
 		}
@@ -656,7 +656,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				act(e);
 			}
-			catch (Exception ex) { VRChatArchiveModPlugin.Logger.LogWarning($"[UserMenu] {what} failed: {Unwrap.Describe(ex)}"); }
+			catch (Exception ex) { Killiorim.Logger.LogWarning($"[UserMenu] {what} failed: {Unwrap.Describe(ex)}"); }
 		}
 
 		// Status line AND toast. The status line is only drawn inside the mod's own menu, which
@@ -684,9 +684,9 @@ namespace VRChatArchiveMod.Modules
 				}
 				GUIUtility.systemCopyBuffer = id;
 				Say("copied avatar id: " + id);
-				VRChatArchiveModPlugin.Logger.LogInfo("[UserMenu] copied avatar id " + id + " for " + (name ?? "?"));
+				Killiorim.Logger.LogInfo("[UserMenu] copied avatar id " + id + " for " + (name ?? "?"));
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] copy id failed: " + Unwrap.Describe(e)); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[UserMenu] copy id failed: " + Unwrap.Describe(e)); }
 		}
 
 		// Clone the avatar of the user this page is showing, without a detour through our menu.
@@ -709,12 +709,12 @@ namespace VRChatArchiveMod.Modules
 					Say(string.IsNullOrEmpty(name)
 						? "clone failed: could not read which user this menu is showing"
 						: "clone failed: '" + name + "' is not in the instance roster yet");
-					VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] clone: no roster entry for " + (name ?? "?"));
+					Killiorim.Logger.LogWarning("[UserMenu] clone: no roster entry for " + (name ?? "?"));
 					return;
 				}
 				VaTagsModule.CloneAvatar(entry);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[UserMenu] clone failed: {Unwrap.Describe(e)}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[UserMenu] clone failed: {Unwrap.Describe(e)}"); }
 		}
 
 		// THE PAGE THE USER IS LOOKING AT, resolved at call time.
@@ -863,7 +863,7 @@ namespace VRChatArchiveMod.Modules
 						.Append(txt.Replace('\n', ' '));
 					n++;
 				}
-				VRChatArchiveModPlugin.Logger.LogWarning("[UserMenu] could not read the selected user on " + page.name
+				Killiorim.Logger.LogWarning("[UserMenu] could not read the selected user on " + page.name
 					+ "; labels on the page (" + n + "):" + sb);
 			}
 			catch { }

@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// RADAR MAP — an optional top-down view of the world, drawn underneath the radar blips.
 	//
@@ -143,7 +143,7 @@ namespace VRChatArchiveMod.Modules
 						// One failure is enough: a camera that throws will throw every frame, and a
 						// radar is not worth an exception per repaint.
 						_failed = true;
-						VRChatArchiveModPlugin.Logger.LogWarning($"[RadarMap] render failed, map disabled: {e.Message}");
+						Killiorim.Logger.LogWarning($"[RadarMap] render failed, map disabled: {e.Message}");
 						Release();
 						return false;
 					}
@@ -203,13 +203,13 @@ namespace VRChatArchiveMod.Modules
 				_cam.nearClipPlane = 0.3f;
 				_cam.enabled = false;          // we call Render() ourselves
 
-				VRChatArchiveModPlugin.Logger.LogInfo($"[RadarMap] camera ready ({res}x{res}).");
+				Killiorim.Logger.LogInfo($"[RadarMap] camera ready ({res}x{res}).");
 				return true;
 			}
 			catch (Exception e)
 			{
 				_failed = true;
-				VRChatArchiveModPlugin.Logger.LogWarning($"[RadarMap] could not create the camera: {e.Message}");
+				Killiorim.Logger.LogWarning($"[RadarMap] could not create the camera: {e.Message}");
 				Release();
 				return false;
 			}

@@ -3,7 +3,7 @@ using System.Reflection;
 using HarmonyLib;
 using VRC.Economy.Internal;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// STORE OWNERSHIP, LOCALLY — so the owner can walk their own published worlds' paid content
 	// without buying their own products back to test a gate.
@@ -55,32 +55,32 @@ namespace VRChatArchiveMod.Core
 					if (m == null) continue;
 					try
 					{
-						VRChatArchiveModPlugin.HarmonyInstance.Patch(m, prefix: new HarmonyMethod(prefix));
+						Killiorim.HarmonyInstance.Patch(m, prefix: new HarmonyMethod(prefix));
 						patched++;
 					}
 					catch (Exception e)
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning("[Eco] could not patch " + name + ": " + e.Message);
+						Killiorim.Logger.LogWarning("[Eco] could not patch " + name + ": " + e.Message);
 					}
 				}
 
 				if (patched == 0)
 				{
 					Status = "neither ownership method resolved on this build";
-					VRChatArchiveModPlugin.Logger.LogWarning("[Eco] " + Status + " — store testing unavailable.");
+					Killiorim.Logger.LogWarning("[Eco] " + Status + " — store testing unavailable.");
 					return;
 				}
 
 				Armed = true;
 				Status = "armed (" + patched + " method(s))";
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.Logger.LogInfo(
 					"[Eco] armed on " + patched + " ownership check(s). Client-side only — what VRChat "
 					+ "validates server-side is unaffected. Inactive until Spoof/StoreOwnership is on.");
 			}
 			catch (Exception e)
 			{
 				Status = "could not patch: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[Eco] " + Status);
+				Killiorim.Logger.LogWarning("[Eco] " + Status);
 			}
 		}
 

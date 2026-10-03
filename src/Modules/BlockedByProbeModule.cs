@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using VRC.Core;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// WHO BLOCKED ME — the data half. Draws nothing; it fills two sets the player lists read.
 	//
@@ -91,7 +91,7 @@ namespace VRChatArchiveMod.Modules
 				// and that was the wrong instinct: a feature that switches itself off is a feature the
 				// user has lost, and the answer to "people are crashing" is to stop the crash, not to
 				// stop the feature. The trail is here so a crash names its own line on the next launch.
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[BlockedBy] the previous session died inside this probe at \"" + _lastCrash + "\". "
 					+ "Running again with the pointer checks below; if this line comes back, it names the step.");
 			}
@@ -118,11 +118,11 @@ namespace VRChatArchiveMod.Modules
 				if (!Il2CppDelegates.Available)
 				{
 					Status = "blocked-by: il2cpp delegate bridge is off — not asking on this build";
-					VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] " + Status);
+					Killiorim.Logger.LogInfo("[BlockedBy] " + Status);
 					return;
 				}
 				_at = now0;
-				VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] asking automatically (once this session).");
+				Killiorim.Logger.LogInfo("[BlockedBy] asking automatically (once this session).");
 			}
 
 			if (_at <= 0f || _fired) return;
@@ -137,7 +137,7 @@ namespace VRChatArchiveMod.Modules
 			catch (Exception e)
 			{
 				Status = "blocked-by probe failed: " + e.Message;
-				VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] " + Status);
+				Killiorim.Logger.LogWarning("[BlockedBy] " + Status);
 			}
 			finally { Core.CrashTrail.End(); }
 		}
@@ -153,7 +153,7 @@ namespace VRChatArchiveMod.Modules
 			_fired = false;
 			_at = Time.realtimeSinceStartup;   // next Update, on the main thread, where il2cpp wants it
 			Status = "blocked-by: asking…";
-			VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] requested by the user");
+			Killiorim.Logger.LogInfo("[BlockedBy] requested by the user");
 		}
 
 		private static void Fetch()
@@ -161,7 +161,7 @@ namespace VRChatArchiveMod.Modules
 			if (!Il2CppDelegates.Available)
 			{
 				Status = "blocked-by: il2cpp delegate bridge is off — cannot ask the API on this build";
-				VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] " + Status);
+				Killiorim.Logger.LogInfo("[BlockedBy] " + Status);
 				return;
 			}
 
@@ -178,11 +178,11 @@ namespace VRChatArchiveMod.Modules
 			if (okAgainst == null || errAgainst == null)
 			{
 				Status = "blocked-by: the delegate bridge refused — nothing was asked";
-				VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] " + Status);
+				Killiorim.Logger.LogInfo("[BlockedBy] " + Status);
 				return;
 			}
 
-			VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] asking the API for player moderations…");
+			Killiorim.Logger.LogInfo("[BlockedBy] asking the API for player moderations…");
 			Core.CrashTrail.Step("FetchAllAgainstMe — the call that needs ConvertDelegate");
 			ApiPlayerModeration.FetchAllAgainstMe(okAgainst, errAgainst);
 			Core.CrashTrail.Step("FetchAllAgainstMe returned");
@@ -197,7 +197,7 @@ namespace VRChatArchiveMod.Modules
 		private static void Fail(string which, string error)
 		{
 			Status = "blocked-by (" + which + "): " + (error ?? "unknown error");
-			VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] " + Status);
+			Killiorim.Logger.LogWarning("[BlockedBy] " + Status);
 		}
 
 		// againstMe: I am the target, so the SOURCE is the person who acted on me.
@@ -224,7 +224,7 @@ namespace VRChatArchiveMod.Modules
 				if (!fieldsSafe)
 				{
 					Status = "blocked-by: field offsets unrepaired on this build — not reading the rows";
-					VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] " + Status);
+					Killiorim.Logger.LogWarning("[BlockedBy] " + Status);
 					return;
 				}
 
@@ -249,7 +249,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] reading the list: " + e.Message);
+				Killiorim.Logger.LogWarning("[BlockedBy] reading the list: " + e.Message);
 			}
 
 			// The breakdown is the point of the probe: "0 rows" and "40 rows, none of them Block" are
@@ -259,7 +259,7 @@ namespace VRChatArchiveMod.Modules
 			string where = againstMe ? "against me" : "mine";
 			Status = "blocked-by (" + where + "): " + total + " row(s)" + (parts.Count > 0 ? " [" + string.Join(", ", parts.ToArray()) + "]" : "")
 				+ " → " + (againstMe ? BlockedMe.Count : IBlocked.Count) + " block(s)";
-			VRChatArchiveModPlugin.Logger.LogInfo("[BlockedBy] " + Status);
+			Killiorim.Logger.LogInfo("[BlockedBy] " + Status);
 		}
 
 		// The one enumeration that every il2cpp collection honours, per this mod's Il2CppSeq notes: a
@@ -270,7 +270,7 @@ namespace VRChatArchiveMod.Modules
 		//     Fatal error. System.AccessViolationException: Attempted to read or write protected memory.
 		//        at Il2CppInterop.Runtime.IL2CPP.il2cpp_class_is_assignable_from(IntPtr, IntPtr)
 		//        at Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase.TryCast[[System.__Canon]]()
-		//        at VRChatArchiveMod.Modules.BlockedByProbeModule.Walk(...)
+		//        at Killiorim.Modules.BlockedByProbeModule.Walk(...)
 		//
 		// AND THE `catch` THAT USED TO WRAP TryCast NEVER RAN. On .NET 6 an AccessViolationException is
 		// a corrupted-state exception: it is not delivered to managed catch blocks at all, the process
@@ -308,7 +308,7 @@ namespace VRChatArchiveMod.Modules
 					_fSource = Core.Il2CppStr.FindField(obj, "sourceUserId");
 					_fTarget = Core.Il2CppStr.FindField(obj, "targetUserId");
 					if (_fSource == IntPtr.Zero || _fTarget == IntPtr.Zero)
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[BlockedBy] ApiPlayerModeration has no sourceUserId/targetUserId field on this build "
 							+ "— no ids will be read, and nothing is guessed.");
 				}
@@ -342,12 +342,12 @@ namespace VRChatArchiveMod.Modules
 			// no cast in this method can be made safely and the honest answer is no rows.
 			if (!ClassOk<Il2CppSystem.Collections.IEnumerable>() || !ClassOk<ApiPlayerModeration>())
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning(
+				Killiorim.Logger.LogWarning(
 					"[BlockedBy] the il2cpp class pointers for IEnumerable/ApiPlayerModeration did not "
 					+ "validate on this build — not walking the list. VRChat has probably moved the type.");
 				return outp;
 			}
-			if (!Core.NativeGuard.Alive(list)) { VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] the list VRChat handed back is not a live object — nothing read."); return outp; }
+			if (!Core.NativeGuard.Alive(list)) { Killiorim.Logger.LogWarning("[BlockedBy] the list VRChat handed back is not a live object — nothing read."); return outp; }
 
 			// THE REAL REPAIR: DO NOT CAST IN THE LOOP AT ALL.
 			//
@@ -383,16 +383,16 @@ namespace VRChatArchiveMod.Modules
 								if (!Core.NativeGuard.Alive(m)) { dead++; continue; }
 								outp.Add(m);
 							}
-							VRChatArchiveModPlugin.Logger.LogInfo(
+							Killiorim.Logger.LogInfo(
 								"[BlockedBy] read " + outp.Count + " row(s) by indexer"
 								+ (dead > 0 ? " (" + dead + " skipped: object gone)" : "") + " — no per-row cast.");
 							return outp;
 						}
-						VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] List.Count read back " + n + " — refusing it, falling back to the enumerator.");
+						Killiorim.Logger.LogWarning("[BlockedBy] List.Count read back " + n + " — refusing it, falling back to the enumerator.");
 					}
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] indexer path: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[BlockedBy] indexer path: " + e.Message); }
 
 			// FALLBACK — an enumerator walk, for a build where the callback hands back something that
 			// is not a List<T>. Same guards, per element, because here the cast is unavoidable.
@@ -428,11 +428,11 @@ namespace VRChatArchiveMod.Modules
 					if (m != null) outp.Add(m);
 				}
 				if (skipped > 0)
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[BlockedBy] skipped " + skipped + " row(s) whose object was not there any more. "
 						+ "This is the guard doing its job — that cast used to end the process.");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[BlockedBy] walk: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[BlockedBy] walk: " + e.Message); }
 			return outp;
 		}
 

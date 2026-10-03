@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// ONE chrome for every HUD panel.
 	//
@@ -10,13 +10,13 @@ namespace VRChatArchiveMod.Core
 	// changing the client's identity is a one-place edit and the panels can never drift apart
 	// again.
 	//
-	// Palette: the client's pink -> violet, on a near-black navy, with a soft outer glow.
+	// Palette: grayscale accents on a near-black surface, with a soft outer glow.
 	public static class Hud
 	{
-		public static readonly Color Pink   = new Color(1.000f, 0.416f, 0.835f);   // #FF6AD5
-		public static readonly Color Violet = new Color(0.506f, 0.263f, 0.902f);   // #8143E6
-		public static readonly Color Body   = new Color(0.043f, 0.043f, 0.078f, 0.90f);
-		public static readonly Color Head   = new Color(0.086f, 0.075f, 0.137f, 0.95f);
+		public static readonly Color Pink   = new Color(0.94f, 0.94f, 0.94f);   // primary neutral
+		public static readonly Color Violet = new Color(0.48f, 0.48f, 0.48f);   // secondary neutral
+		public static readonly Color Body   = new Color(0.035f, 0.035f, 0.035f, 0.94f);
+		public static readonly Color Head   = new Color(0.10f, 0.10f, 0.10f, 0.97f);
 		public static readonly Color Text   = new Color(0.925f, 0.937f, 0.968f);
 		public static readonly Color Dim    = new Color(0.478f, 0.529f, 0.612f);
 		public static readonly Color Row    = new Color(1f, 1f, 1f, 0.030f);
@@ -71,7 +71,7 @@ namespace VRChatArchiveMod.Core
 		{
 			EnsureStyles();
 
-			// Soft violet glow so a panel keeps its edge over a bright world without needing a
+			// Soft grey glow so a panel keeps its edge over a bright world without needing a
 			// hard border or a text shadow on every row.
 			GuiKit.SoftGlow(r, new Color(Violet.r, Violet.g, Violet.b, 0.30f), Radius, 0.35f, 5, 2.5f);
 
@@ -79,7 +79,7 @@ namespace VRChatArchiveMod.Core
 			GuiKit.RoundedFill(new Rect(r.x, r.y, r.width, HeaderH + Radius), Head, Radius);
 			GuiKit.Fill(new Rect(r.x, r.y + HeaderH, r.width, 1f), new Color(1f, 1f, 1f, 0.06f));
 
-			// A pink→violet rule across the top is the client's signature; it is what makes the
+			// A white-to-grey rule across the top is the shared signature; it is what makes the
 			// four panels read as one product.
 			AccentBar(new Rect(r.x + Radius * 0.5f, r.y, r.width - Radius, 2f));
 
@@ -97,7 +97,7 @@ namespace VRChatArchiveMod.Core
 			return new Rect(r.x + PadX * 0.4f, r.y + HeaderH + 3f, r.width - PadX * 0.8f, r.height - HeaderH - 7f);
 		}
 
-		// Horizontal pink -> violet gradient, drawn as a few flat quads. Cheap enough to sit at
+		// Horizontal white -> grey gradient, drawn as a few flat quads. Cheap enough to sit at
 		// the top of every panel every frame.
 		public static void AccentBar(Rect r)
 		{

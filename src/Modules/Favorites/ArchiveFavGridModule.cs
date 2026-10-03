@@ -9,9 +9,9 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// ARCHIVE FAVORITES for WORLDS and SOCIAL — rendered as OUR OWN grid.
 	//
@@ -259,7 +259,7 @@ namespace VRChatArchiveMod.Modules
 						SyncCells();
 					}
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[FavGrid:" + Kind + "] " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[FavGrid:" + Kind + "] " + e.Message); }
 			}
 
 			// ----------------------------------------------------------------- sidebar row
@@ -297,7 +297,7 @@ namespace VRChatArchiveMod.Modules
 				go.SetActive(true);
 
 				AdoptRow(t, root);
-				VRChatArchiveModPlugin.Logger.LogInfo("[FavGrid:" + Kind + "] ARCHIVE FAVORITES row added to the " + Kind + " sidebar.");
+				Killiorim.Logger.LogInfo("[FavGrid:" + Kind + "] ARCHIVE FAVORITES row added to the " + Kind + " sidebar.");
 			}
 
 			private void AdoptRow(Transform t, Transform root)
@@ -433,7 +433,7 @@ namespace VRChatArchiveMod.Modules
 				_gridContent = gridContent;
 
 				if (_shown) { _overlay.gameObject.SetActive(true); Repopulate(); }
-				VRChatArchiveModPlugin.Logger.LogInfo("[FavGrid:" + Kind + "] grid overlay built.");
+				Killiorim.Logger.LogInfo("[FavGrid:" + Kind + "] grid overlay built.");
 			}
 
 			private void AdoptOverlay(Transform overlay)
@@ -449,7 +449,7 @@ namespace VRChatArchiveMod.Modules
 			private void Toggle()
 			{
 				try { if (_shown) Hide(); else Show(); }
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[FavGrid:" + Kind + "] toggle: " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[FavGrid:" + Kind + "] toggle: " + e.Message); }
 			}
 
 			private void Show()
@@ -643,7 +643,7 @@ namespace VRChatArchiveMod.Modules
 					if (!_loggedGrid)
 					{
 						_loggedGrid = true;
-						VRChatArchiveModPlugin.Logger.LogInfo("[FavGrid:" + Kind + "] populated " + _gridContent.childCount
+						Killiorim.Logger.LogInfo("[FavGrid:" + Kind + "] populated " + _gridContent.childCount
 							+ " cell(s) for " + _entries.Count + " favourite(s); style=" + (Dead(donor) ? "scratch" : "native"));
 					}
 				}
@@ -725,7 +725,7 @@ namespace VRChatArchiveMod.Modules
 				}
 				catch (Exception ex)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[FavGrid:" + Kind + "] scratch cell: " + ex.Message);
+					Killiorim.Logger.LogWarning("[FavGrid:" + Kind + "] scratch cell: " + ex.Message);
 				}
 			}
 
@@ -905,7 +905,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				get
 				{
-					string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "thumbs");
+					string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "thumbs");
 					try { Directory.CreateDirectory(d); } catch { }
 					return d;
 				}

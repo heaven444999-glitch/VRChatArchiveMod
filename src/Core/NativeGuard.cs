@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using Il2CppInterop.Runtime.InteropTypes;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// AN ACCESS VIOLATION IS NOT AN EXCEPTION YOU CAN CATCH.
 	//

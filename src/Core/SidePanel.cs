@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// WHERE THE TWO SIDE PANELS HANG. The panels themselves are built by PanelSkin; all this file
 	// decides is what they are parented to, and that decision has its own history worth keeping.

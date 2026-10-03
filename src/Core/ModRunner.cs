@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Il2Cpp-injected MonoBehaviour that pumps the module update loop each frame.
 	// Registered via ClassInjector and attached to a persistent GameObject in Plugin.Load().

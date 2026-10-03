@@ -39,7 +39,7 @@ root = true
 [*]
 
 # UTF-8 without a BOM. Safe here: every tracked non-.cs text file (README.md,
-# LICENSE, NOTICE, .gitignore, VRChatArchiveMod.csproj, BADAPPLE_TEST.bat,
+# LICENSE, NOTICE, .gitignore, Killiorim.csproj, BADAPPLE_TEST.bat,
 # docs/img/README.txt and the three tools/*.py) is already BOM-free, so this
 # setting rewrites nothing. .cs is exempted below — see the note there.
 charset = utf-8
@@ -107,8 +107,8 @@ dotnet_diagnostic.IDE0005.severity = suggestion
 
 # --- namespaces ------------------------------------------------------------
 # Block-scoped, 101 of 101, even though <LangVersion>latest</LangVersion> would
-# permit file-scoped. Three namespaces exist: VRChatArchiveMod (1 file),
-# VRChatArchiveMod.Core (36), VRChatArchiveMod.Modules (64 — the 63 files in
+# permit file-scoped. Three namespaces exist: Killiorim (1 file),
+# Killiorim.Core (36), Killiorim.Modules (64 — the 63 files in
 # src/Modules plus AssetBundlePatch.cs, which sits at the repository root but
 # declares the Modules namespace like the rest of them). 1 + 36 + 64 = 101.
 csharp_style_namespace_declarations = block_scoped:suggestion
@@ -339,7 +339,7 @@ dotnet_naming_rule.visible_members_are_pascal_case.severity = suggestion
 
 
 # ---------------------------------------------------------------------------
-# MSBuild project files — 2 spaces, as VRChatArchiveMod.csproj already is
+# MSBuild project files — 2 spaces, as Killiorim.csproj already is
 # ---------------------------------------------------------------------------
 [*.{csproj,props,targets,sln,xml}]
 indent_style = space

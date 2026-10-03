@@ -1,0 +1,36 @@
+name: Publish Installer
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    name: Build the Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish self-contained installer
+        run: >-
+          dotnet publish installer/KilliorimInstaller.csproj
+          --configuration Release
+          --output artifacts/installer
+
+      - name: Attach installer to the published release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: artifacts/installer/KilliorimInstaller.exe
+          fail_on_unmatched_files: true

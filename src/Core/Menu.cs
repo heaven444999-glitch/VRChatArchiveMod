@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
 using UnityEngine;
-using VRChatArchiveMod.Modules;
+using Killiorim.Modules;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Full on-screen interface (IMGUI). Draggable window, animated accent chrome, a left
 	// tab rail (Dashboard / Anti-Crash / Archive / Settings / Info), stat cards, ON/OFF
@@ -76,18 +76,16 @@ namespace VRChatArchiveMod.Core
 		private static readonly Color DarkBg = new Color(0.012f, 0.014f, 0.02f, 0.986f);
 
 		// ---- redesign palette ------------------------------------------------------------
-		// Violet-biased neutrals over the kept wallpaper, with the Archive violet→pink as the one
-		// accent. Deliberately NOT derived from GuiKit.Accent: the chrome is the brand and stays
-		// violet whatever accent preset the user picks for the controls inside a page.
-		private static readonly Color Violet     = new Color(0.545f, 0.361f, 0.965f, 1f);   // #8B5CF6
-		private static readonly Color VioletSoft = new Color(0.545f, 0.361f, 0.965f, 0.16f);
-		private static readonly Color VioletRim  = new Color(0.545f, 0.361f, 0.965f, 0.35f);
-		private static readonly Color Pink       = new Color(0.925f, 0.282f, 0.600f, 1f);   // #EC4899
+		// Monochrome chrome over the kept wallpaper, independent of page control settings.
+		private static readonly Color Violet     = new Color(0.88f, 0.88f, 0.88f, 1f);
+		private static readonly Color VioletSoft = new Color(0.88f, 0.88f, 0.88f, 0.16f);
+		private static readonly Color VioletRim  = new Color(0.88f, 0.88f, 0.88f, 0.35f);
+		private static readonly Color Pink       = new Color(0.96f, 0.96f, 0.96f, 1f);
 		private static readonly Color Line       = new Color(1f, 1f, 1f, 0.07f);
 		private static readonly Color Hover      = new Color(1f, 1f, 1f, 0.035f);
 		private static readonly Color Clear      = new Color(0f, 0f, 0f, 0f);
-		private static readonly Color TextMuted  = new Color(0.663f, 0.624f, 0.769f, 1f);   // #A99FC4
-		private static readonly Color TextFaint  = new Color(0.431f, 0.400f, 0.565f, 1f);   // #6E6690
+		private static readonly Color TextMuted  = new Color(0.68f, 0.68f, 0.68f, 1f);
+		private static readonly Color TextFaint  = new Color(0.46f, 0.46f, 0.46f, 1f);
 
 		// Layout constants for the chrome, so header/rail/content can never drift apart.
 		private const float RailPad = 26f;    // window edge → rail
@@ -145,13 +143,14 @@ namespace VRChatArchiveMod.Core
 		{
 			try
 			{
-				// The cursor should be free whenever the menu is open OR the Alt toggle is on.
-				bool wantFree = Visible || FreeCursor;
+				// Both in-game menus share the same cursor and input handoff.
+				bool menuOpen = Visible || Overlay.Visible;
+				bool wantFree = menuOpen || FreeCursor;
 				// Capture (freeze movement, eat clicks) only for a menu opened WITHOUT free-move.
 				// FreeCursor is an explicit "let me move", so it suppresses capture even mid-menu.
 				// (UI/CaptureInput used to gate this too; it went 2026-09-01 — with the menu sealed,
 				// Visible is never true and the switch could not change anything.)
-				bool capture = Visible && !FreeCursor;
+				bool capture = menuOpen && !FreeCursor;
 
 				if (wantFree)
 				{
@@ -266,7 +265,7 @@ namespace VRChatArchiveMod.Core
 			SuspendAllOfType(_playerInputType);
 			SuspendAllOfType(_uiInputType);
 
-			VRChatArchiveModPlugin.Logger?.LogInfo($"[Menu] input captured — {_suspended.Count} component(s) suspended.");
+			Killiorim.Logger?.LogInfo($"[Menu] input captured — {_suspended.Count} component(s) suspended.");
 		}
 
 		private static void SuspendAllOfType(System.Type t)
@@ -294,7 +293,7 @@ namespace VRChatArchiveMod.Core
 				try { if (_suspended[i] != null) { _suspended[i].enabled = true; restored++; } } catch { }
 			}
 			_suspended.Clear();
-			if (restored > 0) VRChatArchiveModPlugin.Logger?.LogInfo($"[Menu] input released — {restored} component(s) restored.");
+			if (restored > 0) Killiorim.Logger?.LogInfo($"[Menu] input released — {restored} component(s) restored.");
 		}
 
 		public static void HandleInput()
@@ -372,14 +371,14 @@ namespace VRChatArchiveMod.Core
 			{
 				float w = 560f, h = 46f;
 				var r = new Rect((Screen.width - w) / 2f, 10f, w, h);
-				GuiKit.RoundedFill(r, new Color(0.22f, 0.05f, 0.07f, 0.92f), 10f);
-				GuiKit.RoundedBorder(r, Clear, new Color(0.97f, 0.35f, 0.35f, 0.95f), 10f, 1.6f);
+				GuiKit.RoundedFill(r, new Color(0.06f, 0.06f, 0.06f, 0.92f), 10f);
+				GuiKit.RoundedBorder(r, Clear, new Color(1f, 1f, 1f, 0.95f), 10f, 1.6f);
 
 				var prev = GUI.color;
-				GUI.color = new Color(1f, 0.72f, 0.72f, 1f);
+				GUI.color = new Color(0.96f, 0.96f, 0.96f, 1f);
 				GUI.Label(new Rect(r.x + 16f, r.y + 5f, r.width - 26f, 20f),
 					"WORLD SCRIPTS ARE BLOCKED — mirrors, doors, pens and videos will not work");
-				GUI.color = new Color(0.92f, 0.78f, 0.80f, 1f);
+				GUI.color = new Color(0.8f, 0.8f, 0.81f);
 				GUI.Label(new Rect(r.x + 16f, r.y + 24f, r.width - 26f, 18f),
 					// TAB opened a menu that is sealed now, so it was an escape route that did not
 					// exist. The switch lives in the desktop client, and so must the way out of it.
@@ -399,10 +398,10 @@ namespace VRChatArchiveMod.Core
 			{
 				float w = 208f, h = 28f;
 				var r = new Rect((Screen.width - w) / 2f, 12f, w, h);
-				GuiKit.RoundedFill(r, new Color(0.10f, 0.07f, 0.16f, 0.82f), 9f);
-				GuiKit.RoundedBorder(r, new Color(0f, 0f, 0f, 0f), new Color(0.55f, 0.36f, 0.98f, 0.9f), 9f, 1.5f);
+				GuiKit.RoundedFill(r, new Color(0.08f, 0.08f, 0.08f, 0.82f), 9f);
+				GuiKit.RoundedBorder(r, new Color(0f, 0f, 0f, 0f), new Color(1f, 1f, 1f, 0.9f), 9f, 1.5f);
 				var prev = GUI.color;
-				GUI.color = new Color(0.86f, 0.80f, 1f, 1f);
+				GUI.color = new Color(0.92f, 0.92f, 0.92f, 1f);
 				GUI.Label(new Rect(r.x + 14f, r.y + 4f, r.width - 24f, 20f), "FREE CURSOR  ·  release Alt to lock");
 				GUI.color = prev;
 			}
@@ -463,7 +462,7 @@ namespace VRChatArchiveMod.Core
 					GUI.DrawTexture(new Rect(mark.x + 1f, mark.y + 1f, mark.width - 2f, mark.height - 2f),
 						logo, ScaleMode.ScaleAndCrop);
 				}
-				GUI.Label(new Rect(mark.xMax + 12f, _win.y + 22f, 300f, 22f), "VRCHAT ARCHIVE", _title);
+				GUI.Label(new Rect(mark.xMax + 12f, _win.y + 22f, 300f, 22f), "KILLIORIUM", _title);
 				GUI.Label(new Rect(mark.xMax + 13f, _win.y + 43f, 300f, 16f), "MOD MENU", _subtitle);
 
 				// Right-hand status readout — quiet, aligned, no barcode/zone chrome.
@@ -539,7 +538,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[Menu] draw threw: {e}");
+				Killiorim.Logger.LogError($"[Menu] draw threw: {e}");
 			}
 			finally
 			{
@@ -547,11 +546,9 @@ namespace VRChatArchiveMod.Core
 			}
 		}
 
-		// ================= TABS =================
-
+				// ================= TABS =================
 		// The overlays, grouped by WHAT THEY SHOW and nested under their master. This was a flat
 		// 3x3 grid whose only grouping was the invisible fact that each column happened to belong to
-		// one feature — so "Radar names" sat beside "Udon overlay" with nothing saying that the
 		// first does nothing unless the radar above it is on.
 		private static void DrawHudOverlays(Rect a)
 		{
@@ -1548,7 +1545,7 @@ namespace VRChatArchiveMod.Core
 			float ny = au + 66f;
 			GUI.Label(new Rect(a.x, ny, a.width, 16f), "MEMBER JOIN BANNER", _header);
 			ModConfig.MemberNotifyRgb.Value = GuiKit.Toggle(new Rect(a.x, ny + 22f, half, 36f),
-				ModConfig.MemberNotifyRgb.Value ? "Style: RGB rainbow" : "Style: pink→violet", ModConfig.MemberNotifyRgb.Value);
+				ModConfig.MemberNotifyRgb.Value ? "Style: RGB rainbow" : "Style: white→grey", ModConfig.MemberNotifyRgb.Value);
 			if (GuiKit.Button(new Rect(a.x + half + 8f, ny + 24f, half, 32f), "Test notification"))
 				Modules.WatchlistModule.TestMemberNotification(null);
 
@@ -1650,7 +1647,7 @@ namespace VRChatArchiveMod.Core
 				var c = items[i];
 				var row = new Rect(0f, y, width, rowH - 6f);
 				GuiKit.RoundedFill(row, new Color(1f, 1f, 1f, (i & 1) == 0 ? 0.045f : 0.025f), 6f);
-				// A pink tick down the left edge, the same accent the HUD panels use.
+				// A neutral tick down the left edge, matching the monochrome HUD panelsUD panels.
 				GuiKit.RoundedFill(new Rect(row.x + 6f, row.y + 7f, 3f, row.height - 14f), Hud.Pink, 1.5f);
 
 				GUI.Label(new Rect(row.x + 18f, row.y + 3f, 220f, 18f),
@@ -1669,7 +1666,7 @@ namespace VRChatArchiveMod.Core
 
 		private static void DrawInfo(Rect a)
 		{
-			GUI.Label(new Rect(a.x, a.y, a.width, 16f), "VRCHAT ARCHIVE MOD", _header);
+			GUI.Label(new Rect(a.x, a.y, a.width, 16f), "KILLIORIUUM", _header);
 			GUI.Label(new Rect(a.x, a.y + 22f, a.width, 20f), "BepInEx 6 (IL2CPP) — protection + archiving.", _dim);
 
 			// --- diagnostics report: what a tester sends back when something misbehaves ---
@@ -1868,7 +1865,7 @@ namespace VRChatArchiveMod.Core
 			("lbl",     "LBL · Letter by letter", "Letters are removed one by one, then added back."),
 			("gt",      "GT · Ghost Trail","A dark fade sweeps across the text. (colour ignored)"),
 			("glow",    "Glow",            "Your colour pulses brighter and dimmer."),
-			("grad",    "VA Gradient",     "Pink→violet gradient — the VRChat Archive member badge."),
+			("grad",    "VA Gradient",     "White→grey gradient — the Killiorium member badge."),
 		};
 		private static readonly string[] TagFx = BuildFxIds();
 		private static string[] BuildFxIds()
@@ -2754,7 +2751,7 @@ namespace VRChatArchiveMod.Core
 					if (Usable(f))
 					{
 						_emojiFont = f;
-						VRChatArchiveModPlugin.Logger.LogInfo($"[Menu] emoji font '{name}' loaded (OS font, single name).");
+						Killiorim.Logger.LogInfo($"[Menu] emoji font '{name}' loaded (OS font, single name).");
 						return _emojiFont;
 					}
 				}
@@ -2768,7 +2765,7 @@ namespace VRChatArchiveMod.Core
 				if (Usable(f))
 				{
 					_emojiFont = f;
-					VRChatArchiveModPlugin.Logger.LogInfo("[Menu] emoji font loaded (OS font, fallback chain).");
+					Killiorim.Logger.LogInfo("[Menu] emoji font loaded (OS font, fallback chain).");
 					return _emojiFont;
 				}
 			}
@@ -2791,7 +2788,7 @@ namespace VRChatArchiveMod.Core
 							if (Usable(f))
 							{
 								_emojiFont = f;
-								VRChatArchiveModPlugin.Logger.LogInfo($"[Menu] emoji font '{name}' loaded (Internal_CreateFont).");
+								Killiorim.Logger.LogInfo($"[Menu] emoji font '{name}' loaded (Internal_CreateFont).");
 								return _emojiFont;
 							}
 						}
@@ -2803,7 +2800,7 @@ namespace VRChatArchiveMod.Core
 
 			// Not fatal: the menu keeps IMGUI's default font. Emoji still render above nameplates,
 			// which goes through VRChat's TMP font and never touched any of this.
-			VRChatArchiveModPlugin.Logger.LogWarning(
+			Killiorim.Logger.LogWarning(
 				"[Menu] no OS font could be created on this build — emoji stay invisible in the menu "
 				+ "(they still render in-world and are still saved correctly).");
 			return _emojiFont;

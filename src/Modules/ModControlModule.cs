@@ -4,9 +4,9 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// THE CONTROL CHANNEL — the desktop client drives the mod.
 	//
@@ -84,7 +84,7 @@ namespace VRChatArchiveMod.Modules
 				// here. 64 dropped a third of every bulk batch with nothing but a log line to show for it.
 				if (MainWork.Count >= 4096)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[ModControl] main-thread queue full, command dropped.");
+					Killiorim.Logger.LogWarning("[ModControl] main-thread queue full, command dropped.");
 					return;
 				}
 				MainWork.Enqueue(work);
@@ -122,7 +122,7 @@ namespace VRChatArchiveMod.Modules
 				_mainCreditMs = Math.Max(0, _mainCreditMs - 10);
 				ran++;
 				try { work(); }
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[ModControl] queued command failed: " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[ModControl] queued command failed: " + e.Message); }
 			}
 		}
 
@@ -1083,7 +1083,7 @@ namespace VRChatArchiveMod.Modules
 					if (applied)
 					{
 						done++;
-						VRChatArchiveModPlugin.Logger.LogInfo("[ModControl] applied " + kind + " " + cid + " = " + Str(c, "value"));
+						Killiorim.Logger.LogInfo("[ModControl] applied " + kind + " " + cid + " = " + Str(c, "value"));
 						Remember(seq);
 					}
 					else
@@ -1092,7 +1092,7 @@ namespace VRChatArchiveMod.Modules
 						// And it is said out loud -- the client clears its queue the moment it hands a
 						// command over, so a failure here is the last trace the change ever existed.
 						_failed++;
-						VRChatArchiveModPlugin.Logger.LogWarning(
+						Killiorim.Logger.LogWarning(
 							"[ModControl] could not apply " + kind + " '" + cid + "' from the client"
 							+ (kind == "set" ? " (unknown setting, or the value did not fit its type)" : "") + ".");
 					}
@@ -1287,7 +1287,7 @@ namespace VRChatArchiveMod.Modules
 								// through it produced that nonsensical toast. The status lives in the mod
 								// log (VideoUrlModule.LastStatus); the FUN page shows its own confirmation.
 								try { VideoUrlModule.Inject(vurl); }
-								catch (Exception ex) { VRChatArchiveModPlugin.Logger.LogWarning("[VideoUrl] inject threw: " + ex.Message); }
+								catch (Exception ex) { Killiorim.Logger.LogWarning("[VideoUrl] inject threw: " + ex.Message); }
 							});
 							return true;   // accepted; runs on the next main-thread pump
 						}
@@ -1552,7 +1552,7 @@ namespace VRChatArchiveMod.Modules
 						OnMain(() =>
 						{
 							AntiCrashModule.RequestRescan();
-							VRChatArchiveModPlugin.Logger.LogInfo("[ModControl] applied action antiCrashRescan");
+							Killiorim.Logger.LogInfo("[ModControl] applied action antiCrashRescan");
 						});
 						return true;
 
@@ -1563,7 +1563,7 @@ namespace VRChatArchiveMod.Modules
 						OnMain(() =>
 						{
 							PhotonGuardModule.Reset();
-							VRChatArchiveModPlugin.Logger.LogInfo("[ModControl] applied action photonGuardReset");
+							Killiorim.Logger.LogInfo("[ModControl] applied action photonGuardReset");
 						});
 						return true;
 
@@ -1641,7 +1641,7 @@ namespace VRChatArchiveMod.Modules
 							}
 							sbA.Append(']');
 							_udonAllEvents = sbA.ToString();
-							VRChatArchiveModPlugin.Logger.LogInfo("[UdonManager] events of " + nA + " script(s) sent to the client in one answer.");
+							Killiorim.Logger.LogInfo("[UdonManager] events of " + nA + " script(s) sent to the client in one answer.");
 							_udonPayload = BuildUdon();
 						});
 						return true;

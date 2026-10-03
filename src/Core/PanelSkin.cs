@@ -5,7 +5,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// THE SIDE PANELS, BUILT RATHER THAN CLONED.
 	//
@@ -41,23 +41,17 @@ namespace VRChatArchiveMod.Core
 		private static Color Rgb(int hex, float a = 1f) =>
 			new Color(((hex >> 16) & 0xFF) / 255f, ((hex >> 8) & 0xFF) / 255f, (hex & 0xFF) / 255f, a);
 
-		private static readonly Color Body = Rgb(0x0B0B14, 0.90f);   // panel body
-		private static readonly Color Head = Rgb(0x161323, 0.95f);   // header slab
-		private static readonly Color Pink = Rgb(0xFF6AD5);
-		private static readonly Color Violet = Rgb(0x8143E6);
-		private static readonly Color Hair = new Color(1f, 1f, 1f, 0.06f);   // under the header
-		private static readonly Color Rule = new Color(1f, 1f, 1f, 0.10f);   // under the column heads
+		private static readonly Color Body = Rgb(0x080808, 0.94f);   // panel body
+		private static readonly Color Head = Rgb(0x111111, 0.98f);   // header slab
+		private static readonly Color Pink = Rgb(0xF4F4F4);
+		private static readonly Color Violet = Rgb(0x505050);
+		private static readonly Color Hair = new Color(1f, 1f, 1f, 0.12f);   // under the header
+		private static readonly Color Rule = new Color(1f, 1f, 1f, 0.16f);   // under the column heads
 
-		public const string HexText = "F2F5FC";
-		// LIGHTER than the HUD's #7A879C it was ported from. That grey works on the HUD, which sits on
-		// flat near-black; here the column headings and the timestamps sat on a dimmed WALLPAPER and
-		// simply disappeared into it. Contrast against the actual background is what matters, not
-		// fidelity to the original hex.
-		public const string HexDim = "A9BAD4";
-		public const string HexPink = "FF6AD5";
-		// The byline sat in the dim grey used for column headings and simply did not read. It is a
-		// signature, not a column label, so it takes the panel's own accent instead.
-		public const string HexByline = "E07BFF";
+		public const string HexText = "F4F4F4";
+		public const string HexDim = "A8A8A8";
+		public const string HexPink = "EAEAEA";
+		public const string HexByline = "C8C8C8";
 
 		// ---------------------------------------------------------------- geometry
 
@@ -98,7 +92,7 @@ namespace VRChatArchiveMod.Core
 		// over everything is what actually works: the artwork stays readable AS artwork because it is
 		// dimmed uniformly rather than blotched, and every row gets the same dark ground whether the
 		// list holds one player or forty.
-		private const float Veil = 0.86f;
+		private const float Veil = 0.70f;
 
 		// Per-row plates, off. Superseded by the veil above — two darkening layers stacked would put
 		// the rows back to near-black. Set above 0 only if the veil is ever lowered again.
@@ -134,6 +128,9 @@ namespace VRChatArchiveMod.Core
 			internal RectTransform WingR;   // the wing's 420-wide content, whose edge we track
 			internal RectTransform Host;    // Window, the space both are measured in
 			internal Image Frame;           // the border, rebaked when the panel is resized
+			internal Image Accent;
+			internal Image Dot;
+			internal Image Wallpaper;
 			internal int FrameW, FrameH;    // the size its texture was baked for
 			internal bool Left;
 			// Size and row pitch belong to the INSTANCE, not to the class: the floating panels are
@@ -223,7 +220,7 @@ namespace VRChatArchiveMod.Core
 					if (open != _wasOpen)
 					{
 						_wasOpen = open;
-						VRChatArchiveModPlugin.Logger.LogInfo("[PanelSkin] wing " + (Left ? "L" : "R")
+						Killiorim.Logger.LogInfo("[PanelSkin] wing " + (Left ? "L" : "R")
 							+ (open ? " OPEN" : " CLOSED") + ": active=" + active + " alpha=" + alpha.ToString("F2")
 							+ " x=[" + minX.ToString("F0") + "," + maxX.ToString("F0") + "]"
 							+ " half=" + half.ToString("F0") + " -> target=" + target.ToString("F0"));
@@ -284,7 +281,7 @@ namespace VRChatArchiveMod.Core
 						WriteRow(t, rows[i], i);
 					}
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] rows: " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[PanelSkin] rows: " + e.Message); }
 			}
 
 			/// <summary>How many rows physically fit. The caller trims to this instead of overflowing,
@@ -300,6 +297,33 @@ namespace VRChatArchiveMod.Core
 		/// canvas and overwrites .color every 0.35 s. A rich-text tag is applied per character at
 		/// layout time, so it wins that race by not entering it.</summary>
 		public static string Tag(string hex, string text) => "<color=#" + hex + ">" + text + "</color>";
+
+		public static void Animate(Panel panel)
+		{
+			if (panel == null) return;
+			float time = Time.unscaledTime;
+			float wave = 0.5f + 0.5f * Mathf.Sin(time * 1.15f);
+			float glow = 0.62f + wave * 0.34f;
+			var shade = new Color(glow, glow, glow, 1f);
+			try { if (panel.Accent != null) panel.Accent.color = shade; } catch { }
+			try { if (panel.Dot != null) panel.Dot.color = shade; } catch { }
+			try
+			{
+				if (panel.Frame != null)
+				{
+					float edge = 0.72f + wave * 0.28f;
+					panel.Frame.color = new Color(edge, edge, edge, 1f);
+				}
+			}
+			catch { }
+			try
+			{
+				if (panel.Wallpaper != null)
+					panel.Wallpaper.rectTransform.anchoredPosition = new Vector2(
+						Mathf.Sin(time * 0.12f) * 4f, Mathf.Cos(time * 0.09f) * 7f);
+			}
+			catch { }
+		}
 
 		// ---------------------------------------------------------------- build
 
@@ -337,7 +361,7 @@ namespace VRChatArchiveMod.Core
 					// Worth a warning rather than a silent build: a TextMeshProUGUI added at runtime
 					// has no font asset of its own and renders NOTHING, so the panel would come out as
 					// chrome with invisible text and look like a layout bug instead of a missing font.
-					VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] no TMP font found under the menu — "
+					Killiorim.Logger.LogWarning("[PanelSkin] no TMP font found under the menu — "
 						+ "text in '" + name + "' may be invisible.");
 				}
 
@@ -363,7 +387,7 @@ namespace VRChatArchiveMod.Core
 
 				// The wing handles are logged because the panel following the wing depends entirely on
 				// them: "wing -" here is the one-line explanation for "it does not slide".
-				VRChatArchiveModPlugin.Logger.LogInfo("[PanelSkin] built '" + name + "' ("
+				Killiorim.Logger.LogInfo("[PanelSkin] built '" + name + "' ("
 					+ (left ? "left" : "right") + ", capacity " + p.Capacity
 					+ ", wallpaper " + (hasWall ? "yes" : "no")
 					+ ", wing " + (wing != null ? wing.name : "-")
@@ -372,7 +396,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] build of " + name + " failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[PanelSkin] build of " + name + " failed: " + e.Message);
 				return null;
 			}
 		}
@@ -418,7 +442,7 @@ namespace VRChatArchiveMod.Core
 				catch (Exception e)
 				{
 					// Not fatal: without the mask the wallpaper simply has square corners.
-					VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] mask: " + e.Message);
+					Killiorim.Logger.LogWarning("[PanelSkin] mask: " + e.Message);
 				}
 			}
 
@@ -430,6 +454,7 @@ namespace VRChatArchiveMod.Core
 				Stretch(w.rectTransform, 0f);
 				w.preserveAspect = true;   // the art is already cropped to this exact aspect
 				w.raycastTarget = false;
+					p.Wallpaper = w;
 				var veil = Img(Rect("VA_Veil", bodyT), null, new Color(0.02f, 0.02f, 0.05f, Veil));
 				Stretch(veil.rectTransform, 0f);
 				veil.raycastTarget = false;
@@ -445,6 +470,7 @@ namespace VRChatArchiveMod.Core
 			head.raycastTarget = false;
 
 			var accent = Img(Rect("VA_Accent", head.transform), GradientSprite(Pink, Violet), Color.white);
+			p.Accent = accent;
 			var art = accent.rectTransform;
 			art.anchorMin = new Vector2(0f, 1f); art.anchorMax = new Vector2(1f, 1f);
 			art.pivot = new Vector2(0.5f, 1f);
@@ -452,6 +478,7 @@ namespace VRChatArchiveMod.Core
 			accent.raycastTarget = false;
 
 			var dot = Img(Rect("VA_Dot", head.transform), DotSprite(), Pink);
+			p.Dot = dot;
 			var drt = dot.rectTransform;
 			drt.anchorMin = drt.anchorMax = new Vector2(0f, 0.5f);
 			drt.pivot = new Vector2(0f, 0.5f);
@@ -518,7 +545,7 @@ namespace VRChatArchiveMod.Core
 				var p = new Panel { W = width, H = height, RH = rowPitch, Single = singleColumn, Inline = true };
 				p.Font = StealFont(parent);
 				if (p.Font == null)
-					VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] no TMP font under " + parent.name
+					Killiorim.Logger.LogWarning("[PanelSkin] no TMP font under " + parent.name
 						+ " — text in '" + name + "' may be invisible.");
 
 				Transform root = Rect(name, parent);
@@ -546,14 +573,14 @@ namespace VRChatArchiveMod.Core
 				le.minWidth = width;
 
 				bool hasWall = Assemble(p, root, title, wallpaper);
-				VRChatArchiveModPlugin.Logger.LogInfo("[PanelSkin] inline '" + name + "' under "
+				Killiorim.Logger.LogInfo("[PanelSkin] inline '" + name + "' under "
 					+ parent.name + " (" + (int)width + "x" + (int)height + ", capacity " + p.Capacity
 					+ ", wallpaper " + (hasWall ? "yes" : "no") + ").");
 				return p;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] inline build of " + name + " failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[PanelSkin] inline build of " + name + " failed: " + e.Message);
 				return null;
 			}
 		}
@@ -611,7 +638,7 @@ namespace VRChatArchiveMod.Core
 				var ctm = cnt != null ? cnt.GetComponent<TMPro.TextMeshProUGUI>() : null;
 				if (ctm != null) ctm.fontSize = SizeCount * 1.2f;
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] brand: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[PanelSkin] brand: " + e.Message); }
 		}
 
 		/// <summary>A panel that is a CHILD OF WINDOW but sits wherever a target rect happens to be.
@@ -651,13 +678,13 @@ namespace VRChatArchiveMod.Core
 				rt.localRotation = Quaternion.identity;
 
 				bool hasWall = Assemble(p, root, title, wallpaper);
-				VRChatArchiveModPlugin.Logger.LogInfo("[PanelSkin] over-panel '" + name + "' built under "
+				Killiorim.Logger.LogInfo("[PanelSkin] over-panel '" + name + "' built under "
 					+ host.name + " (wallpaper " + (hasWall ? "yes" : "no") + ").");
 				return p;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] over-panel " + name + " failed: " + e.Message);
+				Killiorim.Logger.LogWarning("[PanelSkin] over-panel " + name + " failed: " + e.Message);
 				return null;
 			}
 		}
@@ -784,7 +811,7 @@ namespace VRChatArchiveMod.Core
 				Write(host, "Pos", pos == null ? "" : Tag(HexDim, "<b>" + pos + "</b>"));
 				Write(host, "Badge", badge == null ? "" : Tag(HexDim, "<b>" + badge + "</b>"));
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] headings: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[PanelSkin] headings: " + e.Message); }
 		}
 
 		// ---------------------------------------------------------------- rows
@@ -837,7 +864,7 @@ namespace VRChatArchiveMod.Core
 					var handler = p.OnRow;
 					UiClick.AddClick(btn, () => handler(captured));
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] row click: " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[PanelSkin] row click: " + e.Message); }
 			}
 
 			// FONT SIZE FROM THE ROW PITCH, NOT A CONSTANT.
@@ -938,9 +965,9 @@ namespace VRChatArchiveMod.Core
 						  .Append(" rich=").Append(t != null && t.richText)
 						  .Append(" len=").Append(val != null ? val.Length : -1);
 					}
-					VRChatArchiveModPlugin.Logger.LogInfo(sb.ToString());
+					Killiorim.Logger.LogInfo(sb.ToString());
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] row0: " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[PanelSkin] row0: " + e.Message); }
 			}
 
 			Write(row, "Id", string.IsNullOrEmpty(r.Id) ? "" : Tag(HexDim, r.Id));
@@ -1070,7 +1097,7 @@ namespace VRChatArchiveMod.Core
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] outline material: " + e.Message);
+				Killiorim.Logger.LogWarning("[PanelSkin] outline material: " + e.Message);
 				_mat = null;
 			}
 			return _mat;
@@ -1267,7 +1294,7 @@ namespace VRChatArchiveMod.Core
 					s.hideFlags = HideFlags.HideAndDontSave;
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[PanelSkin] wallpaper " + resource + ": " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[PanelSkin] wallpaper " + resource + ": " + e.Message); }
 			_wall[resource] = s;
 			return s;
 		}

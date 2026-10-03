@@ -24,9 +24,9 @@ body:
       label: Mod version
       description: >-
         The plugin prints it at startup, in `BepInEx/LogOutput.log`:
-        `VRCHAT ARCHIVE MOD v3.9.20 loading (BepInEx IL2CPP)...`. It is also in the header of every
-        diagnostics report the mod writes to `BepInEx/VRChatArchiveMod/diagnostics/`. If you built the
-        DLL yourself, the `<Version>` in `VRChatArchiveMod.csproj` is the same number.
+        `KILLIORIM v3.9.20 loading (BepInEx IL2CPP)...`. It is also in the header of every
+        diagnostics report the mod writes to `BepInEx/Killiorim/diagnostics/`. If you built the
+        DLL yourself, the `<Version>` in `Killiorim.csproj` is the same number.
       placeholder: "3.9.20"
     validations:
       required: true
@@ -40,7 +40,7 @@ body:
         or by offset move without warning. A feature that worked yesterday, stopped today, and had no
         code change in between is almost always that — and without the exact build the report cannot
         be reproduced or even dated. Where to find it: the `game` line in the header of the mod's own
-        diagnostics report (`BepInEx/VRChatArchiveMod/diagnostics/va-report_<timestamp>.log`), or the
+        diagnostics report (`BepInEx/Killiorim/diagnostics/va-report_<timestamp>.log`), or the
         version string VRChat itself displays in the client.
       placeholder: "e.g. VRChat 2026.2.1p3 — copy the string exactly as shown"
     validations:
@@ -123,14 +123,14 @@ body:
         under it. The lines immediately before it are often the ones that identify which module was
         running. If the plugin never loaded at all, the top of the file is the interesting part instead.
         If the game *died* rather than logged anything, the mod may also have left a breadcrumb file at
-        `BepInEx/VRChatArchiveMod/crash/<name>.trail`, whose last line is the last step that completed
+        `BepInEx/Killiorim/crash/<name>.trail`, whose last line is the last step that completed
         before the process went — paste that line too. It is consumed on the next launch, so take it
         before you relaunch. Strip display names, `usr_` / `avtr_` / `wrld_` ids and instance ids
         before pasting.
       render: text
       placeholder: |
-        [Info   :VRCHAT ARCHIVE MOD] VRCHAT ARCHIVE MOD v3.9.20 loading (BepInEx IL2CPP)...
-        [Error  :VRCHAT ARCHIVE MOD] <exception and stack trace here>
+        [Info   :KILLIORIM] KILLIORIM v3.9.20 loading (BepInEx IL2CPP)...
+        [Error  :KILLIORIM] <exception and stack trace here>
     validations:
       required: true
   - type: checkboxes

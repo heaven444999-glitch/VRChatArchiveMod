@@ -7,9 +7,9 @@ using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// NATIVE QUICKMENU TAB — adds a "VRChat Archive" tab to VRChat's own QuickMenu tab strip,
 	// with its own page of buttons, so the mod lives inside the game's menu.
@@ -34,8 +34,8 @@ namespace VRChatArchiveMod.Modules
 	{
 		public override string Name => "QuickMenuTab";
 
-		private const string TabName  = "Page_VRChatArchive";
-		private const string PageName = "Menu_VRChatArchive";
+		private const string TabName  = "Page_Killiorium";
+		private const string PageName = "Menu_Killiorium";
 
 		private const string QmRoot = "Canvas_QuickMenu(Clone)";
 		private const string StripPath = "CanvasGroup/Container/Window/Page_Buttons_QM/HorizontalLayoutGroup";
@@ -48,6 +48,7 @@ namespace VRChatArchiveMod.Modules
 
 		private GameObject _tab, _page;
 		private Transform _body;
+		private Transform _archiveGrid, _archiveContent;
 		private float _nextTry;
 		private int _fails;
 		private bool _loggedOnce;
@@ -84,7 +85,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] update threw: {e.Message}");
+				Killiorim.Logger.LogWarning($"[QMTab] update threw: {e.Message}");
 				_fails++;
 			}
 		}
@@ -110,7 +111,7 @@ namespace VRChatArchiveMod.Modules
 				if (!_loggedOnce)
 				{
 					_loggedOnce = true;
-					VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] QuickMenu found but strip={(strip != null)} body={(body != null)} — layout changed?");
+					Killiorim.Logger.LogWarning($"[QMTab] QuickMenu found but strip={(strip != null)} body={(body != null)} — layout changed?");
 				}
 				return false;
 			}
@@ -126,7 +127,7 @@ namespace VRChatArchiveMod.Modules
 			Transform page = body.Find("Menu_DevTools");
 			if (tab == null || page == null)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] DevTools tab/page not present (tab={(tab != null)} page={(page != null)}).");
+				Killiorim.Logger.LogWarning($"[QMTab] DevTools tab/page not present (tab={(tab != null)} page={(page != null)}).");
 				return false;
 			}
 
@@ -148,7 +149,7 @@ namespace VRChatArchiveMod.Modules
 
 			_tab = tab.gameObject;
 			_page = page.gameObject;
-			VRChatArchiveModPlugin.Logger.LogInfo("[QMTab] VRChat's own DevTools tab enabled and re-purposed as the VRChat Archive tab.");
+			Killiorim.Logger.LogInfo("[QMTab] VRChat's own DevTools tab enabled and re-purposed as the Killiorium tab.");
 			return true;
 		}
 
@@ -272,7 +273,7 @@ namespace VRChatArchiveMod.Modules
 					if (tmp != null && LooksLikeStockCaption(tmp.text)) tmp.text = NewName;
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] tooltip rename failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[QMTab] tooltip rename failed: {e.Message}"); }
 		}
 
 		private static bool LooksLikeStockCaption(string s)
@@ -336,7 +337,7 @@ namespace VRChatArchiveMod.Modules
 						if (n.Length == 0 || _byName.ContainsKey(n)) continue;
 						_byName[n] = sp; _names.Add(n);
 					}
-					VRChatArchiveModPlugin.Logger.LogInfo("[QMTab] sprite index: " + _names.Count + " name(s).");
+					Killiorim.Logger.LogInfo("[QMTab] sprite index: " + _names.Count + " name(s).");
 					if (!_dumped)
 					{
 						_dumped = true;
@@ -345,12 +346,12 @@ namespace VRChatArchiveMod.Modules
 							string path = System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "qm_sprites.txt");
 							var sorted = new List<string>(_names); sorted.Sort(StringComparer.OrdinalIgnoreCase);
 							System.IO.File.WriteAllLines(path, sorted);
-							VRChatArchiveModPlugin.Logger.LogInfo("[QMTab] sprite names written to " + path);
+							Killiorim.Logger.LogInfo("[QMTab] sprite names written to " + path);
 						}
-						catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] sprite dump failed: " + e.Message); }
+						catch (Exception e) { Killiorim.Logger.LogWarning("[QMTab] sprite dump failed: " + e.Message); }
 					}
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] sprite index failed: " + e.Message); }
+				catch (Exception e) { Killiorim.Logger.LogWarning("[QMTab] sprite index failed: " + e.Message); }
 			}
 
 			// First hint that is contained in a loaded sprite's name wins; an exact name beats a
@@ -400,7 +401,7 @@ namespace VRChatArchiveMod.Modules
 		// a VRChat page push: we rebuild the grid we already own and retitle the header. That keeps
 		// it entirely inside Unity — no obfuscated page-stack API to break on the next update — and
 		// the Back arrow is VRChat's own, which ships in this header already disabled.
-		public enum QmPage { Root = 0, Protection = 1, Overlays = 2, Sounds = 3, Movement = 4 }
+		public enum QmPage { Root = 0, Protection = 1, Overlays = 2, Sounds = 3, Movement = 4, Tools = 5 }
 
 		private static QmPage _qmPage = QmPage.Root;
 		private static bool _pageDirty;
@@ -420,6 +421,7 @@ namespace VRChatArchiveMod.Modules
 				case QmPage.Overlays:   return "Archive · On screen";
 				case QmPage.Sounds:     return "Archive · Sounds";
 				case QmPage.Movement:   return "Archive · Movement";
+				case QmPage.Tools:      return "Archive · Tools";
 				default:                return "VRChat Archive";
 			}
 		}
@@ -432,6 +434,13 @@ namespace VRChatArchiveMod.Modules
 
 			switch (page)
 			{
+				case QmPage.Tools:
+					return new List<Act>
+					{
+						new Act { IconName = "Icon_UdonSpotlight|Logging|debug", Label = "Udon Console", Do = () => { ModConfig.UdonLogEnabled.Value = !ModConfig.UdonLogEnabled.Value; }, State = () => ModConfig.UdonLogEnabled.Value },
+						new Act { IconName = "Tag|Tag_Disabled|ReloadIcon", Label = "Refresh Tags", Do = VaTagsModule.RequestRefresh },
+					};
+
 				case QmPage.Protection:
 					return new List<Act>
 					{
@@ -449,6 +458,11 @@ namespace VRChatArchiveMod.Modules
 				case QmPage.Overlays:
 					return new List<Act>
 					{
+						new Act { IconName = "Icon_Safety_Avatar_Shape|Hand_Avatar|icon_user", Label = "2D player ESP", Do = () => { ModConfig.EspEnabled.Value = !ModConfig.EspEnabled.Value; }, State = () => ModConfig.EspEnabled.Value },
+						new Act { IconName = "Rectangle|Box|Icon_Safety_Avatar_Shape", Label = "Player box", Do = () => { ModConfig.EspBox.Value = !ModConfig.EspBox.Value; }, State = () => ModConfig.EspBox.Value },
+						new Act { IconName = "Skeleton|Avatar|Humanoid", Label = "Player skeleton", Do = () => { ModConfig.EspSkeleton.Value = !ModConfig.EspSkeleton.Value; }, State = () => ModConfig.EspSkeleton.Value },
+						new Act { IconName = "Text|Name|User", Label = "Player names", Do = () => { ModConfig.EspName.Value = !ModConfig.EspName.Value; }, State = () => ModConfig.EspName.Value },
+						new Act { IconName = "Distance|Location|Ruler", Label = "Player distance", Do = () => { ModConfig.EspDistance.Value = !ModConfig.EspDistance.Value; }, State = () => ModConfig.EspDistance.Value },
 
 						// ONE GLOW, ONE TILE. The screen-space "Box around players" is gone; the 3D
 						// capsule is what shows a player through a wall, and every glow below is a
@@ -504,8 +518,7 @@ namespace VRChatArchiveMod.Modules
 						new Act { IconName = "Icon_Shield|Icon_Shield_Custom|shield", Label = "Protection ›",  Do = () => GoTo(QmPage.Protection), State = () => ModConfig.UdonBlockAll.Value || ModConfig.AntiCrashEnabled.Value },
 						new Act { IconName = "HUD|HUD_Verbose|Eye", Label = "On screen ›",   Do = () => GoTo(QmPage.Overlays) },
 						new Act { IconName = "PlayerMove|ic_fly_mode|BodyMode_Standing", Label = "Movement ›",    Do = () => GoTo(QmPage.Movement), State = () => ModConfig.FlyEnabled.Value || ModConfig.SpeedEnabled.Value },
-						new Act { IconName = "Icon_UdonSpotlight|Logging|debug", Label = "Udon Console",  Do = () => { ModConfig.UdonLogEnabled.Value = !ModConfig.UdonLogEnabled.Value; }, State = () => ModConfig.UdonLogEnabled.Value },
-						new Act { IconName = "Tag|Tag_Disabled|ReloadIcon", Label = "Refresh Tags",  Do = VaTagsModule.RequestRefresh },
+						new Act { IconName = "Settings|settings|Tool", Label = "Tools ›", Do = () => GoTo(QmPage.Tools) },
 						new Act { Label = "Sounds ›",      Do = () => GoTo(QmPage.Sounds), Icon = () => AssetLoader.HeartIcon },
 					};
 			}
@@ -516,12 +529,12 @@ namespace VRChatArchiveMod.Modules
 			try
 			{
 				Transform content = FindContent(page);
-				if (content == null) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] page has no content node."); return; }
+				if (content == null) { Killiorim.Logger.LogWarning("[QMTab] page has no content node."); return; }
 
 				Transform donorGrid = body.Find(QuickLinksPath);
 				if (donorGrid == null)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] Launchpad quick-links grid not found — page left as-is.");
+					Killiorim.Logger.LogWarning("[QMTab] Launchpad quick-links grid not found — page left as-is.");
 					return;
 				}
 
@@ -541,27 +554,18 @@ namespace VRChatArchiveMod.Modules
 				var grid = UnityEngine.Object.Instantiate(donorGrid.gameObject, content);
 				grid.name = "Buttons_Archive";
 				grid.SetActive(true);
+				_archiveGrid = grid.transform;
+				_archiveContent = content;
 
-				// The Launchpad grid is laid out for exactly its own six cards, so it flows as many
-				// columns as fit. Adding tiles pushed it to a fourth column that runs off the right
-				// edge of the panel. Pinning it to THREE columns makes extra tiles wrap onto a new
-				// row instead, which the page already scrolls.
+				// Two wide cards make the labels readable and give every Archive page one consistent
+				// rhythm. Width comes from the live content rect, so the same layout works across menu
+				// sizes instead of inheriting the Launchpad's fixed three-column tile geometry.
 				try
 				{
-					var glg = grid.GetComponent<UnityEngine.UI.GridLayoutGroup>();
-					if (glg != null)
-					{
-						glg.constraint = UnityEngine.UI.GridLayoutGroup.Constraint.FixedColumnCount;
-						glg.constraintCount = 3;
-					}
+					ApplyArchiveGridLayout();
 
-					// MAKE THE GRID DECLARE ITS REAL HEIGHT. The donor is the Launchpad's grid, whose
-					// rect is sized for its own six cards in two rows. Pinned to three columns and
-					// given seven tiles it DRAWS three rows, but its rect still reported two — so the
-					// page's vertical layout placed whatever came next (the sliders) on top of the
-					// third row, which is the overlap on screen. A ContentSizeFitter makes the rect
-					// follow what the grid actually lays out, so the sliders land below the last row
-					// and VRChat's own page scroll reaches them.
+					// The donor rect only accounts for its original six tiles. Fit the height to however
+					// many rows the Archive page actually needs, so sliders and scroll bounds follow it.
 					var fit = grid.GetComponent<UnityEngine.UI.ContentSizeFitter>();
 					if (fit == null) fit = grid.AddComponent<UnityEngine.UI.ContentSizeFitter>();
 					fit.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
@@ -571,7 +575,7 @@ namespace VRChatArchiveMod.Modules
 					var gle = grid.GetComponent<UnityEngine.UI.LayoutElement>();
 					if (gle != null) { gle.ignoreLayout = false; gle.minHeight = -1f; gle.preferredHeight = -1f; }
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] grid constraint failed: {e.Message}"); }
+				catch (Exception e) { Killiorim.Logger.LogWarning($"[QMTab] grid constraint failed: {e.Message}"); }
 
 				SpriteIndex.Invalidate();
 				var acts = ActsFor(_qmPage);
@@ -601,7 +605,7 @@ namespace VRChatArchiveMod.Modules
 						}
 						catch (Exception e)
 						{
-							VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] could not add tile {k}: {e.Message}");
+							Killiorim.Logger.LogWarning($"[QMTab] could not add tile {k}: {e.Message}");
 							break;
 						}
 					}
@@ -636,9 +640,29 @@ namespace VRChatArchiveMod.Modules
 					if (htmp != null) htmp.text = TitleFor(_qmPage);
 				}
 
-				VRChatArchiveModPlugin.Logger.LogInfo($"[QMTab] page filled with {used} Launchpad-styled tile(s).");
+				Killiorim.Logger.LogInfo($"[QMTab] page filled with {used} Launchpad-styled tile(s).");
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] page fill failed: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[QMTab] page fill failed: {e.Message}"); }
+		}
+
+		private void ApplyArchiveGridLayout()
+		{
+			try
+			{
+				if (_archiveGrid == null) return;
+				var grid = _archiveGrid.GetComponent<UnityEngine.UI.GridLayoutGroup>();
+				if (grid == null) return;
+
+				grid.constraint = UnityEngine.UI.GridLayoutGroup.Constraint.FixedColumnCount;
+				grid.constraintCount = 2;
+				float width = _archiveContent != null
+					? _archiveContent.GetComponent<RectTransform>().rect.width : 0f;
+				if (width <= 1f) width = 920f;
+				float cellWidth = Mathf.Max(160f, (width - grid.padding.horizontal - grid.spacing.x) * 0.5f);
+				Vector2 size = new Vector2(cellWidth, 78f);
+				if ((grid.cellSize - size).sqrMagnitude > 1f) grid.cellSize = size;
+			}
+			catch { }
 		}
 
 		// The card recipe now lives in Core.MenuCard and is shared with the per-user menu, so a fix
@@ -673,7 +697,7 @@ namespace VRChatArchiveMod.Modules
 					var tex = act.Icon();
 					if (tex != null) Core.MenuCard.SetIcon(card, tex);
 				}
-				catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[QMTab] icon for '{act.Label}' failed: {e.Message}"); }
+				catch (Exception e) { Killiorim.Logger.LogWarning($"[QMTab] icon for '{act.Label}' failed: {e.Message}"); }
 			}
 		}
 
@@ -772,7 +796,7 @@ namespace VRChatArchiveMod.Modules
 			MakeRow(host, "Walk speed", ModConfig.WalkSpeed,   0.1f, 20f);
 			MakeRow(host, "Run speed",  ModConfig.RunSpeed,    0.1f, 40f);
 
-			VRChatArchiveModPlugin.Logger.LogInfo($"[QMTab] built {_sliders.Count} slider row(s) below the buttons.");
+			Killiorim.Logger.LogInfo($"[QMTab] built {_sliders.Count} slider row(s) below the buttons.");
 		}
 
 		private static RectTransform NewRect(string name, Transform parent)
@@ -872,7 +896,7 @@ namespace VRChatArchiveMod.Modules
 				Retitle(srow);
 				_sliders.Add(srow);
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] make row '" + title + "': " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[QMTab] make row '" + title + "': " + e.Message); }
 		}
 
 
@@ -1032,6 +1056,18 @@ namespace VRChatArchiveMod.Modules
 			return null;
 		}
 
+		internal static Transform ArchiveContent()
+		{
+			try
+			{
+				Transform qm = Core.QuickMenu.Root();
+				Transform page = qm != null ? qm.Find(BodyPath + "/Menu_DevTools") : null;
+				Transform content = page != null ? FindContent(page) : null;
+				return content != null && content.Find("Buttons_Archive") != null ? content : null;
+			}
+			catch { return null; }
+		}
+
 		// VRChat's toggle tile shows its state by swapping two children, Icon_Off and Icon_On.
 		// Driving those from our config is what makes the tile behave like the game's own.
 		// VRChat's cards carry a 'Foreground' highlight layer that ships disabled — that is the
@@ -1053,7 +1089,7 @@ namespace VRChatArchiveMod.Modules
 			if (allDone)
 			{
 				_spritesResolved = true;
-				VRChatArchiveModPlugin.Logger.LogInfo("[QMTab] card sprites resolved.");
+				Killiorim.Logger.LogInfo("[QMTab] card sprites resolved.");
 			}
 		}
 
@@ -1105,13 +1141,14 @@ namespace VRChatArchiveMod.Modules
 				{
 					_pageDirty = false;
 					try { FillPage(_page.transform, _body); }
-					catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[QMTab] sub-page rebuild: " + e.Message); }
+					catch (Exception e) { Killiorim.Logger.LogWarning("[QMTab] sub-page rebuild: " + e.Message); }
 				}
 
 				// VRChat's own back arrow ships in this header, disabled. Lit only on a sub-page,
 				// where it means what it says.
 				SyncBackButton();
 				SyncSliders();
+				QMConsole.KeepLast();
 
 				// A live capture caught Menu_DevTools active AT THE SAME TIME as Menu_QM_Launchpad.
 				// In uGUI the later sibling draws on top, and Launchpad is the later one — so it
@@ -1143,6 +1180,7 @@ namespace VRChatArchiveMod.Modules
 				if (now >= _nextLayout)
 				{
 					_nextLayout = now + 0.5f;
+					ApplyArchiveGridLayout();
 					for (int i = 0; i < _pairs.Count; i++)
 					{
 						var p = _pairs[i];
@@ -1165,7 +1203,7 @@ namespace VRChatArchiveMod.Modules
 			// is left exactly as found. The original Button_Back was never touched.
 			try { if (_backClone != null) UnityEngine.Object.Destroy(_backClone.gameObject); } catch { }
 			_backClone = null; _backBtn = null; _backWired = false; _wasActive = false;
-			_page = null; _tab = null; _body = null; _fails = 0; _nextTry = 0f;
+			_page = null; _tab = null; _body = null; _archiveGrid = null; _archiveContent = null; _fails = 0; _nextTry = 0f;
 			_toggles.Clear();
 		}
 

@@ -2,7 +2,7 @@
   <img src="docs/img/logo.png" alt="Kawaii Studio" width="180">
 </p>
 
-<h1 align="center">VRChat Archive Mod</h1>
+<h1 align="center">Killiorim</h1>
 
 <p align="center"><em>by <a href="https://kawaiistudio.org">Kawaii Studio</a> · <a href="https://vrchatarchive.org">vrchatarchive.org</a></em></p>
 
@@ -37,13 +37,11 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/img/mod-ingame.webp" alt="The mod running in VRChat: instance roster, event feed, instance log, radar and the themed QuickMenu">
+  <img src="docs/img/mod-ingame.webp" alt="Killiorim's themed QuickMenu open in VRChat, showing the Launch Pad, profile and avatar panels">
 </p>
 
-<p align="center"><em>Everything the mod draws, in one instance — the <strong>PLAYERS</strong> roster and
-<strong>EVENTS</strong> feed at the left, the <strong>INSTANCE LOG</strong> and <strong>RADAR</strong> at the
-right, and the QuickMenu wearing the mod's own theme. All of it is local: nobody else in the instance
-sees any of it.</em></p>
+<p align="center"><em>The Killiorim-themed QuickMenu open in VRChat, with the Launch Pad, profile and
+avatar panels visible.</em></p>
 
 ### Bad Apple!!, played with the world's own objects
 
@@ -65,7 +63,7 @@ drift from the music while the networked mode waits to take ownership of the obj
 
 ## Overview
 
-**VRChat Archive Mod** is a client-side BepInEx 6 (IL2CPP) plugin for VRChat, built for one purpose: preserving and organizing avatars, plus a set of quality-of-life tools that make browsing, archiving, and inspecting content easier. It is **local-only by design**. Nothing it does is transmitted to other players in your instance — every visualization, movement tweak, favourite list, and diagnostic runs on your machine and affects only your view. Where it does talk to a network, it talks to the companion VRChat Archive desktop client over `127.0.0.1` or to the project's own site APIs, never to the game's other clients.
+**Killiorim** is a client-side BepInEx 6 (IL2CPP) plugin for VRChat, built for one purpose: preserving and organizing avatars, plus a set of quality-of-life tools that make browsing, archiving, and inspecting content easier. It is **local-only by design**. Nothing it does is transmitted to other players in your instance — every visualization, movement tweak, favourite list, and diagnostic runs on your machine and affects only your view. Where it does talk to a network, it talks to the companion VRChat Archive desktop client over `127.0.0.1` or to the project's own site APIs, never to the game's other clients.
 
 The mod is organized around a **module system**: each feature is a self-contained unit implementing a common `IModule` lifecycle contract, registered once at startup and driven by a central `ModuleManager`. Every user-facing setting is a BepInEx `ConfigEntry` bound and documented in a single `ModConfig`, so the whole feature surface can be inspected, edited, and synced from one place — including by the desktop client, which drives the mod through a polling HTTP control channel.
 
@@ -75,7 +73,7 @@ Because VRChat ships obfuscated IL2CPP, a large part of the codebase is defensiv
 
 ## Architecture
 
-The mod is a standard **BepInEx 6 IL2CPP plugin**. `VRChatArchiveModPlugin` is the entry point: on load it initializes configuration, installs the IL2CPP compatibility fixes, registers every feature module, and injects a persistent runtime driver GameObject into the scene.
+The mod is a standard **BepInEx 6 IL2CPP plugin**. `KilliorimPlugin` is the entry point: on load it initializes configuration, installs the IL2CPP compatibility fixes, registers every feature module, and injects a persistent runtime driver GameObject into the scene.
 
 **Module lifecycle.** `IModule` is the abstract contract every feature implements. It defines lifecycle callbacks — initialize, UI-ready, per-frame `Update`/`LateUpdate`/`FixedUpdate`, `OnGUI`, scene-loaded, and shutdown. `ModuleManager` is the central registry and per-frame dispatcher: it iterates the registered modules each frame, wraps every callback in an exception guard (with rate-limited error logging so a misbehaving module cannot flood the log or crash the loop), and can attach a per-module `Stopwatch` profiler for cost measurement. `ModRunner` is the IL2CPP-injected `MonoBehaviour` on that persistent GameObject; it pumps the module update loop and re-asserts cursor state across `Update`, `OnGUI`, and `LateUpdate`.
 
@@ -98,7 +96,7 @@ Supporting these are cached accessors (`PlayerRef`, `ApiUsers`, `QuickMenu`), sh
 
 Foundation modules — the plugin entry, lifecycle, configuration, IL2CPP safety, shared UI toolkits, and the control channel to the desktop client.
 
-- **VRChatArchiveModPlugin** — BepInEx 6 IL2CPP entry point; initializes config, installs the field-offset/nested-type fixes, registers all modules, and injects the runtime driver GameObject.
+- **KilliorimPlugin** — BepInEx 6 IL2CPP entry point; initializes config, installs the field-offset/nested-type fixes, registers all modules, and injects the runtime driver GameObject.
 - **IModule** — abstract lifecycle contract (initialize, UI-ready, update/late/fixed, GUI, scene-loaded, shutdown) every feature implements.
 - **ModuleManager** — central registry and per-frame dispatcher, with per-call exception guards, rate-limited error logging, and an optional per-module `Stopwatch` profiler.
 - **ModRunner** — IL2CPP-injected `MonoBehaviour` on a persistent GameObject that pumps the module update loop and re-asserts cursor state.
@@ -242,15 +240,23 @@ dotnet build -c Release
 
 ### Deploy
 
-Copy the built DLL into your VRChat BepInEx plugins folder, then launch VRChat through BepInEx:
+Most users can download `KilliorimInstaller.exe` from the project's [GitHub Releases](https://github.com/yhshh8092-netizen/VRChatArchiveMod/releases). It checks the latest published release, downloads `Killiorim.dll`, and installs it into the selected VRChat BepInEx plugins folder. It runs on current Windows versions with the built-in .NET Framework 4.8. VRChat must be closed while installing.
+
+The DLL can also be installed manually by copying it into the VRChat BepInEx plugins folder:
 
 ```
-<VRChat>/BepInEx/plugins/VRChatArchiveMod.dll
+<VRChat>/BepInEx/plugins/Killiorim.dll
 ```
 
 The plugin logs to the BepInEx console/log. If the module list does not register, check that `libs/` matched your interop assemblies and that the IL2CPP fixes reported success in the log.
 
 VRChat must be **closed** while you copy: the plugin DLL is locked for as long as the game is running.
+
+To build the standalone installer on Windows, use the .NET 10 SDK:
+
+```powershell
+dotnet publish installer/KilliorimInstaller.csproj -c Release -o installer/publish
+```
 
 ---
 

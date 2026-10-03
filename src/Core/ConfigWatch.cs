@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// WHO CHANGED THIS SETTING, AND WHEN.
 	//
@@ -38,7 +38,7 @@ namespace VRChatArchiveMod.Core
 						if (e?.ChangedSetting == null) return;
 						string changed = e.ChangedSetting.Definition.Section + "/" + e.ChangedSetting.Definition.Key;
 						if (changed != id) return;
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							"[ConfigWatch] " + changed + " -> " + e.ChangedSetting.BoxedValue
 							+ "  (" + (ApplyingFrom ?? "in-game menu or code") + ")");
 					}

@@ -4,7 +4,7 @@ using System.Reflection;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// Loads the client's branding images — embedded in the DLL as EmbeddedResource (see
 	// the .csproj) — into Texture2D for the IMGUI menu. Each texture is decoded once and
@@ -62,7 +62,7 @@ namespace VRChatArchiveMod.Core
 		// Cached by name so OnGUI can ask for them every frame.
 		private static readonly System.Collections.Generic.Dictionary<string, Texture2D> EraCache =
 			new System.Collections.Generic.Dictionary<string, Texture2D>();
-		// THE DISK WINS OVER THE EMBED. BepInEx\VRChatArchiveMod\loading\<key>.png replaces a
+		// THE DISK WINS OVER THE EMBED. BepInEx\Killiorim\loading\<key>.png replaces a
 		// piece of the 2017 artwork without a rebuild, and an empty folder leaves the original in
 		// place. Same folder convention as CrashTrail and the diagnostics dumps.
 		//
@@ -83,13 +83,13 @@ namespace VRChatArchiveMod.Core
 			try
 			{
 				string path = Path.Combine(BepInEx.Paths.BepInExRootPath,
-					"VRChatArchiveMod", "loading", key + ".png");
+					"Killiorim", "loading", key + ".png");
 				if (!File.Exists(path)) return null;
 				byte[] data = File.ReadAllBytes(path);
 				var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
 				if (!ImageConversion.LoadImage(tex, new Il2CppStructArray<byte>(data))) return null;
 				tex.hideFlags = HideFlags.HideAndDontSave;
-				VRChatArchiveModPlugin.Logger.LogInfo("[AssetLoader] loading screen art overridden from disk: " + key + ".png");
+				Killiorim.Logger.LogInfo("[AssetLoader] loading screen art overridden from disk: " + key + ".png");
 				return tex;
 			}
 			catch { return null; }
@@ -128,7 +128,7 @@ namespace VRChatArchiveMod.Core
 				{
 					if (s == null)
 					{
-						VRChatArchiveModPlugin.Logger.LogWarning($"[Assets] embedded resource not found: {resourceName}");
+						Killiorim.Logger.LogWarning($"[Assets] embedded resource not found: {resourceName}");
 						return null;
 					}
 					using (var ms = new MemoryStream())
@@ -143,12 +143,12 @@ namespace VRChatArchiveMod.Core
 				tex.wrapMode = TextureWrapMode.Clamp;
 				// Decodes JPG/PNG bytes into the texture (resizes it to the image).
 				ImageConversion.LoadImage(tex, new Il2CppStructArray<byte>(data));
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Assets] loaded {resourceName} ({tex.width}x{tex.height}).");
+				Killiorim.Logger.LogInfo($"[Assets] loaded {resourceName} ({tex.width}x{tex.height}).");
 				return tex;
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[Assets] failed to load {resourceName}: {e}");
+				Killiorim.Logger.LogError($"[Assets] failed to load {resourceName}: {e}");
 				return null;
 			}
 		}

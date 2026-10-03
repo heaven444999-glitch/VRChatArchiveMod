@@ -2,7 +2,7 @@
 using System.Reflection;
 using HarmonyLib;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// GIVE Il2CppInterop BACK ITS NESTED TYPES.
 	//
@@ -47,20 +47,20 @@ namespace VRChatArchiveMod.Core
 
 				if (target == null)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning(
+					Killiorim.Logger.LogWarning(
 						"[NestedTypeFix] IL2CPP.GetIl2CppNestedType not found — nested types stay broken.");
 					return;
 				}
 
 				var pre = new HarmonyMethod(typeof(NestedTypeFix)
 					.GetMethod(nameof(Prefix), BindingFlags.Static | BindingFlags.NonPublic));
-				VRChatArchiveModPlugin.HarmonyInstance.Patch(target, prefix: pre);
-				VRChatArchiveModPlugin.Logger.LogInfo(
+				Killiorim.HarmonyInstance.Patch(target, prefix: pre);
+				Killiorim.Logger.LogInfo(
 					"[NestedTypeFix] armed — nested types resolved by walking Il2CppClass, not by export name.");
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError("[NestedTypeFix] install failed: " + e);
+				Killiorim.Logger.LogError("[NestedTypeFix] install failed: " + e);
 			}
 		}
 
@@ -91,7 +91,7 @@ namespace VRChatArchiveMod.Core
 					if (!_logged)
 					{
 						_logged = true;
-						VRChatArchiveModPlugin.Logger.LogInfo(
+						Killiorim.Logger.LogInfo(
 							"[NestedTypeFix] nested-type array located at Il2CppClass+0x" + off.ToString("X")
 							+ " (found from " + name + "'s enclosing type, header count "
 							+ (*(ushort*)((byte*)enclosing + OffNestedCount)) + ").");

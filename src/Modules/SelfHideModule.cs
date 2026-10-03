@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// SELF HIDE — your own avatar is not drawn on YOUR screen.
 	//
@@ -43,7 +43,7 @@ namespace VRChatArchiveMod.Modules
 				try { on = ModConfig.SelfHide.Value; } catch { }
 				if (!on)
 				{
-					if (_on || _hidden.Count > 0) { RestoreAll(); Status = "self hide off"; VRChatArchiveModPlugin.Logger.LogInfo("[SelfHide] off — avatar drawn again."); }
+					if (_on || _hidden.Count > 0) { RestoreAll(); Status = "self hide off"; Killiorim.Logger.LogInfo("[SelfHide] off — avatar drawn again."); }
 					_on = false;
 					return;
 				}
@@ -116,7 +116,7 @@ namespace VRChatArchiveMod.Modules
 					_nextLog = now + 10f;
 					var sb = new System.Text.StringBuilder();
 					try { int k = 0; for (int i = 0; i < lt.childCount && k < 12; i++, k++) { if (k > 0) sb.Append(", "); sb.Append(lt.GetChild(i).name); } } catch { }
-					VRChatArchiveModPlugin.Logger.LogWarning("[SelfHide] no avatar root under '" + lt.name + "' (children: " + sb + ").");
+					Killiorim.Logger.LogWarning("[SelfHide] no avatar root under '" + lt.name + "' (children: " + sb + ").");
 				}
 				return;
 			}
@@ -144,7 +144,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { }
 			Status = "self hide on — " + _hidden.Count + " renderer(s) of your avatar hidden";
-			if (added > 0) VRChatArchiveModPlugin.Logger.LogInfo("[SelfHide] hiding " + _hidden.Count + " renderer(s) under '" + _rootName + "' (+" + added + "), kept off every frame.");
+			if (added > 0) Killiorim.Logger.LogInfo("[SelfHide] hiding " + _hidden.Count + " renderer(s) under '" + _rootName + "' (+" + added + "), kept off every frame.");
 		}
 
 		private static int Take(GameObject root)

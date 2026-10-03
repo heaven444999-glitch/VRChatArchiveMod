@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// GRAVITY — turn it off and float.
 	//
@@ -42,7 +42,7 @@ namespace VRChatArchiveMod.Modules
 				ApplyPlayer();
 				ApplyWorld();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[Gravity] update threw: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[Gravity] update threw: {e.Message}"); }
 		}
 
 		private void ApplyPlayer()
@@ -70,7 +70,7 @@ namespace VRChatArchiveMod.Modules
 				try { api.SetGravityStrength(0f); } catch { return; }
 				_playerApplied = true;
 				LastStatus = "gravity off — for you only, nobody else sees you float";
-				VRChatArchiveModPlugin.Logger.LogInfo($"[Gravity] player gravity 0 (was {_originalPlayer:F2}).");
+				Killiorim.Logger.LogInfo($"[Gravity] player gravity 0 (was {_originalPlayer:F2}).");
 				return;
 			}
 
@@ -95,7 +95,7 @@ namespace VRChatArchiveMod.Modules
 					if (_originalWorld.sqrMagnitude < 0.001f) _originalWorld = new Vector3(0f, -9.81f, 0f);
 					Physics.gravity = Vector3.zero;
 					_worldApplied = true;
-					VRChatArchiveModPlugin.Logger.LogInfo("[Gravity] world physics gravity 0 (local only).");
+					Killiorim.Logger.LogInfo("[Gravity] world physics gravity 0 (local only).");
 				}
 				catch { }
 			}

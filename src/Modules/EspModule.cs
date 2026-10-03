@@ -6,9 +6,9 @@ using Il2CppInterop.Runtime;
 using UnityEngine;
 using VRC.Core;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Player ESP: draws a box around remote players, colored by their VRChat trust rank
 	// (Visitor / New User / User / Known / Trusted / Nuisance), with optional name and
@@ -191,7 +191,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogError($"[ESP] draw threw: {e}");
+				Killiorim.Logger.LogError($"[ESP] draw threw: {e}");
 			}
 		}
 
@@ -272,7 +272,7 @@ namespace VRChatArchiveMod.Modules
 						?.MakeGenericMethod(_playerType);
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning($"[ESP] trust reflection unavailable: {e.Message}"); }
+			catch (Exception e) { Killiorim.Logger.LogWarning($"[ESP] trust reflection unavailable: {e.Message}"); }
 		}
 
 		// Best-effort: map a VRCPlayerApi back to its VRC.Player, then to APIUser.

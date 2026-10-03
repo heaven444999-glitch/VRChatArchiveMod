@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// THE EVENT CONSOLE, IN THE SPACE VRCHAT USES FOR ADVERTS.
 	//
@@ -30,6 +30,7 @@ namespace VRChatArchiveMod.Modules
 
 		private const string PanelName = "VA_LaunchpadConsole";
 		private const string CarouselName = "Carousel_Banners";
+		private const string VrcPlusBannersName = "VRC+_Banners";
 		// The carousel's own footprint, read from the live dump. Matching it exactly is what keeps
 		// the rest of the page — the tiles below — from moving when we take the slot.
 		// 918, not the carousel's own 1024: its visible artwork is clipped by
@@ -43,14 +44,15 @@ namespace VRChatArchiveMod.Modules
 		// At 26 the slot still holds eight lines, which is what it showed before.
 		private const float RowPitch = 26f;
 
-		/// <summary>ON by default — the owner asked for this slot specifically. It is still a toggle,
-		/// because it does replace part of VRChat's own menu and anyone should be able to give the
-		/// banner back. The carousel is only ever deactivated, never destroyed, so that is one flip.</summary>
-		public static bool Active { get; private set; } = true;
+		/// <summary>Off on a fresh config because this replaces part of VRChat's own menu.</summary>
+		public static bool Active => ModConfig.LaunchpadConsoleEnabled != null
+			&& ModConfig.LaunchpadConsoleEnabled.Value;
 		public static string Status = "";
 
 		private PanelSkin.Panel _panel;
 		private Transform _carousel;
+		private Transform _vrcPlusBanners;
+		private bool _vrcPlusBannersWasActive;
 		private RectTransform _slot;   // the carousel's rect: what the panel is placed over
 		private TMPro.TMP_Text _pageTitle;
 		private float _nextTitle;
@@ -60,10 +62,11 @@ namespace VRChatArchiveMod.Modules
 
 		public static void Toggle()
 		{
-			Active = !Active;
+			if (ModConfig.LaunchpadConsoleEnabled == null) return;
+			ModConfig.LaunchpadConsoleEnabled.Value = !ModConfig.LaunchpadConsoleEnabled.Value;
 			Status = Active ? "event console takes the Launch Pad banner slot"
 			                : "Launch Pad banner restored";
-			VRChatArchiveModPlugin.Logger.LogInfo("[LaunchpadConsole] " + Status);
+			Killiorim.Logger.LogInfo("[LaunchpadConsole] " + Status);
 		}
 
 		public override void OnUpdate()
@@ -132,14 +135,20 @@ namespace VRChatArchiveMod.Modules
 				}
 			}
 			catch { }
+			try
+			{
+				if (_vrcPlusBanners != null)
+					_vrcPlusBanners.gameObject.SetActive(_vrcPlusBannersWasActive);
+			}
+			catch { }
 			_carousel = null;
+			_vrcPlusBanners = null;
 			try { if (_panel != null && _panel.Root != null) UnityEngine.Object.Destroy(_panel.Root.gameObject); } catch { }
 			_panel = null;
 			_shown = -1;
 		}
 
 		// ---------------------------------------------------------------- build
-
 		private bool TryBuild()
 		{
 			Transform root = MenuDonor.LaunchpadContent();
@@ -166,17 +175,29 @@ namespace VRChatArchiveMod.Modules
 			var p = PanelSkin.BuildOver(host, PanelName, "EVENTS", null, RowPitch, false,
 				colIdW: 86f, colBadgeW: 118f);
 			if (p == null) return false;
+			try
+			{
+				var body = p.Root.Find("VA_Body");
+				var bodyImage = body != null ? body.GetComponent<UnityEngine.UI.Image>() : null;
+				var outline = bodyImage != null ? bodyImage.gameObject.AddComponent<UnityEngine.UI.Outline>() : null;
+				if (outline != null)
+				{
+					outline.effectColor = new Color(0.96f, 0.82f, 0.88f, 0.95f);
+					outline.effectDistance = new Vector2(3f, 3f);
+				}
+			}
+			catch { }
 
 			// The slot used to carry VRChat's branding, so ours goes there in its place rather than
 			// leaving an unlabelled box in the middle of the menu.
-			PanelSkin.SetBrand(p, "kawaii_logo.png", "VRCHAT ARCHIVE MOD", "by Kawaii Studio");
+			PanelSkin.SetBrand(p, "kawaii_logo.png", "KILLIORIUM", "bloodline // archive");
 			PanelSkin.SetHeadings(p, "TIME", "WHAT THE ARCHIVE IS DOING", null, "KIND");
 
 			_slot = carousel.GetComponent<RectTransform>();
 			if (!PanelSkin.PlaceOver(p, _slot))
 			{
 				// The page is not on screen yet; keep the panel and let OnUpdate place it.
-				VRChatArchiveModPlugin.Logger.LogInfo("[LaunchpadConsole] built, waiting for the Launch Pad to be shown.");
+				Killiorim.Logger.LogInfo("[LaunchpadConsole] built, waiting for the Launch Pad to be shown.");
 			}
 			// HIDDEN, BUT STILL THERE. Deactivating the banner was the obvious move and it silently
 			// removed the console: the panel is placed over the carousel's RECT, and PlaceOver refuses
@@ -195,9 +216,17 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch { try { carousel.gameObject.SetActive(false); } catch { } }
 
+			Transform vrcPlusBanners = root.Find(VrcPlusBannersName);
+			if (vrcPlusBanners != null)
+			{
+				_vrcPlusBanners = vrcPlusBanners;
+				_vrcPlusBannersWasActive = vrcPlusBanners.gameObject.activeSelf;
+				vrcPlusBanners.gameObject.SetActive(false);
+			}
+
 			_carousel = carousel;
 			_panel = p;
-			VRChatArchiveModPlugin.Logger.LogInfo("[LaunchpadConsole] console placed over the banner slot (capacity "
+			Killiorim.Logger.LogInfo("[LaunchpadConsole] console placed over the banner slot (capacity "
 				+ p.Capacity + ").");
 			return true;
 		}
@@ -209,7 +238,7 @@ namespace VRChatArchiveMod.Modules
 		// its localisation table whenever the page is shown or restyled — a single write survives
 		// until the next tab change. Twice a second is enough to look permanent and costs one string
 		// compare; the write itself only happens when the text is not already ours.
-		private const string PageTitle = "It's Time To Archive";
+		private const string PageTitle = "Killiorium";
 
 		private void RenameThePage()
 		{
@@ -225,7 +254,7 @@ namespace VRChatArchiveMod.Modules
 					if (t == null) return;
 					_pageTitle = t.GetComponent<TMPro.TMP_Text>();
 					if (_pageTitle == null) return;
-					VRChatArchiveModPlugin.Logger.LogInfo("[LaunchpadConsole] page title claimed ('"
+					Killiorim.Logger.LogInfo("[LaunchpadConsole] page title claimed ('"
 						+ _pageTitle.text + "' -> '" + PageTitle + "').");
 				}
 
@@ -274,9 +303,8 @@ namespace VRChatArchiveMod.Modules
 					// Tagged, always: MenuThemeModule rewrites every TMP colour under this canvas
 					// several times a second, and a rich-text tag is the one it cannot take.
 					Id = PanelSkin.Tag("C79BFA", e.Clock ?? ""),
-					// Pink rather than near-white: this is the Archive's own console, and the white was
-					// VRChat's text colour showing through on a panel that is meant to look like ours.
-					Name = PanelSkin.Tag(PanelSkin.HexPink, e.Text ?? ""),
+					// White rather than a pink accent: the panel is part of the monochrome app shell.
+					Name = PanelSkin.Tag(PanelSkin.HexText, e.Text ?? ""),
 					Pos = "",
 					Badge = cache ? PanelSkin.Tag("4DE3FF", "CACHE") : PanelSkin.Tag("8FEEB2", "ARCHIVED"),
 				});
@@ -288,12 +316,10 @@ namespace VRChatArchiveMod.Modules
 				// of looking broken. It says which feed it is on and that it is merely waiting.
 				rows.Add(new PanelSkin.Row
 				{
-					// Pink, not the dim grey used for column labels: this line is the console telling you
-					// it is alive and idle, which is worth reading — the grey made it look like a
-					// disabled heading, i.e. exactly like the broken console it spent all evening
-					// impersonating.
-					Id = PanelSkin.Tag(PanelSkin.HexPink, "--:--:--"),
-					Name = PanelSkin.Tag(PanelSkin.HexPink,
+					// White, not the dim grey used for column labels: this line is the console telling you
+					// it is alive and idle, and it needs to stay readable in the monochrome shell.
+					Id = PanelSkin.Tag(PanelSkin.HexText, "--:--:--"),
+					Name = PanelSkin.Tag(PanelSkin.HexText,
 						"waiting for " + Core.ArchiveFeed.CurrentTitle.ToLowerInvariant() + " — nothing yet this session"),
 					Pos = "",
 					Badge = "",

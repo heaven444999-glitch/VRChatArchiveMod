@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// MENU BACKGROUNDS — unlocks the QuickMenu/Main Menu backgrounds the client hides behind VRChat
 	// Plus, including the animated (parallax) ones.
@@ -85,7 +85,7 @@ namespace VRChatArchiveMod.Modules
 					: "menu backgrounds: none found yet — open the menu once, it retries on its own";
 			}
 			VaTagsModule.LastStatus = Status;
-			VRChatArchiveModPlugin.Logger.LogInfo("[VrcPlusBackgrounds] " + Status);
+			Killiorim.Logger.LogInfo("[VrcPlusBackgrounds] " + Status);
 		}
 
 		private static void Sweep()
@@ -124,10 +124,10 @@ namespace VRChatArchiveMod.Modules
 				if (added > 0)
 				{
 					Status = "menu backgrounds unlocked — " + _touched.Count + " (reopen the menu to see them)";
-					VRChatArchiveModPlugin.Logger.LogInfo("[VrcPlusBackgrounds] " + added + " newly unlocked, " + _touched.Count + " total");
+					Killiorim.Logger.LogInfo("[VrcPlusBackgrounds] " + added + " newly unlocked, " + _touched.Count + " total");
 				}
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogWarning("[VrcPlusBackgrounds] sweep: " + e.Message); }
+			catch (Exception e) { Killiorim.Logger.LogWarning("[VrcPlusBackgrounds] sweep: " + e.Message); }
 		}
 
 		private static int Unlock(VRC.BackgroundOptions set)
@@ -174,7 +174,7 @@ namespace VRChatArchiveMod.Modules
 				try { opt._isVRCPlus = false; added++; }
 				catch (Exception e)
 				{
-					VRChatArchiveModPlugin.Logger.LogWarning("[VrcPlusBackgrounds] could not unlock an option: " + e.Message);
+					Killiorim.Logger.LogWarning("[VrcPlusBackgrounds] could not unlock an option: " + e.Message);
 				}
 			}
 			return added;

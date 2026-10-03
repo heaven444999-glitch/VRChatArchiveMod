@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using VRC.SDKBase;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// Anti-block: when someone blocks you, VRChat hides them from your view. The block itself
 	// is untouched — you stay blocked, nothing networked changes — but the person is revealed
@@ -88,7 +88,7 @@ namespace VRChatArchiveMod.Modules
 				_lastScan = Time.realtimeSinceStartup;
 				Scan();
 			}
-			catch (Exception e) { VRChatArchiveModPlugin.Logger.LogError($"[AntiBlock] update threw: {e}"); }
+			catch (Exception e) { Killiorim.Logger.LogError($"[AntiBlock] update threw: {e}"); }
 		}
 
 		public override void OnShutdown() => RestoreAll();
@@ -175,7 +175,7 @@ namespace VRChatArchiveMod.Modules
 			{
 				_noticeName = rec.Name;
 				_noticeUntil = Time.realtimeSinceStartup + 6f;
-				VRChatArchiveModPlugin.Logger.LogInfo($"[AntiBlock] revealed hidden player: {rec.Name}.");
+				Killiorim.Logger.LogInfo($"[AntiBlock] revealed hidden player: {rec.Name}.");
 			}
 		}
 

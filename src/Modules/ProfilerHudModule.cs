@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// THE PROFILER, WHERE YOU CAN ACTUALLY READ IT.
 	//
@@ -29,7 +29,7 @@ namespace VRChatArchiveMod.Modules
 		private static float _fpsAt;
 
 		public override void OnInitialize()
-			=> VRChatArchiveModPlugin.Logger.LogInfo("[ProfilerHud] ready — Right-Shift+P shows per-module frame cost.");
+			=> Killiorim.Logger.LogInfo("[ProfilerHud] ready — Right-Shift+P shows per-module frame cost.");
 
 		public override void OnUpdate()
 		{

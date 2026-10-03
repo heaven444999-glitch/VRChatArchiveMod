@@ -1,6 +1,6 @@
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
-	// Base contract for every VRCHAT ARCHIVE MOD feature module.
+	// Base contract for every KILLIORIM feature module.
 	// Mirrors the Munchen ModuleComponent lifecycle, adapted to the BepInEx runtime.
 	public abstract class IModule
 	{

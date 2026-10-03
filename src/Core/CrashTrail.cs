@@ -3,7 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace VRChatArchiveMod.Core
+namespace Killiorim.Core
 {
 	// A BREADCRUMB TRAIL THAT SURVIVES THE PROCESS DYING.
 	//
@@ -18,7 +18,7 @@ namespace VRChatArchiveMod.Core
 	// around one dangerous operation and closed immediately after, never left running.
 	//
 	// HOW TO READ ONE: the trail is written to
-	//     BepInEx\VRChatArchiveMod\crash\<name>.trail
+	//     BepInEx\Killiorim\crash\<name>.trail
 	// and its LAST LINE is the last thing that completed. The step after it is what killed the game.
 	// End() appends "== COMPLETED ==" and renames nothing; if the file exists on the next run WITHOUT
 	// that marker, the previous attempt crashed — Check() reports that, once, with the last step in
@@ -34,7 +34,7 @@ namespace VRChatArchiveMod.Core
 		{
 			get
 			{
-				string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "VRChatArchiveMod", "crash");
+				string d = Path.Combine(BepInEx.Paths.BepInExRootPath, "Killiorim", "crash");
 				Directory.CreateDirectory(d);
 				return d;
 			}

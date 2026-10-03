@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VRChatArchiveMod.Core;
+using Killiorim.Core;
 
-namespace VRChatArchiveMod.Modules
+namespace Killiorim.Modules
 {
 	// OBJECT ORBIT — rips the loose props out of the world and spins them in a ring around you, or
 	// around somebody else. A gag, nothing more.
@@ -156,7 +156,7 @@ namespace VRChatArchiveMod.Modules
 				: _synced
 					? $"{Held0.Count} object(s) orbiting {CenterName} — none are networked, so only YOU see this"
 					: $"{Held0.Count} object(s) orbiting {CenterName} — only YOU can see this";
-			VRChatArchiveModPlugin.Logger.LogInfo(
+			Killiorim.Logger.LogInfo(
 				$"[ObjectOrbit] {Held0.Count} object(s) around {CenterName} ({(_synced ? "SYNCED" : "local only")}).");
 		}
 
@@ -386,7 +386,7 @@ namespace VRChatArchiveMod.Modules
 			}
 			catch (Exception e)
 			{
-				VRChatArchiveModPlugin.Logger.LogWarning($"[ObjectOrbit] collect failed: {e.Message}");
+				Killiorim.Logger.LogWarning($"[ObjectOrbit] collect failed: {e.Message}");
 			}
 			return outp;
 		}
