@@ -4,7 +4,7 @@
 
 <h1 align="center">Killiorim</h1>
 
-<p align="center"><em>by <a href="https://kawaiistudio.org">Kawaii Studio</a> · <a href="https://vrchatarchive.org">vrchatarchive.org</a></em></p>
+<p align="center"><em>by <a href="https://kawaiistudio.org">Killi</a> · <a href="https://vrchatarchive.org">vrchatarchive.org</a></em></p>
 
 <p align="center">
   A client-side <strong>BepInEx 6 (IL2CPP)</strong> plugin for VRChat — built for preserving and
